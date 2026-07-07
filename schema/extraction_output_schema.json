@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GraphExtractionOutput",
+  "description": "LLM graph extraction 的輸出格式。所有節點/關係都是 proposed 狀態的候選,寫入 curation_items.payload 前必須通過本 schema 驗證。",
+  "type": "object",
+  "required": ["nodes", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "$defs": {
+    "node_type": {
+      "type": "string",
+      "enum": [
+        "Concept", "System", "Process", "Structure", "Molecule",
+        "Hormone", "Receptor", "PhysiologicalVariable", "RegulatoryEffect",
+        "Interaction", "FeedbackLoop", "Enzyme", "Disease", "Experiment",
+        "Misconception"
+      ]
+    },
+    "relationship_type": {
+      "type": "string",
+      "enum": [
+        "PART_OF", "SECRETES", "SECRETED_BY", "BINDS_TO", "TARGETS",
+        "HAS_EFFECT", "ON_VARIABLE", "INCREASES", "DECREASES",
+        "REGULATES_SECRETION_OF", "PARTICIPATES_IN", "USES_EFFECT",
+        "CATALYZES", "PREREQUISITE_OF", "CAUSES", "EVIDENCED_BY",
+        "COMMONLY_CONFUSED_WITH"
+      ]
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "type", "label", "description", "source_chunk_id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z_]+:[a-z0-9_]+$" },
+        "type": { "$ref": "#/$defs/node_type" },
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "properties": {
+          "type": "object",
+          "description": "節點類型特有屬性,例如 interaction_type、feedback_type、regulated_variable"
+        },
+        "source_chunk_id": { "type": "string" },
+        "possible_duplicate_of": {
+          "type": "string",
+          "description": "懷疑與既有節點重複時填入該節點 id,交由人工在 curation 階段決定是否 merge"
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["id", "type", "source", "target", "source_chunk_id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "$ref": "#/$defs/relationship_type" },
+        "source": { "type": "string", "description": "來源節點 id" },
+        "target": { "type": "string", "description": "目標節點 id" },
+        "properties": { "type": "object" },
+        "source_chunk_id": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+# Secrets / local env
+.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node (future frontend)
+node_modules/
+dist/
+build/
+
+# Docker
+*.local.yml
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Claude Code local config (personal tooling, not project content)
+.claude/
