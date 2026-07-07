@@ -1,4 +1,4 @@
-.PHONY: up down logs test health seed-sample
+.PHONY: up down logs test health seed-sample eval
 
 up:
 	docker compose up -d --build
@@ -17,3 +17,6 @@ health:
 
 seed-sample:
 	docker compose run --rm backend python -m ingestion.pipeline.run
+
+eval:
+	docker compose run --rm backend python -m app.eval.runner

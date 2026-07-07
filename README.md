@@ -59,6 +59,19 @@ Every approve/reject/merge/delete is recorded in `graph_change_logs` with actor,
 make test
 ```
 
+## Evaluation
+
+```bash
+make eval
+```
+
+Replays 22 golden questions (`data/sample/sample_questions.json`) through the
+`/query` retrieval pipeline and scores retrieval recall@k, grounded-answer pass
+rate, and latency against fixed thresholds (recall@5 ≥ 0.8, grounded ≥ 0.75, P95
+≤ 5s). Results persist to `evaluation_runs`/`evaluation_items` and a Markdown/JSON
+report; the command gates on the thresholds so it can run in CI. Methodology and
+an honest reading of the numbers are in `docs/evaluation.md`.
+
 ## Project Layout
 
 - `backend/` — FastAPI service

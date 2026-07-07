@@ -1,0 +1,156 @@
+[
+  {
+    "question_id": "q001",
+    "question": "血糖濃度上升時,胰島素如何降低血糖?",
+    "topic": "blood_glucose_regulation",
+    "expected_chunk_ids": ["chunk:sample:001"],
+    "expected_node_ids": ["hormone:insulin", "physiological_variable:blood_glucose"]
+  },
+  {
+    "question_id": "q002",
+    "question": "胰島素是由哪個器官的胰島細胞分泌的?",
+    "topic": "blood_glucose_regulation",
+    "expected_chunk_ids": ["chunk:sample:001"],
+    "expected_node_ids": ["hormone:insulin", "structure:pancreas"]
+  },
+  {
+    "question_id": "q003",
+    "question": "血糖濃度下降時,升糖素如何促使血糖回升?",
+    "topic": "blood_glucose_regulation",
+    "expected_chunk_ids": ["chunk:sample:002"],
+    "expected_node_ids": ["hormone:glucagon", "physiological_variable:blood_glucose"]
+  },
+  {
+    "question_id": "q004",
+    "question": "胰島素與升糖素的拮抗作用如何維持血糖恆定?",
+    "topic": "blood_glucose_regulation",
+    "expected_chunk_ids": ["chunk:sample:002"],
+    "expected_node_ids": ["interaction:insulin_glucagon_blood_glucose"]
+  },
+  {
+    "question_id": "q005",
+    "question": "血糖的負回饋調節機制是什麼?",
+    "topic": "blood_glucose_regulation",
+    "expected_chunk_ids": ["chunk:sample:002"],
+    "expected_node_ids": ["feedback:blood_glucose_negative_feedback"]
+  },
+  {
+    "question_id": "q006",
+    "question": "血液滲透壓升高時,抗利尿激素ADH如何作用?",
+    "topic": "water_balance",
+    "expected_chunk_ids": ["chunk:sample:003"],
+    "expected_node_ids": ["hormone:adh", "physiological_variable:blood_osmolarity"]
+  },
+  {
+    "question_id": "q007",
+    "question": "ADH作用於腎臟集尿管促進水分再吸收的效果為何?",
+    "topic": "water_balance",
+    "expected_chunk_ids": ["chunk:sample:003"],
+    "expected_node_ids": ["hormone:adh", "structure:kidney"]
+  },
+  {
+    "question_id": "q008",
+    "question": "ADH與醛固酮如何協同作用調節血量?",
+    "topic": "water_balance",
+    "expected_chunk_ids": ["chunk:sample:004"],
+    "expected_node_ids": ["interaction:adh_aldosterone_blood_volume"]
+  },
+  {
+    "question_id": "q009",
+    "question": "腎上腺皮質分泌的醛固酮如何提高血量?",
+    "topic": "water_balance",
+    "expected_chunk_ids": ["chunk:sample:004"],
+    "expected_node_ids": ["hormone:aldosterone", "structure:adrenal_cortex"]
+  },
+  {
+    "question_id": "q010",
+    "question": "血鈣濃度過低時,副甲狀腺素PTH如何提高血鈣?",
+    "topic": "calcium_homeostasis",
+    "expected_chunk_ids": ["chunk:sample:005"],
+    "expected_node_ids": ["hormone:parathyroid_hormone", "physiological_variable:blood_calcium"]
+  },
+  {
+    "question_id": "q011",
+    "question": "副甲狀腺素如何促進骨骼釋放鈣質?",
+    "topic": "calcium_homeostasis",
+    "expected_chunk_ids": ["chunk:sample:005"],
+    "expected_node_ids": ["hormone:parathyroid_hormone", "structure:bone"]
+  },
+  {
+    "question_id": "q012",
+    "question": "血鈣濃度過高時,抑鈣素如何降低血鈣?",
+    "topic": "calcium_homeostasis",
+    "expected_chunk_ids": ["chunk:sample:006"],
+    "expected_node_ids": ["hormone:calcitonin", "physiological_variable:blood_calcium"]
+  },
+  {
+    "question_id": "q013",
+    "question": "副甲狀腺素與抑鈣素對血鈣的拮抗關係為何?",
+    "topic": "calcium_homeostasis",
+    "expected_chunk_ids": ["chunk:sample:006"],
+    "expected_node_ids": ["interaction:pth_calcitonin_blood_calcium"]
+  },
+  {
+    "question_id": "q014",
+    "question": "血鈣的負回饋調節如何運作?",
+    "topic": "calcium_homeostasis",
+    "expected_chunk_ids": ["chunk:sample:006"],
+    "expected_node_ids": ["feedback:blood_calcium_negative_feedback"]
+  },
+  {
+    "question_id": "q015",
+    "question": "分娩開始時,催產素如何增強子宮收縮?",
+    "topic": "positive_feedback",
+    "expected_chunk_ids": ["chunk:sample:007"],
+    "expected_node_ids": ["hormone:oxytocin", "physiological_variable:uterine_contraction_intensity"]
+  },
+  {
+    "question_id": "q016",
+    "question": "催產素作用引發子宮收縮的目標器官是什麼?",
+    "topic": "positive_feedback",
+    "expected_chunk_ids": ["chunk:sample:007"],
+    "expected_node_ids": ["hormone:oxytocin", "structure:uterus"]
+  },
+  {
+    "question_id": "q017",
+    "question": "子宮收縮的正回饋迴路如何使收縮持續增強?",
+    "topic": "positive_feedback",
+    "expected_chunk_ids": ["chunk:sample:008"],
+    "expected_node_ids": ["feedback:uterine_contraction_positive_feedback", "concept:positive_feedback"]
+  },
+  {
+    "question_id": "q018",
+    "question": "正回饋與大多數恆定機制採用的負回饋有什麼不同?",
+    "topic": "positive_feedback",
+    "expected_chunk_ids": ["chunk:sample:008"],
+    "expected_node_ids": ["concept:positive_feedback", "concept:negative_feedback"]
+  },
+  {
+    "question_id": "q019",
+    "question": "胰臟會分泌哪兩種調節血糖濃度的激素?",
+    "topic": "blood_glucose_regulation",
+    "expected_chunk_ids": ["chunk:sample:001", "chunk:sample:002"],
+    "expected_node_ids": ["hormone:insulin", "hormone:glucagon"]
+  },
+  {
+    "question_id": "q020",
+    "question": "胰島素能促進肝臟與肌肉細胞攝取葡萄糖,肝臟扮演什麼角色?",
+    "topic": "blood_glucose_regulation",
+    "expected_chunk_ids": ["chunk:sample:001"],
+    "expected_node_ids": ["structure:liver", "hormone:insulin"]
+  },
+  {
+    "question_id": "q021",
+    "question": "血液滲透壓如何透過激素調節維持恆定?",
+    "topic": "water_balance",
+    "expected_chunk_ids": ["chunk:sample:003"],
+    "expected_node_ids": ["hormone:adh", "physiological_variable:blood_osmolarity"]
+  },
+  {
+    "question_id": "q022",
+    "question": "當血鈣過低時,副甲狀腺與骨骼和腎臟如何合作提高血鈣濃度?",
+    "topic": "calcium_homeostasis",
+    "expected_chunk_ids": ["chunk:sample:005"],
+    "expected_node_ids": ["hormone:parathyroid_hormone", "structure:parathyroid_gland"]
+  }
+]
