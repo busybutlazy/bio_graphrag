@@ -1,0 +1,25 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+
+    app_env: str = "local"
+
+    postgres_host: str = "postgres"
+    postgres_port: int = 5432
+    postgres_db: str = "biology_graphrag"
+    postgres_user: str = "biology_app"
+    postgres_password: str = "change_me"
+
+    neo4j_uri: str = "bolt://neo4j:7687"
+    neo4j_username: str = "neo4j"
+    neo4j_password: str = "change_me"
+
+    qdrant_url: str = "http://qdrant:6333"
+
+    openai_api_key: str = ""
+    llm_provider: str = "openai"
+
+
+settings = Settings()
