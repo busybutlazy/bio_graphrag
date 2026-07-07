@@ -14,6 +14,19 @@ curl "http://localhost:8000/neighbors/hormone:insulin?depth=1"
 
 `make seed-sample` runs the ingestion pipeline: parses the sample source files, validates them, embeds chunks, and loads Neo4j (44 nodes / 84 relationships), Qdrant (`biology_chunks` collection), and PostgreSQL (`documents`/`chunks`/`ingestion_jobs`) — safe to re-run.
 
+Retrieval only ever reads `status = 'approved'` nodes/edges. New nodes/edges go through human curation first:
+
+```bash
+curl -X POST http://localhost:8000/admin/curation/items \
+  -H "Content-Type: application/json" \
+  -d '{"item_type":"node","action":"create","payload":{"id":"hormone:example","type":"Hormone","label":"Example","description":"..."},"reason":"why"}'
+
+curl -X POST http://localhost:8000/admin/curation/items/curation:hormone:example/approve \
+  -H "Content-Type: application/json" -d '{"reviewer":"you","reason":"looks correct"}'
+```
+
+Every approve/reject/merge/delete is recorded in `graph_change_logs` with actor, action, and reason.
+
 ## Tests
 
 ```bash
