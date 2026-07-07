@@ -1,4 +1,4 @@
-.PHONY: up down logs test health
+.PHONY: up down logs test health seed-sample
 
 up:
 	docker compose up -d --build
@@ -14,3 +14,6 @@ test:
 
 health:
 	curl -sf http://localhost:8000/health | python3 -m json.tool
+
+seed-sample:
+	docker compose run --rm backend python scripts/seed_sample_graph.py

@@ -1,0 +1,674 @@
+[
+  {
+    "id": "edge:pancreas_secretes_insulin",
+    "type": "SECRETES",
+    "source": "structure:pancreas",
+    "target": "hormone:insulin",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:pancreas_secretes_glucagon",
+    "type": "SECRETES",
+    "source": "structure:pancreas",
+    "target": "hormone:glucagon",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:posterior_pituitary_secretes_adh",
+    "type": "SECRETES",
+    "source": "structure:posterior_pituitary",
+    "target": "hormone:adh",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:posterior_pituitary_secretes_oxytocin",
+    "type": "SECRETES",
+    "source": "structure:posterior_pituitary",
+    "target": "hormone:oxytocin",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:parathyroid_gland_secretes_parathyroid_hormone",
+    "type": "SECRETES",
+    "source": "structure:parathyroid_gland",
+    "target": "hormone:parathyroid_hormone",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:thyroid_gland_secretes_calcitonin",
+    "type": "SECRETES",
+    "source": "structure:thyroid_gland",
+    "target": "hormone:calcitonin",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adrenal_cortex_secretes_aldosterone",
+    "type": "SECRETES",
+    "source": "structure:adrenal_cortex",
+    "target": "hormone:aldosterone",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:insulin_targets_liver",
+    "type": "TARGETS",
+    "source": "hormone:insulin",
+    "target": "structure:liver",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:glucagon_targets_liver",
+    "type": "TARGETS",
+    "source": "hormone:glucagon",
+    "target": "structure:liver",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_targets_kidney",
+    "type": "TARGETS",
+    "source": "hormone:adh",
+    "target": "structure:kidney",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:parathyroid_hormone_targets_bone",
+    "type": "TARGETS",
+    "source": "hormone:parathyroid_hormone",
+    "target": "structure:bone",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:parathyroid_hormone_targets_kidney",
+    "type": "TARGETS",
+    "source": "hormone:parathyroid_hormone",
+    "target": "structure:kidney",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:calcitonin_targets_bone",
+    "type": "TARGETS",
+    "source": "hormone:calcitonin",
+    "target": "structure:bone",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:aldosterone_targets_kidney",
+    "type": "TARGETS",
+    "source": "hormone:aldosterone",
+    "target": "structure:kidney",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:oxytocin_targets_uterus",
+    "type": "TARGETS",
+    "source": "hormone:oxytocin",
+    "target": "structure:uterus",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:insulin_binds_to_insulin_receptor",
+    "type": "BINDS_TO",
+    "source": "hormone:insulin",
+    "target": "receptor:insulin_receptor",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_binds_to_adh_receptor",
+    "type": "BINDS_TO",
+    "source": "hormone:adh",
+    "target": "receptor:adh_receptor",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:oxytocin_binds_to_oxytocin_receptor",
+    "type": "BINDS_TO",
+    "source": "hormone:oxytocin",
+    "target": "receptor:oxytocin_receptor",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:insulin_has_effect_insulin_decreases_blood_glucose",
+    "type": "HAS_EFFECT",
+    "source": "hormone:insulin",
+    "target": "regulatory_effect:insulin_decreases_blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:glucagon_has_effect_glucagon_increases_blood_glucose",
+    "type": "HAS_EFFECT",
+    "source": "hormone:glucagon",
+    "target": "regulatory_effect:glucagon_increases_blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_has_effect_adh_decreases_blood_osmolarity",
+    "type": "HAS_EFFECT",
+    "source": "hormone:adh",
+    "target": "regulatory_effect:adh_decreases_blood_osmolarity",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:parathyroid_hormone_has_effect_pth_increases_blood_calcium",
+    "type": "HAS_EFFECT",
+    "source": "hormone:parathyroid_hormone",
+    "target": "regulatory_effect:pth_increases_blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:calcitonin_has_effect_calcitonin_decreases_blood_calcium",
+    "type": "HAS_EFFECT",
+    "source": "hormone:calcitonin",
+    "target": "regulatory_effect:calcitonin_decreases_blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:aldosterone_has_effect_aldosterone_increases_blood_volume",
+    "type": "HAS_EFFECT",
+    "source": "hormone:aldosterone",
+    "target": "regulatory_effect:aldosterone_increases_blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_has_effect_adh_increases_blood_volume",
+    "type": "HAS_EFFECT",
+    "source": "hormone:adh",
+    "target": "regulatory_effect:adh_increases_blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:oxytocin_has_effect_oxytocin_increases_uterine_contraction",
+    "type": "HAS_EFFECT",
+    "source": "hormone:oxytocin",
+    "target": "regulatory_effect:oxytocin_increases_uterine_contraction",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:insulin_decreases_blood_glucose_on_variable_blood_glucose",
+    "type": "ON_VARIABLE",
+    "source": "regulatory_effect:insulin_decreases_blood_glucose",
+    "target": "physiological_variable:blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:glucagon_increases_blood_glucose_on_variable_blood_glucose",
+    "type": "ON_VARIABLE",
+    "source": "regulatory_effect:glucagon_increases_blood_glucose",
+    "target": "physiological_variable:blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_decreases_blood_osmolarity_on_variable_blood_osmolarity",
+    "type": "ON_VARIABLE",
+    "source": "regulatory_effect:adh_decreases_blood_osmolarity",
+    "target": "physiological_variable:blood_osmolarity",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:pth_increases_blood_calcium_on_variable_blood_calcium",
+    "type": "ON_VARIABLE",
+    "source": "regulatory_effect:pth_increases_blood_calcium",
+    "target": "physiological_variable:blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:calcitonin_decreases_blood_calcium_on_variable_blood_calcium",
+    "type": "ON_VARIABLE",
+    "source": "regulatory_effect:calcitonin_decreases_blood_calcium",
+    "target": "physiological_variable:blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:aldosterone_increases_blood_volume_on_variable_blood_volume",
+    "type": "ON_VARIABLE",
+    "source": "regulatory_effect:aldosterone_increases_blood_volume",
+    "target": "physiological_variable:blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_increases_blood_volume_on_variable_blood_volume",
+    "type": "ON_VARIABLE",
+    "source": "regulatory_effect:adh_increases_blood_volume",
+    "target": "physiological_variable:blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:oxytocin_increases_uterine_contraction_on_variable_uterine_contraction_intensity",
+    "type": "ON_VARIABLE",
+    "source": "regulatory_effect:oxytocin_increases_uterine_contraction",
+    "target": "physiological_variable:uterine_contraction_intensity",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:insulin_decreases_blood_glucose_decreases_blood_glucose",
+    "type": "DECREASES",
+    "source": "regulatory_effect:insulin_decreases_blood_glucose",
+    "target": "physiological_variable:blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:glucagon_increases_blood_glucose_increases_blood_glucose",
+    "type": "INCREASES",
+    "source": "regulatory_effect:glucagon_increases_blood_glucose",
+    "target": "physiological_variable:blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_decreases_blood_osmolarity_decreases_blood_osmolarity",
+    "type": "DECREASES",
+    "source": "regulatory_effect:adh_decreases_blood_osmolarity",
+    "target": "physiological_variable:blood_osmolarity",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:pth_increases_blood_calcium_increases_blood_calcium",
+    "type": "INCREASES",
+    "source": "regulatory_effect:pth_increases_blood_calcium",
+    "target": "physiological_variable:blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:calcitonin_decreases_blood_calcium_decreases_blood_calcium",
+    "type": "DECREASES",
+    "source": "regulatory_effect:calcitonin_decreases_blood_calcium",
+    "target": "physiological_variable:blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:aldosterone_increases_blood_volume_increases_blood_volume",
+    "type": "INCREASES",
+    "source": "regulatory_effect:aldosterone_increases_blood_volume",
+    "target": "physiological_variable:blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_increases_blood_volume_increases_blood_volume",
+    "type": "INCREASES",
+    "source": "regulatory_effect:adh_increases_blood_volume",
+    "target": "physiological_variable:blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:oxytocin_increases_uterine_contraction_increases_uterine_contraction_intensity",
+    "type": "INCREASES",
+    "source": "regulatory_effect:oxytocin_increases_uterine_contraction",
+    "target": "physiological_variable:uterine_contraction_intensity",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_glucose_regulates_secretion_of_insulin",
+    "type": "REGULATES_SECRETION_OF",
+    "source": "physiological_variable:blood_glucose",
+    "target": "hormone:insulin",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_glucose_regulates_secretion_of_glucagon",
+    "type": "REGULATES_SECRETION_OF",
+    "source": "physiological_variable:blood_glucose",
+    "target": "hormone:glucagon",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_osmolarity_regulates_secretion_of_adh",
+    "type": "REGULATES_SECRETION_OF",
+    "source": "physiological_variable:blood_osmolarity",
+    "target": "hormone:adh",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_calcium_regulates_secretion_of_parathyroid_hormone",
+    "type": "REGULATES_SECRETION_OF",
+    "source": "physiological_variable:blood_calcium",
+    "target": "hormone:parathyroid_hormone",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_calcium_regulates_secretion_of_calcitonin",
+    "type": "REGULATES_SECRETION_OF",
+    "source": "physiological_variable:blood_calcium",
+    "target": "hormone:calcitonin",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_volume_regulates_secretion_of_aldosterone",
+    "type": "REGULATES_SECRETION_OF",
+    "source": "physiological_variable:blood_volume",
+    "target": "hormone:aldosterone",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:uterine_contraction_intensity_regulates_secretion_of_oxytocin",
+    "type": "REGULATES_SECRETION_OF",
+    "source": "physiological_variable:uterine_contraction_intensity",
+    "target": "hormone:oxytocin",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:insulin_participates_in_insulin_glucagon_blood_glucose",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:insulin",
+    "target": "interaction:insulin_glucagon_blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:glucagon_participates_in_insulin_glucagon_blood_glucose",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:glucagon",
+    "target": "interaction:insulin_glucagon_blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:parathyroid_hormone_participates_in_pth_calcitonin_blood_calcium",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:parathyroid_hormone",
+    "target": "interaction:pth_calcitonin_blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:calcitonin_participates_in_pth_calcitonin_blood_calcium",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:calcitonin",
+    "target": "interaction:pth_calcitonin_blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_participates_in_adh_aldosterone_blood_volume",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:adh",
+    "target": "interaction:adh_aldosterone_blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:aldosterone_participates_in_adh_aldosterone_blood_volume",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:aldosterone",
+    "target": "interaction:adh_aldosterone_blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:insulin_participates_in_blood_glucose_negative_feedback",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:insulin",
+    "target": "feedback:blood_glucose_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:glucagon_participates_in_blood_glucose_negative_feedback",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:glucagon",
+    "target": "feedback:blood_glucose_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_participates_in_blood_osmolarity_negative_feedback",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:adh",
+    "target": "feedback:blood_osmolarity_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:parathyroid_hormone_participates_in_blood_calcium_negative_feedback",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:parathyroid_hormone",
+    "target": "feedback:blood_calcium_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:oxytocin_participates_in_uterine_contraction_positive_feedback",
+    "type": "PARTICIPATES_IN",
+    "source": "hormone:oxytocin",
+    "target": "feedback:uterine_contraction_positive_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:insulin_glucagon_blood_glucose_uses_effect_insulin_decreases_blood_glucose",
+    "type": "USES_EFFECT",
+    "source": "interaction:insulin_glucagon_blood_glucose",
+    "target": "regulatory_effect:insulin_decreases_blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:insulin_glucagon_blood_glucose_uses_effect_glucagon_increases_blood_glucose",
+    "type": "USES_EFFECT",
+    "source": "interaction:insulin_glucagon_blood_glucose",
+    "target": "regulatory_effect:glucagon_increases_blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:pth_calcitonin_blood_calcium_uses_effect_pth_increases_blood_calcium",
+    "type": "USES_EFFECT",
+    "source": "interaction:pth_calcitonin_blood_calcium",
+    "target": "regulatory_effect:pth_increases_blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:pth_calcitonin_blood_calcium_uses_effect_calcitonin_decreases_blood_calcium",
+    "type": "USES_EFFECT",
+    "source": "interaction:pth_calcitonin_blood_calcium",
+    "target": "regulatory_effect:calcitonin_decreases_blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_aldosterone_blood_volume_uses_effect_adh_increases_blood_volume",
+    "type": "USES_EFFECT",
+    "source": "interaction:adh_aldosterone_blood_volume",
+    "target": "regulatory_effect:adh_increases_blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adh_aldosterone_blood_volume_uses_effect_aldosterone_increases_blood_volume",
+    "type": "USES_EFFECT",
+    "source": "interaction:adh_aldosterone_blood_volume",
+    "target": "regulatory_effect:aldosterone_increases_blood_volume",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_glucose_negative_feedback_uses_effect_insulin_decreases_blood_glucose",
+    "type": "USES_EFFECT",
+    "source": "feedback:blood_glucose_negative_feedback",
+    "target": "regulatory_effect:insulin_decreases_blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_glucose_negative_feedback_uses_effect_glucagon_increases_blood_glucose",
+    "type": "USES_EFFECT",
+    "source": "feedback:blood_glucose_negative_feedback",
+    "target": "regulatory_effect:glucagon_increases_blood_glucose",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_osmolarity_negative_feedback_uses_effect_adh_decreases_blood_osmolarity",
+    "type": "USES_EFFECT",
+    "source": "feedback:blood_osmolarity_negative_feedback",
+    "target": "regulatory_effect:adh_decreases_blood_osmolarity",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:blood_calcium_negative_feedback_uses_effect_pth_increases_blood_calcium",
+    "type": "USES_EFFECT",
+    "source": "feedback:blood_calcium_negative_feedback",
+    "target": "regulatory_effect:pth_increases_blood_calcium",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:uterine_contraction_positive_feedback_uses_effect_oxytocin_increases_uterine_contraction",
+    "type": "USES_EFFECT",
+    "source": "feedback:uterine_contraction_positive_feedback",
+    "target": "regulatory_effect:oxytocin_increases_uterine_contraction",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:pancreas_part_of_endocrine_system",
+    "type": "PART_OF",
+    "source": "structure:pancreas",
+    "target": "system:endocrine_system",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:posterior_pituitary_part_of_endocrine_system",
+    "type": "PART_OF",
+    "source": "structure:posterior_pituitary",
+    "target": "system:endocrine_system",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:parathyroid_gland_part_of_endocrine_system",
+    "type": "PART_OF",
+    "source": "structure:parathyroid_gland",
+    "target": "system:endocrine_system",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:thyroid_gland_part_of_endocrine_system",
+    "type": "PART_OF",
+    "source": "structure:thyroid_gland",
+    "target": "system:endocrine_system",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:adrenal_cortex_part_of_endocrine_system",
+    "type": "PART_OF",
+    "source": "structure:adrenal_cortex",
+    "target": "system:endocrine_system",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:homeostasis_prerequisite_of_blood_glucose_negative_feedback",
+    "type": "PREREQUISITE_OF",
+    "source": "concept:homeostasis",
+    "target": "feedback:blood_glucose_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:homeostasis_prerequisite_of_blood_osmolarity_negative_feedback",
+    "type": "PREREQUISITE_OF",
+    "source": "concept:homeostasis",
+    "target": "feedback:blood_osmolarity_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:homeostasis_prerequisite_of_blood_calcium_negative_feedback",
+    "type": "PREREQUISITE_OF",
+    "source": "concept:homeostasis",
+    "target": "feedback:blood_calcium_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:homeostasis_prerequisite_of_uterine_contraction_positive_feedback",
+    "type": "PREREQUISITE_OF",
+    "source": "concept:homeostasis",
+    "target": "feedback:uterine_contraction_positive_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:negative_feedback_prerequisite_of_blood_glucose_negative_feedback",
+    "type": "PREREQUISITE_OF",
+    "source": "concept:negative_feedback",
+    "target": "feedback:blood_glucose_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:negative_feedback_prerequisite_of_blood_osmolarity_negative_feedback",
+    "type": "PREREQUISITE_OF",
+    "source": "concept:negative_feedback",
+    "target": "feedback:blood_osmolarity_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:negative_feedback_prerequisite_of_blood_calcium_negative_feedback",
+    "type": "PREREQUISITE_OF",
+    "source": "concept:negative_feedback",
+    "target": "feedback:blood_calcium_negative_feedback",
+    "status": "approved",
+    "properties": {}
+  },
+  {
+    "id": "edge:positive_feedback_prerequisite_of_uterine_contraction_positive_feedback",
+    "type": "PREREQUISITE_OF",
+    "source": "concept:positive_feedback",
+    "target": "feedback:uterine_contraction_positive_feedback",
+    "status": "approved",
+    "properties": {}
+  }
+]

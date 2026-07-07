@@ -1,0 +1,375 @@
+[
+  {
+    "id": "structure:pancreas",
+    "type": "Structure",
+    "label": "Pancreas",
+    "status": "approved",
+    "description": "分泌胰島素與升糖素的內分泌腺",
+    "properties": {}
+  },
+  {
+    "id": "structure:liver",
+    "type": "Structure",
+    "label": "Liver",
+    "status": "approved",
+    "description": "胰島素與升糖素的主要作用目標器官,負責肝醣合成與分解",
+    "properties": {}
+  },
+  {
+    "id": "structure:kidney",
+    "type": "Structure",
+    "label": "Kidney",
+    "status": "approved",
+    "description": "ADH 與 aldosterone 的作用目標器官,負責水分與鈉離子再吸收",
+    "properties": {}
+  },
+  {
+    "id": "structure:posterior_pituitary",
+    "type": "Structure",
+    "label": "Posterior pituitary",
+    "status": "approved",
+    "description": "分泌 ADH 與 oxytocin 的腦垂體後葉",
+    "properties": {}
+  },
+  {
+    "id": "structure:parathyroid_gland",
+    "type": "Structure",
+    "label": "Parathyroid gland",
+    "status": "approved",
+    "description": "分泌副甲狀腺素(PTH)的腺體",
+    "properties": {}
+  },
+  {
+    "id": "structure:thyroid_gland",
+    "type": "Structure",
+    "label": "Thyroid gland",
+    "status": "approved",
+    "description": "分泌抑鈣素(calcitonin)的腺體",
+    "properties": {}
+  },
+  {
+    "id": "structure:adrenal_cortex",
+    "type": "Structure",
+    "label": "Adrenal cortex",
+    "status": "approved",
+    "description": "分泌 aldosterone 的腎上腺皮質",
+    "properties": {}
+  },
+  {
+    "id": "structure:bone",
+    "type": "Structure",
+    "label": "Bone",
+    "status": "approved",
+    "description": "PTH 與 calcitonin 作用的目標組織,鈣離子儲存庫",
+    "properties": {}
+  },
+  {
+    "id": "structure:small_intestine",
+    "type": "Structure",
+    "label": "Small intestine",
+    "status": "approved",
+    "description": "鈣離子吸收的部位,受 PTH 間接調控",
+    "properties": {}
+  },
+  {
+    "id": "structure:uterus",
+    "type": "Structure",
+    "label": "Uterus",
+    "status": "approved",
+    "description": "oxytocin 作用引發子宮收縮的目標器官",
+    "properties": {}
+  },
+  {
+    "id": "hormone:insulin",
+    "type": "Hormone",
+    "label": "Insulin",
+    "status": "approved",
+    "description": "由胰臟分泌,降低血糖濃度的激素",
+    "properties": {}
+  },
+  {
+    "id": "hormone:glucagon",
+    "type": "Hormone",
+    "label": "Glucagon",
+    "status": "approved",
+    "description": "由胰臟分泌,提高血糖濃度的激素",
+    "properties": {}
+  },
+  {
+    "id": "hormone:adh",
+    "type": "Hormone",
+    "label": "Antidiuretic hormone (ADH)",
+    "status": "approved",
+    "description": "由腦垂體後葉分泌,促進腎臟水分再吸收、降低血液滲透壓",
+    "properties": {}
+  },
+  {
+    "id": "hormone:parathyroid_hormone",
+    "type": "Hormone",
+    "label": "Parathyroid hormone (PTH)",
+    "status": "approved",
+    "description": "由副甲狀腺分泌,提高血鈣濃度的激素",
+    "properties": {}
+  },
+  {
+    "id": "hormone:calcitonin",
+    "type": "Hormone",
+    "label": "Calcitonin",
+    "status": "approved",
+    "description": "由甲狀腺分泌,降低血鈣濃度的激素",
+    "properties": {}
+  },
+  {
+    "id": "hormone:aldosterone",
+    "type": "Hormone",
+    "label": "Aldosterone",
+    "status": "approved",
+    "description": "由腎上腺皮質分泌,促進腎臟鈉離子與水分再吸收、提高血量的激素",
+    "properties": {}
+  },
+  {
+    "id": "hormone:oxytocin",
+    "type": "Hormone",
+    "label": "Oxytocin",
+    "status": "approved",
+    "description": "由腦垂體後葉分泌,引發並強化子宮收縮的激素",
+    "properties": {}
+  },
+  {
+    "id": "receptor:insulin_receptor",
+    "type": "Receptor",
+    "label": "Insulin receptor",
+    "status": "approved",
+    "description": "胰島素作用的細胞表面受器",
+    "properties": {}
+  },
+  {
+    "id": "receptor:adh_receptor",
+    "type": "Receptor",
+    "label": "ADH receptor (V2)",
+    "status": "approved",
+    "description": "腎臟集尿管上 ADH 作用的受器",
+    "properties": {}
+  },
+  {
+    "id": "receptor:oxytocin_receptor",
+    "type": "Receptor",
+    "label": "Oxytocin receptor",
+    "status": "approved",
+    "description": "子宮平滑肌上 oxytocin 作用的受器",
+    "properties": {}
+  },
+  {
+    "id": "physiological_variable:blood_glucose",
+    "type": "PhysiologicalVariable",
+    "label": "Blood glucose",
+    "status": "approved",
+    "description": "血液中葡萄糖濃度",
+    "properties": {}
+  },
+  {
+    "id": "physiological_variable:blood_osmolarity",
+    "type": "PhysiologicalVariable",
+    "label": "Blood osmolarity",
+    "status": "approved",
+    "description": "血液滲透壓",
+    "properties": {}
+  },
+  {
+    "id": "physiological_variable:blood_calcium",
+    "type": "PhysiologicalVariable",
+    "label": "Blood calcium",
+    "status": "approved",
+    "description": "血液中鈣離子濃度",
+    "properties": {}
+  },
+  {
+    "id": "physiological_variable:blood_volume",
+    "type": "PhysiologicalVariable",
+    "label": "Blood volume",
+    "status": "approved",
+    "description": "血液總量",
+    "properties": {}
+  },
+  {
+    "id": "physiological_variable:uterine_contraction_intensity",
+    "type": "PhysiologicalVariable",
+    "label": "Uterine contraction intensity",
+    "status": "approved",
+    "description": "子宮收縮強度",
+    "properties": {}
+  },
+  {
+    "id": "regulatory_effect:insulin_decreases_blood_glucose",
+    "type": "RegulatoryEffect",
+    "label": "Insulin decreases blood glucose",
+    "status": "approved",
+    "description": "胰島素促進細胞攝取葡萄糖與肝醣合成,降低血糖",
+    "properties": {}
+  },
+  {
+    "id": "regulatory_effect:glucagon_increases_blood_glucose",
+    "type": "RegulatoryEffect",
+    "label": "Glucagon increases blood glucose",
+    "status": "approved",
+    "description": "升糖素促進肝醣分解與糖質新生,提高血糖",
+    "properties": {}
+  },
+  {
+    "id": "regulatory_effect:adh_decreases_blood_osmolarity",
+    "type": "RegulatoryEffect",
+    "label": "ADH decreases blood osmolarity",
+    "status": "approved",
+    "description": "ADH 促進腎臟水分再吸收,稀釋血液、降低滲透壓",
+    "properties": {}
+  },
+  {
+    "id": "regulatory_effect:pth_increases_blood_calcium",
+    "type": "RegulatoryEffect",
+    "label": "PTH increases blood calcium",
+    "status": "approved",
+    "description": "PTH 促進骨骼釋放鈣質、腎臟保留鈣離子,提高血鈣",
+    "properties": {}
+  },
+  {
+    "id": "regulatory_effect:calcitonin_decreases_blood_calcium",
+    "type": "RegulatoryEffect",
+    "label": "Calcitonin decreases blood calcium",
+    "status": "approved",
+    "description": "抑鈣素抑制骨骼釋放鈣質,降低血鈣",
+    "properties": {}
+  },
+  {
+    "id": "regulatory_effect:aldosterone_increases_blood_volume",
+    "type": "RegulatoryEffect",
+    "label": "Aldosterone increases blood volume",
+    "status": "approved",
+    "description": "Aldosterone 促進腎臟鈉與水分再吸收,提高血量",
+    "properties": {}
+  },
+  {
+    "id": "regulatory_effect:adh_increases_blood_volume",
+    "type": "RegulatoryEffect",
+    "label": "ADH increases blood volume",
+    "status": "approved",
+    "description": "ADH 促進水分再吸收,間接提高血量",
+    "properties": {}
+  },
+  {
+    "id": "regulatory_effect:oxytocin_increases_uterine_contraction",
+    "type": "RegulatoryEffect",
+    "label": "Oxytocin increases uterine contraction",
+    "status": "approved",
+    "description": "Oxytocin 促使子宮平滑肌收縮強度增加",
+    "properties": {}
+  },
+  {
+    "id": "interaction:insulin_glucagon_blood_glucose",
+    "type": "Interaction",
+    "label": "Insulin-glucagon antagonism on blood glucose",
+    "status": "approved",
+    "description": "胰島素與升糖素對血糖的拮抗作用",
+    "properties": {
+      "interaction_type": "antagonism",
+      "scope": "blood_glucose_regulation"
+    }
+  },
+  {
+    "id": "interaction:pth_calcitonin_blood_calcium",
+    "type": "Interaction",
+    "label": "PTH-calcitonin antagonism on blood calcium",
+    "status": "approved",
+    "description": "PTH 與抑鈣素對血鈣的拮抗作用",
+    "properties": {
+      "interaction_type": "antagonism",
+      "scope": "blood_calcium_regulation"
+    }
+  },
+  {
+    "id": "interaction:adh_aldosterone_blood_volume",
+    "type": "Interaction",
+    "label": "ADH-aldosterone synergism on blood volume",
+    "status": "approved",
+    "description": "ADH 與 aldosterone 對血量調節的協同作用",
+    "properties": {
+      "interaction_type": "synergism",
+      "scope": "blood_volume_regulation"
+    }
+  },
+  {
+    "id": "feedback:blood_glucose_negative_feedback",
+    "type": "FeedbackLoop",
+    "label": "Blood glucose negative feedback",
+    "status": "approved",
+    "description": "血糖的負回饋調節迴路",
+    "properties": {
+      "feedback_type": "negative",
+      "regulated_variable": "blood_glucose"
+    }
+  },
+  {
+    "id": "feedback:blood_osmolarity_negative_feedback",
+    "type": "FeedbackLoop",
+    "label": "Blood osmolarity negative feedback",
+    "status": "approved",
+    "description": "血液滲透壓的負回饋調節迴路",
+    "properties": {
+      "feedback_type": "negative",
+      "regulated_variable": "blood_osmolarity"
+    }
+  },
+  {
+    "id": "feedback:blood_calcium_negative_feedback",
+    "type": "FeedbackLoop",
+    "label": "Blood calcium negative feedback",
+    "status": "approved",
+    "description": "血鈣的負回饋調節迴路",
+    "properties": {
+      "feedback_type": "negative",
+      "regulated_variable": "blood_calcium"
+    }
+  },
+  {
+    "id": "feedback:uterine_contraction_positive_feedback",
+    "type": "FeedbackLoop",
+    "label": "Uterine contraction positive feedback",
+    "status": "approved",
+    "description": "分娩過程中子宮收縮的正回饋迴路",
+    "properties": {
+      "feedback_type": "positive",
+      "regulated_variable": "uterine_contraction_intensity"
+    }
+  },
+  {
+    "id": "system:endocrine_system",
+    "type": "System",
+    "label": "Endocrine system",
+    "status": "approved",
+    "description": "內分泌系統",
+    "properties": {}
+  },
+  {
+    "id": "concept:homeostasis",
+    "type": "Concept",
+    "label": "Homeostasis",
+    "status": "approved",
+    "description": "恆定性:生物體維持內部環境穩定的能力",
+    "properties": {}
+  },
+  {
+    "id": "concept:negative_feedback",
+    "type": "Concept",
+    "label": "Negative feedback",
+    "status": "approved",
+    "description": "負回饋:效應抵消原始刺激的調節機制",
+    "properties": {}
+  },
+  {
+    "id": "concept:positive_feedback",
+    "type": "Concept",
+    "label": "Positive feedback",
+    "status": "approved",
+    "description": "正回饋:效應強化原始刺激的調節機制",
+    "properties": {}
+  }
+]

@@ -8,7 +8,11 @@ Domain-specific GraphRAG system for high-school biology. See `docs/graph_plan.md
 cp .env.example .env
 make up
 make health
+make seed-sample
+curl "http://localhost:8000/neighbors/hormone:insulin?depth=1"
 ```
+
+`make seed-sample` loads the sample hormone-regulation graph (44 nodes / 84 relationships — blood glucose, water/osmolarity, calcium, and uterine-contraction feedback loops) into Neo4j.
 
 ## Tests
 
@@ -22,4 +26,5 @@ make test
 - `schema/` — Neo4j node/relationship types, DB schema, LLM extraction guidelines
 - `prompts/` — LLM extraction prompt templates
 - `docs/` — project plan and API contract
-- `scripts/` — helper scripts (e.g. `wait_for_services.sh`)
+- `scripts/` — helper scripts (`wait_for_services.sh`, `seed_sample_graph.py`)
+- `data/sample/` — sample hormone-regulation concept/edge JSON
