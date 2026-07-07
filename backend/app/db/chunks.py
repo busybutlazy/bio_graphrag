@@ -42,6 +42,18 @@ async def fetch_chunks_by_ids(chunk_ids: list[str]) -> dict[str, dict]:
     }
 
 
+async def all_topics() -> list[str]:
+    """Distinct chunk topics, ordered by first appearance."""
+    conn = await _connect()
+    try:
+        rows = await conn.fetch(
+            "SELECT DISTINCT topic FROM chunks WHERE topic IS NOT NULL ORDER BY topic"
+        )
+    finally:
+        await conn.close()
+    return [row["topic"] for row in rows]
+
+
 async def concept_ids_by_topic(topic: str) -> list[str]:
     """Distinct concept_ids referenced by chunks whose topic matches."""
     conn = await _connect()

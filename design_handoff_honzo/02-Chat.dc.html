@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@400;500;600;700;800&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=Noto+Serif+TC:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ background:#E7DFCE; }
+    body{ font-family:'Zen Kaku Gothic New','Noto Sans TC',sans-serif; color:#211C16; -webkit-font-smoothing:antialiased; }
+    ::selection{ background:#A65A35; color:#F4EFE4; }
+    .sess:hover{ background:#F1EBDD; }
+  </style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; min-height:100vh; box-sizing:border-box; padding:56px; background:#E7DFCE; background-image:radial-gradient(#D8CFBA 0.6px, transparent 0.6px); background-size:24px 24px; display:flex; flex-direction:column; align-items:center; gap:0;">
+
+  <div style="width:1440px; height:884px; background:#F4EFE4; box-shadow:0 1px 3px rgba(33,28,22,.10), 0 24px 60px rgba(33,28,22,.10); display:flex; flex-direction:column; overflow:hidden;">
+
+    <!-- header -->
+    <div style="display:flex; align-items:center; padding:16px 40px; gap:24px; flex:none;">
+      <div style="display:flex; align-items:center; gap:13px;"><div style="width:34px; height:34px; background:#A65A35; color:#F4EFE4; display:flex; align-items:center; justify-content:center; font-family:'Shippori Mincho B1',serif; font-size:19px; font-weight:700;">本</div><div style="line-height:1;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:20px; font-weight:700;">本草</div><div style="font-family:'IBM Plex Mono',monospace; font-size:8.5px; letter-spacing:0.32em; color:#B3A88F; margin-top:3px;">HONZŌ</div></div><div style="width:1px; height:26px; background:#DED5C2; margin:0 4px;"></div><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">知識研究平台</div></div>
+      <div style="margin-left:auto; display:flex; align-items:center; gap:18px;"><div style="display:flex; align-items:center; gap:8px; border:1px solid #DED5C2; padding:7px 14px 7px 11px; color:#B3A88F; min-width:188px;"><span style="font-size:12px;">⌕</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px;">搜尋條目、實體…</span><span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:9px; border:1px solid #DED5C2; padding:1px 4px;">/</span></div><button style="display:flex; align-items:center; gap:8px; background:#211C16; color:#F4EFE4; border:none; padding:9px 16px; cursor:pointer; font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; font-weight:500;"><span style="color:#E0A989;">✦</span>智詢</button><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">繁體中文</span><div style="width:30px;height:30px;background:#6B5640;color:#F4EFE4;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;">DA</div></div>
+    </div>
+    <div style="display:flex; align-items:flex-end; gap:30px; padding:0 40px; border-bottom:1px solid #DED5C2; flex:none;">
+      <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">總覽</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">典藏</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">圖譜</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#211C16; font-weight:500; padding:6px 0 13px; border-bottom:2px solid #A65A35;">問答</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">收錄</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">解析</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">用量</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">設定</span>
+    </div>
+
+    <!-- body: chat thread + collapsible session panel -->
+    <div style="flex:1; display:flex; min-height:0;">
+
+      <!-- chat column -->
+      <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+        <!-- thread title -->
+        <div style="flex:none; padding:18px 44px; border-bottom:1px solid #EDE5D5; display:flex; align-items:center; gap:14px;">
+          <div style="width:30px;height:30px;flex:none;background:#211C16;color:#E0A989;display:flex;align-items:center;justify-content:center;font-size:14px;">✦</div>
+          <div><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:700; line-height:1;">細胞構造問答</div><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#8A7D67; margin-top:4px;">僅依典藏知識作答 · 細胞學域</div></div>
+          <span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#B3A88F; border:1px solid #DED5C2; padding:4px 10px;">HYBRID · VECTOR + GRAPH</span>
+        </div>
+
+        <!-- messages -->
+        <div style="flex:1; overflow:hidden; padding:30px 44px; display:flex; flex-direction:column; gap:24px;">
+          <div style="display:flex; justify-content:center;"><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.14em; color:#B3A88F;">2026-06-22 · 今日</span></div>
+
+          <!-- user -->
+          <div style="display:flex; justify-content:flex-end;"><div style="max-width:62%; background:#6B5640; color:#F4EFE4; padding:13px 18px; font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; line-height:1.65;">簡單介紹細胞的基本構造</div></div>
+
+          <!-- ai -->
+          <div style="display:flex; gap:14px; max-width:80%;">
+            <div style="width:30px;height:30px;flex:none;background:#211C16;color:#E0A989;display:flex;align-items:center;justify-content:center;font-size:14px;">✦</div>
+            <div style="background:#FBF8F0; border:1px solid #E2DAC8; padding:16px 18px;">
+              <p style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; line-height:1.95; color:#211C16; text-wrap:pretty;">細胞是生命的基本構造與功能單位。典型真核細胞由<strong style="font-weight:700;">細胞膜</strong>界定範圍,內含攜帶遺傳訊息的<strong style="font-weight:700;">細胞核</strong>、負責產能的<strong style="font-weight:700;">粒線體</strong>,以及合成蛋白質的<strong style="font-weight:700;">核糖體</strong>;植物細胞另具細胞壁與葉綠體。</p>
+              <div style="margin-top:14px; padding-top:13px; border-top:1px solid #E2DAC8;">
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.16em; color:#A65A35; margin-bottom:9px;">引用來源 · 2</div>
+                <div style="display:flex; gap:9px; flex-wrap:wrap;">
+                  <span style="display:flex; align-items:center; gap:8px; border:1px solid #DED5C2; padding:6px 11px; background:#F4EFE4;"><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#A65A35;">03</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">細胞構造</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#7E8060;">0.94</span></span>
+                  <span style="display:flex; align-items:center; gap:8px; border:1px solid #DED5C2; padding:6px 11px; background:#F4EFE4;"><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#A65A35;">04</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">細胞與能量</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#7E8060;">0.81</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- user -->
+          <div style="display:flex; justify-content:flex-end;"><div style="max-width:62%; background:#6B5640; color:#F4EFE4; padding:13px 18px; font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; line-height:1.65;">那粒線體的主要功能是什麼?</div></div>
+
+          <!-- ai -->
+          <div style="display:flex; gap:14px; max-width:80%;">
+            <div style="width:30px;height:30px;flex:none;background:#211C16;color:#E0A989;display:flex;align-items:center;justify-content:center;font-size:14px;">✦</div>
+            <div style="background:#FBF8F0; border:1px solid #E2DAC8; padding:16px 18px;">
+              <p style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; line-height:1.95; color:#211C16; text-wrap:pretty;">粒線體是細胞的「能量工廠」。它透過細胞呼吸,將養分中的化學能轉換為細胞可直接利用的 <strong style="font-weight:700;">ATP</strong>,為大多數耗能反應提供動力。</p>
+              <div style="margin-top:14px; padding-top:13px; border-top:1px solid #E2DAC8;">
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.16em; color:#A65A35; margin-bottom:9px;">引用來源 · 1</div>
+                <span style="display:inline-flex; align-items:center; gap:8px; border:1px solid #DED5C2; padding:6px 11px; background:#F4EFE4;"><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#A65A35;">04</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">細胞與能量</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#7E8060;">0.96</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- composer -->
+        <div style="flex:none; padding:18px 44px 24px; border-top:1px solid #EDE5D5;">
+          <div style="display:flex; gap:14px; align-items:center;">
+            <div style="flex:1; border:1.5px solid #211C16; background:#FBF8F0; padding:13px 16px; font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; color:#B3A88F;">接著問⋯⋯</div>
+            <button style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#F4EFE4; background:#211C16; border:none; padding:14px 28px; cursor:pointer;">發送</button>
+          </div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F; margin-top:9px;">答案僅依典藏知識生成,並標注引用來源 · Enter 送出 · Shift+Enter 換行</div>
+        </div>
+      </div>
+
+      <!-- collapsible session panel -->
+      <div style="width:296px; flex:none; border-left:1px solid #DED5C2; background:#FBF8F0; display:flex; flex-direction:column;">
+        <div style="padding:18px 20px 14px; display:flex; align-items:center; gap:10px; border-bottom:1px solid #EDE5D5;">
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.16em; color:#A65A35;">SESSIONS · 對話</span>
+          <span style="margin-left:auto; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border:1px solid #DED5C2; color:#8A7D67; cursor:pointer; font-size:12px;" title="收合面板">»</span>
+        </div>
+        <div style="padding:14px 16px 8px;">
+          <button style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; color:#211C16; background:transparent; border:1px solid #211C16; padding:10px; cursor:pointer;">＋ 新對話</button>
+        </div>
+        <div style="flex:1; overflow:hidden; padding:6px 12px;">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#B3A88F; padding:8px 8px 6px;">今日 · TODAY</div>
+          <div class="sess" style="padding:12px; background:#211C16; color:#F4EFE4; cursor:pointer;"><div style="display:flex; align-items:center; gap:8px;"><span style="width:4px;height:4px;border-radius:50%;background:#A65A35;"></span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; flex:1;">細胞構造問答</span></div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#9C9276; margin-top:5px; padding-left:12px;">2 則 · 23:24</div></div>
+          <div class="sess" style="padding:12px; cursor:pointer;"><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; color:#3D3225;">DNA 複製機制</div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#B3A88F; margin-top:5px;">4 則 · 18:10</div></div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#B3A88F; padding:14px 8px 6px;">本週 · EARLIER</div>
+          <div class="sess" style="padding:12px; cursor:pointer;"><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; color:#3D3225;">孟德爾遺傳法則</div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#B3A88F; margin-top:5px;">6 則 · 06-21</div></div>
+          <div class="sess" style="padding:12px; cursor:pointer;"><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; color:#3D3225;">演化理論概論</div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#B3A88F; margin-top:5px;">3 則 · 06-19</div></div>
+          <div class="sess" style="padding:12px; cursor:pointer;"><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; color:#3D3225;">病毒是否為生物</div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#B3A88F; margin-top:5px;">2 則 · 06-18</div></div>
+        </div>
+        <div style="padding:14px 20px; border-top:1px solid #EDE5D5; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#8A7D67; display:flex; justify-content:space-between;"><span>5 個對話</span><span style="color:#A65A35;">清除全部</span></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

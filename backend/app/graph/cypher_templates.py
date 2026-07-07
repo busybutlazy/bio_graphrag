@@ -37,6 +37,32 @@ def fetch_node_detail(driver: Driver, node_id: str) -> dict | None:
     }
 
 
+def fetch_nodes_brief(driver: Driver, node_ids: list[str]) -> list[dict]:
+    """Return {id,label,type} for the approved nodes among node_ids."""
+    if not node_ids:
+        return []
+    with driver.session() as session:
+        rows = session.run(
+            "MATCH (n) WHERE n.id IN $ids AND n.status = 'approved' "
+            "RETURN n.id AS id, n.label AS label, labels(n)[0] AS type "
+            "ORDER BY labels(n)[0], n.label",
+            ids=node_ids,
+        ).data()
+    return rows
+
+
+def graph_counts(driver: Driver) -> dict:
+    """Count approved nodes and edges (for the Library summary)."""
+    with driver.session() as session:
+        nodes = session.run(
+            "MATCH (n) WHERE n.status = 'approved' RETURN count(n) AS c"
+        ).single()["c"]
+        edges = session.run(
+            "MATCH ()-[r]->() WHERE r.status = 'approved' RETURN count(r) AS c"
+        ).single()["c"]
+    return {"nodes": nodes, "edges": edges}
+
+
 def expand_from_seeds(
     driver: Driver, seed_ids: list[str], depth: int, node_limit: int
 ) -> dict:

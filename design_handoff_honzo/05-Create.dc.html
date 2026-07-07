@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@400;500;600;700;800&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=Noto+Serif+TC:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ background:#E7DFCE; }
+    body{ font-family:'Zen Kaku Gothic New','Noto Sans TC',sans-serif; color:#211C16; -webkit-font-smoothing:antialiased; }
+    ::selection{ background:#A65A35; color:#F4EFE4; }
+  </style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; min-height:100vh; box-sizing:border-box; padding:56px; background:#E7DFCE; background-image:radial-gradient(#D8CFBA 0.6px, transparent 0.6px); background-size:24px 24px; display:flex; flex-direction:column; align-items:center; gap:0;">
+
+  <!-- ===== VARIATION A — 單欄表單 ===== -->
+  <div style="flex:none;">
+    <div style="width:1440px; background:#F4EFE4; box-shadow:0 1px 3px rgba(33,28,22,.10), 0 24px 60px rgba(33,28,22,.10); overflow:hidden;">
+      <div style="display:flex; align-items:center; padding:16px 40px; gap:24px;">
+        <div style="display:flex; align-items:center; gap:13px;"><div style="width:34px; height:34px; background:#A65A35; color:#F4EFE4; display:flex; align-items:center; justify-content:center; font-family:'Shippori Mincho B1',serif; font-size:19px; font-weight:700;">本</div><div style="line-height:1;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:20px; font-weight:700;">本草</div><div style="font-family:'IBM Plex Mono',monospace; font-size:8.5px; letter-spacing:0.32em; color:#B3A88F; margin-top:3px;">HONZŌ</div></div><div style="width:1px; height:26px; background:#DED5C2; margin:0 4px;"></div><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">知識研究平台</div></div>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:18px;"><div style="display:flex; align-items:center; gap:8px; border:1px solid #DED5C2; padding:7px 14px 7px 11px; color:#B3A88F; min-width:188px;"><span style="font-size:12px;">⌕</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px;">搜尋條目、實體…</span><span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:9px; border:1px solid #DED5C2; padding:1px 4px;">/</span></div><button style="display:flex; align-items:center; gap:8px; background:#211C16; color:#F4EFE4; border:none; padding:9px 16px; cursor:pointer; font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; font-weight:500;"><span style="color:#E0A989;">✦</span>智詢</button><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">繁體中文</span><div style="width:30px;height:30px;background:#6B5640;color:#F4EFE4;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;">DA</div></div>
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:30px; padding:0 40px; border-bottom:1px solid #DED5C2;">
+        <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">總覽</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">典藏</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">圖譜</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">問答</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#211C16; font-weight:500; padding:6px 0 13px; border-bottom:2px solid #A65A35;">收錄</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">解析</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">用量</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">設定</span>
+      </div>
+
+      <div style="max-width:880px; margin:0 auto; padding:40px 40px 48px;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.22em; color:#A65A35; margin-bottom:9px;">CREATE&nbsp;·&nbsp;收錄條目</div>
+        <h1 style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:38px; font-weight:700; line-height:1;">收錄條目</h1>
+        <p style="font-size:13px; color:#8A7D67; margin-top:10px;">當前解析設定檔:生物學 · 通用 (v1)</p>
+
+        <!-- 標題 -->
+        <div style="display:grid; grid-template-columns:200px 1fr; gap:36px; padding:30px 0; border-top:1.5px solid #211C16; margin-top:28px;">
+          <div><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:17px; font-weight:600;">標題</div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.14em; color:#B3A88F; margin-top:5px;">TITLE</div><div style="font-size:12px; color:#8A7D67; margin-top:10px; line-height:1.6;">列表與圖譜上的顯示名稱</div></div>
+          <div><div style="border:1px solid #DED5C2; background:#FBF8F0; padding:14px 16px; font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:17px; color:#211C16;">細胞週期與細胞分裂</div></div>
+        </div>
+        <!-- 學門 -->
+        <div style="display:grid; grid-template-columns:200px 1fr; gap:36px; padding:30px 0; border-top:1px solid #DED5C2;">
+          <div><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:17px; font-weight:600;">歸屬學門</div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.14em; color:#B3A88F; margin-top:5px;">DOMAIN</div><div style="font-size:12px; color:#8A7D67; margin-top:10px; line-height:1.6;">決定範圍與預設可閱覽權限</div></div>
+          <div>
+            <div style="display:flex; gap:10px;">
+              <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#F4EFE4; background:#211C16; padding:10px 20px;">細胞學</span>
+              <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#5A5040; border:1px solid #DED5C2; padding:10px 20px;">遺傳學</span>
+              <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#5A5040; border:1px solid #DED5C2; padding:10px 20px;">演化學</span>
+            </div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; margin-top:12px;">範圍 <span style="color:#A65A35;">CYTOLOGY</span> · 可見於「細胞學」學門</div>
+          </div>
+        </div>
+        <!-- 可閱覽範圍 -->
+        <div style="display:grid; grid-template-columns:200px 1fr; gap:36px; padding:30px 0; border-top:1px solid #DED5C2;">
+          <div><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:17px; font-weight:600;">可閱覽範圍</div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.14em; color:#B3A88F; margin-top:5px;">VISIBILITY</div><div style="font-size:12px; color:#8A7D67; margin-top:10px; line-height:1.6;">誰能在對話與列表中看到此條目</div></div>
+          <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:14px;">
+            <div><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67; margin-bottom:8px;">公開</div><div style="display:flex; flex-direction:column; gap:7px;"><span style="display:flex;align-items:center;gap:9px;font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;border:1px solid #B3B79A;padding:8px 12px;"><span style="color:#7E8060;">✓</span>公開 · 基本</span><span style="display:flex;align-items:center;gap:9px;font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;color:#8A7D67;border:1px solid #DED5C2;padding:8px 12px;">公開 · 限定</span></div></div>
+            <div><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67; margin-bottom:8px;">教師</div><div style="display:flex; flex-direction:column; gap:7px;"><span style="display:flex;align-items:center;gap:9px;font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;border:1px solid #B3B79A;padding:8px 12px;"><span style="color:#7E8060;">✓</span>教師 · 基本</span><span style="display:flex;align-items:center;gap:9px;font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;border:1px solid #B3B79A;padding:8px 12px;"><span style="color:#7E8060;">✓</span>教師 · 機密</span></div></div>
+            <div><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67; margin-bottom:8px;">學生</div><div style="display:flex; flex-direction:column; gap:7px;"><span style="display:flex;align-items:center;gap:9px;font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;border:1px solid #B3B79A;padding:8px 12px;"><span style="color:#7E8060;">✓</span>學生 · 基本</span><span style="display:flex;align-items:center;gap:9px;font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;color:#8A7D67;border:1px solid #DED5C2;padding:8px 12px;">學生 · 限定</span></div></div>
+            <div><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67; margin-bottom:8px;">客座</div><div style="display:flex; flex-direction:column; gap:7px;"><span style="display:flex;align-items:center;gap:9px;font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;color:#8A7D67;border:1px solid #DED5C2;padding:8px 12px;">客座 · 基本</span><span style="display:flex;align-items:center;gap:9px;font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;color:#8A7D67;border:1px solid #DED5C2;padding:8px 12px;">客座 · 限定</span></div></div>
+          </div>
+        </div>
+        <!-- 來源檔案 -->
+        <div style="display:grid; grid-template-columns:200px 1fr; gap:36px; padding:30px 0; border-top:1px solid #DED5C2;">
+          <div><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:17px; font-weight:600;">來源檔案</div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.14em; color:#B3A88F; margin-top:5px;">SOURCE</div><div style="font-size:12px; color:#8A7D67; margin-top:10px; line-height:1.6;">PDF / Word / Markdown / TXT<br>單檔上限 50 MB</div></div>
+          <div style="border:1.5px dashed #C9B79A; background:#FBF8F0; padding:46px; text-align:center;">
+            <div style="font-size:26px; color:#A65A35;">↥</div>
+            <div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:17px; font-weight:600; margin-top:12px;">拖曳檔案或點擊上傳</div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#8A7D67; margin-top:8px; line-height:1.8;">支援 pdf · txt · xlsx · md · docx<br>最大 50MB · PDF 暫時限制最多 20 頁</div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:14px; margin-top:14px;">
+          <button style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; color:#5A5040; background:transparent; border:1px solid #DED5C2; padding:11px 24px; cursor:pointer;">取消</button>
+          <button style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; color:#F4EFE4; background:#211C16; border:none; padding:12px 28px; cursor:pointer;">儲存草稿</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+</div>
+</x-dc>
+</body>
+</html>

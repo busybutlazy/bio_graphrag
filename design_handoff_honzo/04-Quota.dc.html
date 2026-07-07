@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@400;500;600;700;800&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=Noto+Serif+TC:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ background:#E7DFCE; }
+    body{ font-family:'Zen Kaku Gothic New','Noto Sans TC',sans-serif; color:#211C16; -webkit-font-smoothing:antialiased; }
+    ::selection{ background:#A65A35; color:#F4EFE4; }
+  </style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; min-height:100vh; box-sizing:border-box; padding:56px; background:#E7DFCE; background-image:radial-gradient(#D8CFBA 0.6px, transparent 0.6px); background-size:24px 24px; display:flex; flex-direction:column; align-items:center; gap:0;">
+
+  <!-- ===== VARIATION B — 分析 / ANALYTICS ===== -->
+  <div style="flex:none;">
+    <div style="width:1440px; height:900px; background:#F4EFE4; box-shadow:0 1px 3px rgba(33,28,22,.10), 0 24px 60px rgba(33,28,22,.10); display:flex; flex-direction:column; overflow:hidden;">
+      <div style="display:flex; align-items:center; padding:16px 40px; gap:24px; flex:none;">
+        <div style="display:flex; align-items:center; gap:13px;"><div style="width:34px; height:34px; background:#A65A35; color:#F4EFE4; display:flex; align-items:center; justify-content:center; font-family:'Shippori Mincho B1',serif; font-size:19px; font-weight:700;">本</div><div style="line-height:1;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:20px; font-weight:700;">本草</div><div style="font-family:'IBM Plex Mono',monospace; font-size:8.5px; letter-spacing:0.32em; color:#B3A88F; margin-top:3px;">HONZŌ</div></div><div style="width:1px; height:26px; background:#DED5C2; margin:0 4px;"></div><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">知識研究平台</div></div>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:18px;"><div style="display:flex; align-items:center; gap:8px; border:1px solid #DED5C2; padding:7px 14px 7px 11px; color:#B3A88F; min-width:188px;"><span style="font-size:12px;">⌕</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px;">搜尋條目、實體…</span><span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:9px; border:1px solid #DED5C2; padding:1px 4px;">/</span></div><button style="display:flex; align-items:center; gap:8px; background:#211C16; color:#F4EFE4; border:none; padding:9px 16px; cursor:pointer; font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; font-weight:500;"><span style="color:#E0A989;">✦</span>智詢</button><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">繁體中文</span><div style="width:30px;height:30px;background:#6B5640;color:#F4EFE4;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;">DA</div></div>
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:30px; padding:0 40px; border-bottom:1px solid #DED5C2; flex:none;">
+        <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">總覽</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">典藏</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">圖譜</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">問答</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">收錄</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">解析</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#211C16; font-weight:500; padding:6px 0 13px; border-bottom:2px solid #A65A35;">用量</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">設定</span>
+      </div>
+
+      <!-- title + total -->
+      <div style="flex:none; padding:28px 40px 0; display:flex; justify-content:space-between; align-items:flex-end;">
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.22em; color:#A65A35; margin-bottom:8px;">USAGE&nbsp;·&nbsp;用量分析</div>
+          <h1 style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:30px; font-weight:700; line-height:1;">用量分析</h1>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; margin-top:9px;">2026-06-04 → 07-03 · 週期剩餘 11 天</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">本期用量總額</div>
+          <div style="display:flex; align-items:baseline; gap:10px; justify-content:flex-end; margin-top:6px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:44px; color:#211C16; letter-spacing:-0.01em; line-height:1;">931,974</span><span style="font-family:'IBM Plex Mono',monospace; font-size:15px; color:#B3A88F;">/ 10,000,000</span><span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:#A65A35;">TOK</span></div>
+          <div style="width:300px; height:5px; background:#E2DAC8; margin-top:12px; margin-left:auto;"><div style="width:9%; height:100%; background:#A65A35;"></div></div>
+        </div>
+      </div>
+
+      <div style="flex:1; padding:22px 40px 30px; min-height:0; display:grid; grid-template-columns:1.5fr 1fr; grid-template-rows:auto 1fr; gap:22px;">
+        <!-- trend area chart -->
+        <div style="border:1px solid #DED5C2; background:#FBF8F0; padding:24px; grid-column:1; grid-row:1 / span 2; display:flex; flex-direction:column;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.16em; color:#A65A35;">TREND · 用量趨勢</div><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:24px; font-weight:700; margin-top:6px;">近 30 天</div></div><div style="display:flex; gap:14px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#8A7D67;"><span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;background:#A65A35;"></span>GRAPH</span><span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;background:#6B5640;"></span>VECTOR</span><span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;background:#B5894A;"></span>CHAT</span></div></div>
+          <div style="flex:1; margin-top:20px; position:relative; min-height:0;">
+            <svg viewBox="0 0 600 240" preserveAspectRatio="none" style="width:100%; height:100%;">
+              <line x1="0" y1="60" x2="600" y2="60" stroke="#E7E0D0" stroke-width="1"/><line x1="0" y1="120" x2="600" y2="120" stroke="#E7E0D0" stroke-width="1"/><line x1="0" y1="180" x2="600" y2="180" stroke="#E7E0D0" stroke-width="1"/>
+              <path d="M0,210 L50,160 L100,175 L150,120 L200,140 L250,70 L300,110 L350,95 L400,150 L450,90 L500,130 L550,100 L600,120 L600,240 L0,240 Z" fill="#A65A35" opacity="0.16"/>
+              <path d="M0,210 L50,160 L100,175 L150,120 L200,140 L250,70 L300,110 L350,95 L400,150 L450,90 L500,130 L550,100 L600,120" fill="none" stroke="#A65A35" stroke-width="2"/>
+              <path d="M0,228 L50,205 L100,210 L150,185 L200,195 L250,160 L300,180 L350,170 L400,200 L450,165 L500,185 L550,172 L600,182" fill="none" stroke="#6B5640" stroke-width="2"/>
+              <path d="M0,235 L50,228 L100,230 L150,222 L200,225 L250,212 L300,220 L350,216 L400,226 L450,214 L500,222 L550,216 L600,220" fill="none" stroke="#B5894A" stroke-width="1.5" stroke-dasharray="3 3"/>
+            </svg>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:8px; font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#B3A88F;"><span>06-04</span><span>06-11</span><span>06-18</span><span>06-25</span><span>07-03</span></div>
+        </div>
+
+        <!-- breakdown -->
+        <div style="border:1px solid #DED5C2; background:#FBF8F0; padding:24px; grid-column:2; grid-row:1;">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.16em; color:#A65A35;">BY PIPELINE · 管線拆解</div>
+          <div style="display:flex; align-items:flex-end; gap:6px; margin-top:18px; height:96px;">
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px;"><div style="width:100%; background:#A65A35; height:88px;"></div><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#8A7D67;">512K</span></div>
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px;"><div style="width:100%; background:#6B5640; height:58px;"></div><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#8A7D67;">328K</span></div>
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px;"><div style="width:100%; background:#B5894A; height:16px;"></div><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#8A7D67;">92K</span></div>
+          </div>
+          <div style="display:flex; justify-content:space-around; margin-top:10px; font-family:'Zen Kaku Gothic New',sans-serif; font-size:11px; color:#5A5040;"><span>GRAPH</span><span>VECTOR</span><span>CHAT</span></div>
+        </div>
+
+        <!-- member table -->
+        <div style="border:1px solid #DED5C2; background:#FBF8F0; padding:24px; grid-column:2; grid-row:2; display:flex; flex-direction:column; min-height:0;">
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.16em; color:#A65A35;">MEMBERS · 成員用量</div>
+          <div style="margin-top:14px; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid #E2DAC8;"><div style="width:26px;height:26px;background:#6B5640;color:#F4EFE4;font-family:'IBM Plex Mono',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;">DA</div><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; flex:1;">Dev Admin</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">213K</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid #E2DAC8;"><div style="width:26px;height:26px;background:#7E8060;color:#F4EFE4;font-family:'IBM Plex Mono',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;">LW</div><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; flex:1;">L. Wu</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6B5640;">98K</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid #E2DAC8;"><div style="width:26px;height:26px;background:#B5894A;color:#F4EFE4;font-family:'IBM Plex Mono',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;">RL</div><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; flex:1;">R. Lin</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6B5640;">51K</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:11px 0;"><div style="width:26px;height:26px;background:#A9A28F;color:#F4EFE4;font-family:'IBM Plex Mono',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;">CH</div><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; flex:1;">C. Ho</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8A7D67;">12K</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

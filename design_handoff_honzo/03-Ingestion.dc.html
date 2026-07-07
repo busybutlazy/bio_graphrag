@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@400;500;600;700;800&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=Noto+Serif+TC:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ background:#E7DFCE; }
+    body{ font-family:'Zen Kaku Gothic New','Noto Sans TC',sans-serif; color:#211C16; -webkit-font-smoothing:antialiased; }
+    ::selection{ background:#A65A35; color:#F4EFE4; }
+    .row:hover{ background:#FBF8F0; }
+  </style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; min-height:100vh; box-sizing:border-box; padding:56px; background:#E7DFCE; background-image:radial-gradient(#D8CFBA 0.6px, transparent 0.6px); background-size:24px 24px; display:flex; flex-direction:column; align-items:center; gap:0;">
+
+  <!-- ===== VARIATION B — 管線 / PIPELINE ===== -->
+  <div style="flex:none;">
+    <div style="width:1440px; height:760px; background:#F4EFE4; box-shadow:0 1px 3px rgba(33,28,22,.10), 0 24px 60px rgba(33,28,22,.10); display:flex; flex-direction:column; overflow:hidden;">
+      <div style="display:flex; align-items:center; padding:16px 40px; gap:24px; flex:none;">
+        <div style="display:flex; align-items:center; gap:13px;"><div style="width:34px; height:34px; background:#A65A35; color:#F4EFE4; display:flex; align-items:center; justify-content:center; font-family:'Shippori Mincho B1',serif; font-size:19px; font-weight:700;">本</div><div style="line-height:1;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:20px; font-weight:700;">本草</div><div style="font-family:'IBM Plex Mono',monospace; font-size:8.5px; letter-spacing:0.32em; color:#B3A88F; margin-top:3px;">HONZŌ</div></div><div style="width:1px; height:26px; background:#DED5C2; margin:0 4px;"></div><div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">知識研究平台</div></div>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:18px;"><div style="display:flex; align-items:center; gap:8px; border:1px solid #DED5C2; padding:7px 14px 7px 11px; color:#B3A88F; min-width:188px;"><span style="font-size:12px;">⌕</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px;">搜尋條目、實體…</span><span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:9px; border:1px solid #DED5C2; padding:1px 4px;">/</span></div><button style="display:flex; align-items:center; gap:8px; background:#211C16; color:#F4EFE4; border:none; padding:9px 16px; cursor:pointer; font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; font-weight:500;"><span style="color:#E0A989;">✦</span>智詢</button><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">繁體中文</span><div style="width:30px;height:30px;background:#6B5640;color:#F4EFE4;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;">DA</div></div>
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:30px; padding:0 40px; border-bottom:1px solid #DED5C2; flex:none;">
+        <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">總覽</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">典藏</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">圖譜</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">問答</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#211C16; font-weight:500; padding:6px 0 13px; border-bottom:2px solid #A65A35;">收錄</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">解析</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">用量</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px;">設定</span>
+      </div>
+
+      <div style="flex:1; padding:32px 40px; min-height:0; display:flex; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:24px;">
+          <div><div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.22em; color:#A65A35; margin-bottom:8px;">PIPELINE&nbsp;·&nbsp;收錄管線</div><h1 style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:30px; font-weight:700; line-height:1;">收錄管線</h1></div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67;">吞吐 ~155K tok/天 · 峰值 374K</div>
+        </div>
+
+        <!-- Notion-style filter bar -->
+        <div style="display:flex; align-items:center; gap:9px; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid #DED5C2;">
+          <span style="display:flex; align-items:center; gap:7px; font-family:'Zen Kaku Gothic New',sans-serif; font-size:12.5px; color:#5A5040; background:#FBF8F0; border:1px solid #DED5C2; padding:6px 12px;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#A65A35" stroke-width="1.4"><path d="M1.5 2.5h13l-5 6v5l-3 1.5v-6.5z"/></svg>篩選</span>
+          <span style="display:flex; align-items:center; gap:8px; font-family:'Zen Kaku Gothic New',sans-serif; font-size:12.5px; color:#211C16; background:#F0E2D6; border:1px solid #D9B89E; padding:6px 11px;">管線 <span style="color:#8A7D67;">是</span> <span style="font-family:'IBM Plex Mono',monospace; font-size:11px;">GRAPH</span> <span style="color:#B3A88F; font-size:11px;">▾</span> <span style="color:#A65A35; cursor:pointer; font-size:13px; line-height:1;">×</span></span>
+          <span style="display:flex; align-items:center; gap:8px; font-family:'Zen Kaku Gothic New',sans-serif; font-size:12.5px; color:#211C16; background:#F0E2D6; border:1px solid #D9B89E; padding:6px 11px;">狀態 <span style="color:#8A7D67;">是</span> 進行中 <span style="color:#B3A88F; font-size:11px;">▾</span> <span style="color:#A65A35; cursor:pointer; font-size:13px; line-height:1;">×</span></span>
+          <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12.5px; color:#8A7D67; border:1px dashed #C9B79A; padding:6px 11px; cursor:pointer;">＋ 新增篩選</span>
+          <span style="margin-left:auto; display:flex; align-items:center; gap:16px; font-family:'Zen Kaku Gothic New',sans-serif; font-size:12.5px; color:#6F6557;"><span style="display:flex; align-items:center; gap:6px;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8A7D67" stroke-width="1.4"><path d="M3 4h10M4.5 8h7M6 12h4"/></svg>排序</span><span>25 / 每頁</span></span>
+        </div>
+
+        <!-- 5-stage kanban -->
+        <div style="flex:1; display:grid; grid-template-columns:repeat(5,1fr); gap:14px; min-height:0;">
+          <!-- stage -->
+          <div style="display:flex; flex-direction:column; min-height:0;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; padding-bottom:10px; border-bottom:1.5px solid #211C16;"><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:15px; font-weight:700;">佇列</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#A65A35;">2</span></div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#B3A88F; margin-top:6px;">QUEUE</div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
+              <div style="border:1px solid #DED5C2; background:#FBF8F0; padding:12px;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">演化理論的發展</div><div style="display:flex; justify-content:space-between; margin-top:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:9px; color:#7E8060; border:1px solid #B3B79A; padding:1px 6px;">VECTOR</span><span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#B3A88F;">等待中</span></div></div>
+              <div style="border:1px solid #DED5C2; background:#FBF8F0; padding:12px;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">病毒</div><div style="display:flex; justify-content:space-between; margin-top:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:9px; color:#6B5640; border:1px solid #C9B79A; padding:1px 6px;">GRAPH</span><span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#B3A88F;">等待中</span></div></div>
+            </div>
+          </div>
+          <!-- stage chunk -->
+          <div style="display:flex; flex-direction:column; min-height:0;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; padding-bottom:10px; border-bottom:1.5px solid #211C16;"><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:15px; font-weight:700;">切塊</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#A65A35;">1</span></div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#B3A88F; margin-top:6px;">CHUNK</div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
+              <div style="border:1px solid #C9B79A; background:#FBF8F0; padding:12px;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">孟德爾的遺傳法則</div><div style="height:3px; background:#E2DAC8; margin-top:10px;"><div style="width:60%; height:100%; background:#A65A35;"></div></div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#8A7D67; margin-top:7px;">82 / 140 chunks</div></div>
+            </div>
+          </div>
+          <!-- stage embed -->
+          <div style="display:flex; flex-direction:column; min-height:0;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; padding-bottom:10px; border-bottom:1.5px solid #211C16;"><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:15px; font-weight:700;">向量化</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#A65A35;">1</span></div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#B3A88F; margin-top:6px;">EMBED</div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
+              <div style="border:1px solid #C9B79A; background:#FBF8F0; padding:12px;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">遺傳物質</div><div style="height:3px; background:#E2DAC8; margin-top:10px;"><div style="width:38%; height:100%; background:#A65A35;"></div></div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#8A7D67; margin-top:7px;">text-embedding · 38%</div></div>
+            </div>
+          </div>
+          <!-- stage graph -->
+          <div style="display:flex; flex-direction:column; min-height:0;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; padding-bottom:10px; border-bottom:1.5px solid #211C16;"><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:15px; font-weight:700;">圖譜抽取</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#A65A35;">1</span></div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#B3A88F; margin-top:6px;">GRAPH EXTRACT</div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
+              <div style="border:1px solid #C9B79A; background:#FBF8F0; padding:12px;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">細胞週期與分裂</div><div style="height:3px; background:#E2DAC8; margin-top:10px;"><div style="width:74%; height:100%; background:#A65A35;"></div></div><div style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#8A7D67; margin-top:7px;">實體 18 · 關係 24</div></div>
+            </div>
+          </div>
+          <!-- stage done -->
+          <div style="display:flex; flex-direction:column; min-height:0;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; padding-bottom:10px; border-bottom:1.5px solid #211C16;"><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:15px; font-weight:700;">完成</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#7E8060;">6</span></div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#B3A88F; margin-top:6px;">DONE</div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
+              <div style="border:1px solid #DED5C2; background:#F1EBDD; padding:12px;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">細胞構造</div><div style="display:flex; justify-content:space-between; margin-top:8px;"><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:10px; color:#FBF8F0; background:#7E8060; padding:1px 7px;">已完成</span><span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#8A7D67;">274K</span></div></div>
+              <div style="border:1px solid #DED5C2; background:#F1EBDD; padding:12px;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">DNA 複製與表現</div><div style="display:flex; justify-content:space-between; margin-top:8px;"><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:10px; color:#FBF8F0; background:#7E8060; padding:1px 7px;">已完成</span><span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#8A7D67;">133K</span></div></div>
+              <div style="border:1px solid #DED5C2; background:#F1EBDD; padding:12px;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:13px; font-weight:600;">細胞與能量</div><div style="display:flex; justify-content:space-between; margin-top:8px;"><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:10px; color:#FBF8F0; background:#7E8060; padding:1px 7px;">已完成</span><span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#8A7D67;">96K</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

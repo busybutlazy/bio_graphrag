@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@400;500;600;700;800&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=Noto+Serif+TC:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ background:#E7DFCE; }
+    body{ font-family:'Zen Kaku Gothic New','Noto Sans TC',sans-serif; color:#211C16; -webkit-font-smoothing:antialiased; }
+    ::selection{ background:#A65A35; color:#F4EFE4; }
+    .ent:hover{ background:#FBF8F0; }
+    .tab:hover{ color:#211C16; }
+  </style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; min-height:100vh; box-sizing:border-box; padding:56px; background:#E7DFCE; background-image:radial-gradient(#D8CFBA 0.6px, transparent 0.6px); background-size:24px 24px; display:flex; flex-direction:column; align-items:center; gap:0;">
+
+  <!-- ======================= VARIATION A — 橫向導覽 / 典藏列表 ======================= -->
+  <div style="flex:none;">
+    <div style="width:1440px; background:#F4EFE4; box-shadow:0 1px 3px rgba(33,28,22,.10), 0 24px 60px rgba(33,28,22,.10); overflow:hidden;">
+
+      <!-- TOP HEADER row 1 -->
+      <div style="display:flex; align-items:center; padding:16px 40px; gap:24px;">
+        <div style="display:flex; align-items:center; gap:13px;">
+          <div style="width:34px; height:34px; background:#A65A35; color:#F4EFE4; display:flex; align-items:center; justify-content:center; font-family:'Shippori Mincho B1',serif; font-size:19px; font-weight:700;">本</div>
+          <div style="line-height:1;"><div style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:20px; font-weight:700;">本草</div><div style="font-family:'IBM Plex Mono',monospace; font-size:8.5px; letter-spacing:0.32em; color:#B3A88F; margin-top:3px;">HONZŌ</div></div>
+          <div style="width:1px; height:26px; background:#DED5C2; margin:0 4px;"></div>
+          <div style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">知識研究平台</div>
+        </div>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:18px;">
+          <div style="display:flex; align-items:center; gap:8px; border:1px solid #DED5C2; padding:7px 14px 7px 11px; color:#B3A88F; min-width:188px;"><span style="font-size:12px;">⌕</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px;">搜尋條目、實體…</span><span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:9px; border:1px solid #DED5C2; padding:1px 4px;">/</span></div>
+          <button style="display:flex; align-items:center; gap:8px; background:#211C16; color:#F4EFE4; border:none; padding:9px 16px; cursor:pointer; font-family:'Zen Kaku Gothic New',sans-serif; font-size:13px; font-weight:500;"><span style="color:#E0A989;">✦</span>智詢</button>
+          <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:12px; color:#8A7D67;">繁體中文</span>
+          <div style="width:30px;height:30px;background:#6B5640;color:#F4EFE4;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;">DA</div>
+        </div>
+      </div>
+      <!-- TOP HEADER row 2 nav -->
+      <div style="display:flex; align-items:flex-end; gap:30px; padding:0 40px; border-bottom:1px solid #DED5C2;">
+        <span class="tab" style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px; cursor:pointer;">總覽</span>
+        <span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#211C16; font-weight:500; padding:6px 0 13px; border-bottom:2px solid #A65A35; cursor:pointer;">典藏</span>
+        <span class="tab" style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px; cursor:pointer;">圖譜</span>
+        <span class="tab" style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px; cursor:pointer;">問答</span>
+        <span class="tab" style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px; cursor:pointer;">收錄</span>
+        <span class="tab" style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px; cursor:pointer;">解析</span>
+        <span class="tab" style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px; cursor:pointer;">用量</span>
+        <span class="tab" style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:14px; color:#8A7D67; padding:6px 0 14px; cursor:pointer;">設定</span>
+        <span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#C9B79A; padding-bottom:14px;">生物科 · BIOLOGY</span>
+      </div>
+
+      <!-- CONTENT -->
+      <div style="padding:38px 56px 48px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.22em; color:#A65A35; margin-bottom:9px;">LIBRARY&nbsp;·&nbsp;典藏</div>
+            <h1 style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:42px; font-weight:700; line-height:1;">典藏</h1>
+            <p style="font-size:13.5px; color:#6F6557; margin-top:11px;">16 條目 · 3 個學門 · 已索引 42 個實體 / 78 條關係</p>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <button style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; color:#211C16; background:transparent; border:1px solid #211C16; padding:9px 18px; cursor:pointer;">圖譜檢視</button>
+            <button style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:13.5px; color:#F4EFE4; background:#211C16; border:none; padding:10px 20px; cursor:pointer;">＋ 收錄條目</button>
+          </div>
+        </div>
+
+        <!-- pill filters -->
+        <div style="display:flex; align-items:center; gap:8px; margin-top:26px; font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.06em;">
+          <span style="color:#F4EFE4; background:#6B5640; padding:6px 13px;">全部 16</span>
+          <span style="color:#6F6557; padding:6px 13px;">細胞學 8</span>
+          <span style="color:#6F6557; padding:6px 13px;">遺傳學 5</span>
+          <span style="color:#6F6557; padding:6px 13px;">演化學 3</span>
+          <span style="margin-left:auto; font-family:'Zen Kaku Gothic New',sans-serif; font-size:12.5px; color:#6F6557; border-bottom:1px solid #C9B79A; padding-bottom:1px;">進階篩選</span>
+        </div>
+
+        <!-- GROUP 細胞學 -->
+        <div style="margin-top:34px;">
+          <div style="display:flex; align-items:baseline; gap:16px; padding-bottom:10px; border-bottom:1.5px solid #211C16;">
+            <span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:21px; font-weight:700;">細胞學</span>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.16em; color:#A65A35;">CYTOLOGY</span>
+            <span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; color:#B3A88F;">8 條目</span>
+          </div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">01</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">生物學與生物</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 18.2k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 3 · 6天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">02</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">細胞學史</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 12.6k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 1 · 6天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">03</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">細胞構造</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 24.8k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 5 · 7天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">04</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">細胞與能量</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 21.1k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 2 · 7天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">05</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">細胞週期與細胞分裂</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 27.4k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 4 · 7天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">06</span><span style="display:flex;align-items:baseline;gap:9px;"><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">動植物細胞觀察</span><span style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.1em; color:#B5894A; border:1px solid #D9C49A; padding:2px 6px;">探討活動 一</span></span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">LAB · 9.8k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#A65A35; background:#F0E2D6; padding:3px 9px; justify-self:start;">待審核</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 0 · 8天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">07</span><span style="display:flex;align-items:baseline;gap:9px;"><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">顯微測量</span><span style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.1em; color:#B5894A; border:1px solid #D9C49A; padding:2px 6px;">探討活動 二</span></span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">LAB · 7.3k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 1 · 8天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">08</span><span style="display:flex;align-items:baseline;gap:9px;"><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">染色體的觀察</span><span style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.1em; color:#B5894A; border:1px solid #D9C49A; padding:2px 6px;">探討活動 三</span></span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">LAB · 8.1k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 2 · 8天前</span></div>
+        </div>
+
+        <!-- GROUP 遺傳學 -->
+        <div style="margin-top:40px;">
+          <div style="display:flex; align-items:baseline; gap:16px; padding-bottom:10px; border-bottom:1.5px solid #211C16;">
+            <span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:21px; font-weight:700;">遺傳學</span>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.16em; color:#A65A35;">GENETICS</span>
+            <span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; color:#B3A88F;">5 條目</span>
+          </div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">09</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">孟德爾的遺傳法則</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 19.6k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 6 · 9天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">10</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">遺傳物質</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 22.0k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 3 · 9天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">11</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">DNA 的複製與基因表現</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 31.5k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 8 · 9天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">12</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">基因轉殖技術與應用</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 26.7k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 2 · 10天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">13</span><span style="display:flex;align-items:baseline;gap:9px;"><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">DNA 粗萃取</span><span style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.1em; color:#B5894A; border:1px solid #D9C49A; padding:2px 6px;">探討活動 一</span></span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">LAB · 6.9k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 1 · 10天前</span></div>
+        </div>
+
+        <!-- GROUP 演化學 -->
+        <div style="margin-top:40px;">
+          <div style="display:flex; align-items:baseline; gap:16px; padding-bottom:10px; border-bottom:1.5px solid #211C16;">
+            <span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:21px; font-weight:700;">演化學</span>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.16em; color:#A65A35;">EVOLUTION</span>
+            <span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; color:#B3A88F;">3 條目</span>
+          </div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">14</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">演化理論的發展</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 20.3k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 2 · 11天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">15</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">親緣關係的重建</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 17.8k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 1 · 11天前</span></div>
+          <div class="ent" style="display:grid; grid-template-columns:46px 1fr 130px 92px 120px; gap:18px; align-items:center; padding:15px 12px; border-bottom:1px solid #E2DAC8; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A65A35;">16</span><span style="font-family:'Shippori Mincho B1','Noto Serif TC',serif; font-size:18px; font-weight:600;">病毒</span><span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:#B3A88F;">DOC · 14.5k tok</span><span style="font-family:'Zen Kaku Gothic New',sans-serif; font-size:11.5px; color:#FBF8F0; background:#7E8060; padding:3px 9px; justify-self:start;">已發布</span><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8A7D67; text-align:right;">引用 0 · 12天前</span></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+</div>
+</x-dc>
+</body>
+</html>

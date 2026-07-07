@@ -9,10 +9,30 @@ cp .env.example .env
 make up
 make health
 make seed-sample
-curl "http://localhost:8000/neighbors/hormone:insulin?depth=1"
+# then open the demo UI:
+open http://localhost:8000/        # served by the FastAPI backend
 ```
 
 `make seed-sample` runs the ingestion pipeline: parses the sample source files, validates them, embeds chunks, and loads Neo4j (44 nodes / 84 relationships), Qdrant (`biology_chunks` collection), and PostgreSQL (`documents`/`chunks`/`ingestion_jobs`) — safe to re-run.
+
+## Demo UI
+
+A static single-page UI (vanilla HTML/CSS/JS, no build step) is served by the backend at `http://localhost:8000/` — every screen is backed by a real endpoint, over the actual sample endocrine graph. The visual system reuses a supplied design handoff (本草 HONZŌ). Five screens:
+
+| Screen | Endpoint(s) | What it shows |
+|---|---|---|
+| **問答 Chat** | `POST /query` | Hybrid retrieval Q&A: grounded answer + citation chips + supporting nodes + relationships. Deep-link a question: `/?ask=...#chat` |
+| **圖譜 Graph** | `GET /neighbors`, `POST /concept-map` | Force-directed subgraph of a node or topic; click a node for detail. Deep-link: `/?node=hormone:insulin#graph` |
+| **典藏 Library** | `GET /library` | Approved nodes grouped by topic; click through to the graph |
+| **審訂 Curation** | `GET/POST /admin/curation/*` | Human-in-the-loop: propose a node/edge → review queue → approve/reject into the graph |
+| **評估 Evaluation** | `GET /admin/evaluation/latest` | Live recall@k / grounded / P95-latency dashboard over the golden questions |
+
+With no `OPENAI_API_KEY` the demo runs fully offline (lexical retrieval + an extractive, clearly-labelled answer), so a fresh clone works with no secrets.
+
+![Chat](docs/screenshots/chat.png)
+![Graph](docs/screenshots/graph.png)
+![Library](docs/screenshots/library.png)
+![Evaluation](docs/screenshots/evaluation.png)
 
 ## API
 

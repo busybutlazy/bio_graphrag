@@ -11,6 +11,7 @@ services:
       - qdrant
     volumes:
       - ./backend/app:/app/app
+      - ./frontend:/app/frontend
       - ./scripts:/app/scripts
       - ./data:/app/data
       - ./ingestion:/app/ingestion
