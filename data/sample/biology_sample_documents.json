@@ -1,0 +1,30 @@
+[
+  {
+    "doc_id": "doc:sample:blood_glucose_regulation",
+    "title": "血糖濃度的恆定調節",
+    "topic": "blood_glucose_regulation",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "doc_id": "doc:sample:water_balance",
+    "title": "水分與滲透壓恆定",
+    "topic": "water_balance",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "doc_id": "doc:sample:calcium_homeostasis",
+    "title": "血鈣濃度的恆定調節",
+    "topic": "calcium_homeostasis",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "doc_id": "doc:sample:childbirth_positive_feedback",
+    "title": "分娩過程中的正回饋機制",
+    "topic": "positive_feedback",
+    "grade_level": "高二",
+    "source_type": "sample"
+  }
+]

@@ -1,0 +1,118 @@
+[
+  {
+    "chunk_id": "chunk:sample:001",
+    "doc_id": "doc:sample:blood_glucose_regulation",
+    "content": "當血糖濃度上升時,胰臟的胰島細胞會分泌胰島素。胰島素能促進肝臟與肌肉細胞攝取並儲存葡萄糖,進而降低血糖濃度。",
+    "concept_ids": [
+      "hormone:insulin",
+      "structure:pancreas",
+      "structure:liver",
+      "regulatory_effect:insulin_decreases_blood_glucose",
+      "physiological_variable:blood_glucose"
+    ],
+    "topic": "blood_glucose_regulation",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "chunk_id": "chunk:sample:002",
+    "doc_id": "doc:sample:blood_glucose_regulation",
+    "content": "當血糖濃度下降時,胰臟則會分泌升糖素,促使肝臟分解肝醣並釋放葡萄糖到血液中,使血糖回升。胰島素與升糖素的拮抗作用,加上負回饋機制,共同維持血糖濃度的恆定。",
+    "concept_ids": [
+      "hormone:glucagon",
+      "regulatory_effect:glucagon_increases_blood_glucose",
+      "interaction:insulin_glucagon_blood_glucose",
+      "feedback:blood_glucose_negative_feedback"
+    ],
+    "topic": "blood_glucose_regulation",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "chunk_id": "chunk:sample:003",
+    "doc_id": "doc:sample:water_balance",
+    "content": "當血液滲透壓升高時,腦垂體後葉會釋放抗利尿激素(ADH)。ADH 作用於腎臟集尿管,促進水分再吸收,使尿液濃縮、血液滲透壓下降。",
+    "concept_ids": [
+      "hormone:adh",
+      "structure:posterior_pituitary",
+      "structure:kidney",
+      "regulatory_effect:adh_decreases_blood_osmolarity",
+      "physiological_variable:blood_osmolarity"
+    ],
+    "topic": "water_balance",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "chunk_id": "chunk:sample:004",
+    "doc_id": "doc:sample:water_balance",
+    "content": "ADH 同時也會提高血量,而腎上腺皮質分泌的醛固酮則透過促進鈉離子與水分再吸收,同樣提高血量。這兩種激素在血量調節上呈現協同作用。",
+    "concept_ids": [
+      "hormone:aldosterone",
+      "structure:adrenal_cortex",
+      "regulatory_effect:adh_increases_blood_volume",
+      "regulatory_effect:aldosterone_increases_blood_volume",
+      "interaction:adh_aldosterone_blood_volume"
+    ],
+    "topic": "water_balance",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "chunk_id": "chunk:sample:005",
+    "doc_id": "doc:sample:calcium_homeostasis",
+    "content": "當血鈣濃度過低時,副甲狀腺會分泌副甲狀腺素(PTH)。PTH 能促進骨骼釋放鈣質、腎臟保留鈣離子,使血鈣濃度回升。",
+    "concept_ids": [
+      "hormone:parathyroid_hormone",
+      "structure:parathyroid_gland",
+      "structure:bone",
+      "regulatory_effect:pth_increases_blood_calcium",
+      "physiological_variable:blood_calcium"
+    ],
+    "topic": "calcium_homeostasis",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "chunk_id": "chunk:sample:006",
+    "doc_id": "doc:sample:calcium_homeostasis",
+    "content": "相對地,當血鈣濃度過高時,甲狀腺會分泌抑鈣素,抑制骨骼釋放鈣質,使血鈣濃度下降。PTH 與抑鈣素對血鈣的作用方向相反,形成拮抗關係。",
+    "concept_ids": [
+      "hormone:calcitonin",
+      "structure:thyroid_gland",
+      "regulatory_effect:calcitonin_decreases_blood_calcium",
+      "interaction:pth_calcitonin_blood_calcium",
+      "feedback:blood_calcium_negative_feedback"
+    ],
+    "topic": "calcium_homeostasis",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "chunk_id": "chunk:sample:007",
+    "doc_id": "doc:sample:childbirth_positive_feedback",
+    "content": "分娩開始時,子宮收縮會刺激腦垂體後葉釋放催產素(oxytocin)。催產素會進一步增強子宮收縮的強度。",
+    "concept_ids": [
+      "hormone:oxytocin",
+      "structure:uterus",
+      "regulatory_effect:oxytocin_increases_uterine_contraction",
+      "physiological_variable:uterine_contraction_intensity"
+    ],
+    "topic": "positive_feedback",
+    "grade_level": "高二",
+    "source_type": "sample"
+  },
+  {
+    "chunk_id": "chunk:sample:008",
+    "doc_id": "doc:sample:childbirth_positive_feedback",
+    "content": "子宮收縮增強後,會刺激分泌更多催產素,形成正回饋迴路,使收縮持續增強直到分娩完成。這與大多數恆定機制所採用的負回饋不同。",
+    "concept_ids": [
+      "feedback:uterine_contraction_positive_feedback",
+      "concept:positive_feedback",
+      "concept:negative_feedback"
+    ],
+    "topic": "positive_feedback",
+    "grade_level": "高二",
+    "source_type": "sample"
+  }
+]

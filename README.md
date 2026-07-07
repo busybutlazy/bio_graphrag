@@ -12,7 +12,7 @@ make seed-sample
 curl "http://localhost:8000/neighbors/hormone:insulin?depth=1"
 ```
 
-`make seed-sample` loads the sample hormone-regulation graph (44 nodes / 84 relationships — blood glucose, water/osmolarity, calcium, and uterine-contraction feedback loops) into Neo4j.
+`make seed-sample` runs the ingestion pipeline: parses the sample source files, validates them, embeds chunks, and loads Neo4j (44 nodes / 84 relationships), Qdrant (`biology_chunks` collection), and PostgreSQL (`documents`/`chunks`/`ingestion_jobs`) — safe to re-run.
 
 ## Tests
 
@@ -23,8 +23,9 @@ make test
 ## Project Layout
 
 - `backend/` — FastAPI service
+- `ingestion/` — ingestion pipeline (parse → normalize → build chunks → embed → load Neo4j/Qdrant/Postgres)
 - `schema/` — Neo4j node/relationship types, DB schema, LLM extraction guidelines
 - `prompts/` — LLM extraction prompt templates
 - `docs/` — project plan and API contract
-- `scripts/` — helper scripts (`wait_for_services.sh`, `seed_sample_graph.py`)
-- `data/sample/` — sample hormone-regulation concept/edge JSON
+- `scripts/` — helper scripts (`wait_for_services.sh`)
+- `data/sample/` — sample hormone-regulation concepts/edges/documents/chunks JSON
