@@ -10,6 +10,7 @@ content and concept_ids, which seed graph expansion and citations.
 from app.core.config import settings
 from app.db import chunks as chunks_db
 from app.db.qdrant_client import search_chunks
+from app.llm.usage import TokenUsage, UsageAccumulator
 from ingestion.pipeline.embed_chunks import embed_text
 
 
@@ -17,12 +18,19 @@ def _semantic_enabled() -> bool:
     return settings.llm_provider == "openai" and bool(settings.openai_api_key)
 
 
-async def retrieve(question: str, top_k: int) -> list[dict]:
-    """Return up to top_k chunk hits: {chunk_id, doc_id, content, concept_ids, score}."""
+async def retrieve(
+    question: str, top_k: int, acc: UsageAccumulator | None = None
+) -> list[dict]:
+    """Return up to top_k chunk hits: {chunk_id, doc_id, content, concept_ids, score}.
+
+    Embedding tokens (semantic mode only) are added to ``acc`` when provided.
+    """
     if not _semantic_enabled():
         return await chunks_db.lexical_search(question, top_k)
 
-    query_vector = embed_text(question)
+    query_vector, embed_tokens = embed_text(question)
+    if acc is not None:
+        acc.add(TokenUsage(embedding=embed_tokens))
     raw_hits = search_chunks(query_vector, top_k)
     contents = await chunks_db.fetch_chunks_by_ids(
         [h["chunk_id"] for h in raw_hits if h["chunk_id"]]

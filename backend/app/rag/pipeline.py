@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.db.neo4j_driver import get_driver
 from app.graph.cypher_templates import expand_from_seeds
 from app.llm import gateway
+from app.llm.usage import UsageAccumulator
 from app.rag import context_composer
 from app.rag import retriever_vector
 
@@ -25,9 +26,14 @@ def _debug_allowed() -> bool:
     return settings.app_env in {"local", "dev", "test"}
 
 
-async def retrieve(question: str, top_k: int, graph_depth: int) -> dict:
-    """Run vector + graph retrieval and compose context. No LLM call here."""
-    chunk_hits = await retriever_vector.retrieve(question, top_k)
+async def retrieve(
+    question: str, top_k: int, graph_depth: int, acc: UsageAccumulator | None = None
+) -> dict:
+    """Run vector + graph retrieval and compose context. No LLM answer here.
+
+    Embedding tokens spent are added to ``acc`` when provided.
+    """
+    chunk_hits = await retriever_vector.retrieve(question, top_k, acc)
 
     seed_ids: list[str] = []
     seen: set[str] = set()
@@ -47,12 +53,18 @@ async def retrieve(question: str, top_k: int, graph_depth: int) -> dict:
 
 
 async def answer_query(
-    question: str, top_k: int, graph_depth: int, include_debug: bool
+    question: str,
+    top_k: int,
+    graph_depth: int,
+    include_debug: bool,
+    acc: UsageAccumulator | None = None,
 ) -> dict:
-    composed = await retrieve(question, top_k, graph_depth)
-    answer = await anyio.to_thread.run_sync(
+    acc = acc if acc is not None else UsageAccumulator()
+    composed = await retrieve(question, top_k, graph_depth, acc)
+    answer, answer_usage = await anyio.to_thread.run_sync(
         gateway.generate_answer, composed["context_text"], question
     )
+    acc.add(answer_usage)
 
     result = {
         "answer": answer,

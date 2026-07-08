@@ -22,18 +22,34 @@ function E(tag, props, ...kids) {
 function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 function shortId(id) { const p = String(id).split(':'); return p[p.length - 1]; }
 
-/* Admin endpoints accept a named API key when the server is configured with one
-   (settings.admin_api_keys). The demo runs open, so this is empty by default;
-   set it once from the console: localStorage.setItem('adminApiKey', '<key>'). */
+/* A single access key (sent as X-API-Key) is used for both the token-spending
+   tutor endpoints (per-company vendor accounts) and the /admin endpoints. Browse
+   read-only with no key; log in via the header control to use 問答/審訂. */
+const KEY_STORE = 'apiKey';
+function getKey() { return localStorage.getItem(KEY_STORE) || localStorage.getItem('adminApiKey') || ''; }
+function setKey(k) {
+  if (k) localStorage.setItem(KEY_STORE, k); else localStorage.removeItem(KEY_STORE);
+  localStorage.removeItem('adminApiKey'); // migrate/clear the legacy key
+}
 function authHeaders() {
-  const key = localStorage.getItem('adminApiKey');
+  const key = getKey();
   return key ? { 'X-API-Key': key } : {};
+}
+
+/* Errors use the standardized body {error:{code,message}}; surface code + message. */
+async function apiError(r) {
+  const body = await r.json().catch(() => ({}));
+  const detail = (body.error && body.error.message) || body.detail || ('HTTP ' + r.status);
+  const err = new Error(detail);
+  err.code = (body.error && body.error.code) || null;
+  err.status = r.status;
+  return err;
 }
 
 const api = {
   async get(path) {
     const r = await fetch(path, { headers: authHeaders() });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+    if (!r.ok) throw await apiError(r);
     return r.json();
   },
   async post(path, body) {
@@ -42,10 +58,33 @@ const api = {
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(body),
     });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+    if (!r.ok) throw await apiError(r);
     return r.json();
   },
 };
+
+/* Minimal login control mounted into the header (.hd-right). */
+function renderLoginControl() {
+  const host = document.querySelector('.hd-right');
+  if (!host) return;
+  const existing = document.getElementById('loginbox');
+  if (existing) existing.remove();
+  const box = E('div', { id: 'loginbox', class: 'loginbox' });
+  const key = getKey();
+  if (key) {
+    box.append(
+      E('span', { class: 'login-tag', title: '已登入' }, '已登入 · ' + key.slice(0, 4) + '…'),
+      E('button', { class: 'login-btn', onclick: () => { setKey(''); renderLoginControl(); } }, '登出'),
+    );
+  } else {
+    const input = E('input', { class: 'login-input', type: 'password', placeholder: '公司存取金鑰' });
+    const submit = () => { const v = input.value.trim(); if (v) { setKey(v); renderLoginControl(); } };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    box.append(input, E('button', { class: 'login-btn', onclick: submit }, '登入'));
+  }
+  host.prepend(box);
+}
+window.addEventListener('DOMContentLoaded', renderLoginControl);
 
 /* node type -> palette colour (square marker) */
 const TYPE_COLOR = {
@@ -147,7 +186,13 @@ async function renderChat(host) {
         rels: res.relationships_used, debug: res.retrieval_debug,
       });
     } catch (err) {
-      Object.assign(thinking, { text: '查詢失敗：' + err.message, pending: false });
+      // Standardized auth/quota errors carry a code; their message is already a
+      // reader-facing prompt. login_required also nudges toward the header login.
+      let text;
+      if (err.code === 'login_required') text = err.message + '（請點右上角登入)';
+      else if (err.code) text = err.message; // quota_exceeded / account_expired / account_disabled
+      else text = '查詢失敗：' + err.message;
+      Object.assign(thinking, { text, pending: false });
     }
     saveSessions(sessions); paintMain();
   }

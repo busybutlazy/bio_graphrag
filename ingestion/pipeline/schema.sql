@@ -89,3 +89,31 @@ CREATE TABLE IF NOT EXISTS evaluation_items (
     passed BOOLEAN,
     notes TEXT
 );
+
+-- Per-company access accounts for the token-spending endpoints (/query,
+-- /check-answer). vendor_code is the human-readable handle used for admin and
+-- for usage records; api_key is the secret sent as the X-API-Key header. These
+-- are demo-grade access keys (plaintext) — fine for a portfolio demo, not a
+-- production credential store.
+CREATE TABLE IF NOT EXISTS vendors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    vendor_code TEXT UNIQUE NOT NULL,   -- e.g. "acme"; the manual/usage identity
+    name TEXT NOT NULL,                 -- display name, e.g. "Acme Corp"
+    api_key TEXT UNIQUE NOT NULL,       -- the credential (X-API-Key)
+    expires_at DATE,                    -- NULL = no expiry; past = expired
+    token_quota INTEGER NOT NULL,       -- cumulative token cap; 0 = no token access
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- One row per token-spending request; tokens_used = embedding + completion.
+-- Keyed by vendor_code (not the secret key) so the table stays hand-readable.
+CREATE TABLE IF NOT EXISTS vendor_usage (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    vendor_code TEXT NOT NULL,
+    tokens_used INTEGER NOT NULL,
+    endpoint TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS vendor_usage_code_idx ON vendor_usage (vendor_code);

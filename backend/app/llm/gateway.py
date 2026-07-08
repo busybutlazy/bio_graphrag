@@ -7,6 +7,7 @@ module with a provider branch is enough.
 """
 
 from app.core.config import settings
+from app.llm.usage import TokenUsage
 
 _ANSWER_MODEL = "gpt-4o-mini"
 
@@ -28,13 +29,14 @@ def _use_openai() -> bool:
 # --- answer generation --------------------------------------------------------
 
 
-def generate_answer(context: str, question: str) -> str:
+def generate_answer(context: str, question: str) -> tuple[str, TokenUsage]:
+    """Return ``(answer, TokenUsage)``; offline path reports zero tokens."""
     if _use_openai():
         return _openai_answer(context, question)
-    return _fallback_answer(context, question)
+    return _fallback_answer(context, question), TokenUsage()
 
 
-def _openai_answer(context: str, question: str) -> str:
+def _openai_answer(context: str, question: str) -> tuple[str, TokenUsage]:
     from openai import OpenAI
 
     client = OpenAI(api_key=settings.openai_api_key)
@@ -45,10 +47,11 @@ def _openai_answer(context: str, question: str) -> str:
             {"role": "user", "content": f"參考資料:\n{context}\n\n問題:{question}"},
         ],
     )
+    usage = TokenUsage(completion=response.usage.total_tokens if response.usage else 0)
     content = response.choices[0].message.content
     if not content:
-        return "抱歉,目前無法產生回答,請稍後再試。"
-    return content.strip()
+        return "抱歉,目前無法產生回答,請稍後再試。", usage
+    return content.strip(), usage
 
 
 def _fallback_answer(context: str, question: str) -> str:
@@ -68,16 +71,19 @@ def check_misconception(
     question: str,
     student_answer: str,
     misconception_nodes: list[dict],
-) -> dict:
-    """Return {is_correct, misconceptions_detected, feedback}."""
+) -> tuple[dict, TokenUsage]:
+    """Return ``({is_correct, misconceptions_detected, feedback}, TokenUsage)``."""
     if _use_openai():
         return _openai_check(context, question, student_answer, misconception_nodes)
-    return _fallback_check(context, question, student_answer, misconception_nodes)
+    return (
+        _fallback_check(context, question, student_answer, misconception_nodes),
+        TokenUsage(),
+    )
 
 
 def _openai_check(
     context: str, question: str, student_answer: str, misconception_nodes: list[dict]
-) -> dict:
+) -> tuple[dict, TokenUsage]:
     import json
 
     from openai import OpenAI
@@ -98,6 +104,7 @@ def _openai_check(
         ],
         response_format={"type": "json_object"},
     )
+    usage = TokenUsage(completion=response.usage.total_tokens if response.usage else 0)
     try:
         parsed = json.loads(response.choices[0].message.content or "{}")
     except json.JSONDecodeError:
@@ -108,7 +115,7 @@ def _openai_check(
         "is_correct": bool(parsed.get("is_correct", False)),
         "misconceptions_detected": detected,
         "feedback": parsed.get("feedback", ""),
-    }
+    }, usage
 
 
 def _fallback_check(

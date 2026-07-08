@@ -84,7 +84,25 @@ ADMIN_API_KEYS=acme:key1,globex:key2
 
 Requests must then send `X-API-Key: key1`; the matched vendor name is attributed to the action. **When `ADMIN_API_KEYS` is empty (the default) auth is disabled**, so a fresh clone and the test suite run open — set it in any exposed deployment. The demo UI reads its key from `localStorage.setItem('adminApiKey', '<key>')`.
 
-> Per-vendor accounts with usage quotas and expiry are intentionally out of scope for this demo (physical DB isolation and rate limiting are deferred); the named-key gate is the minimal control that keeps the destructive graph-mutation endpoints from being open to anyone who can reach the API.
+### Per-company access & token quotas
+
+The token-spending tutor endpoints (`POST /query`, `POST /check-answer`) are gated per company so a shared demo can't burn tokens uncontrolled. Browsing (library / graph / node detail) stays open — no login needed.
+
+- **Closed by default.** With no account (or an unknown/expired/disabled/over-quota key) the token endpoints return a structured error and stay closed. There is no "open when unconfigured" fallback — safe for a public deployment.
+- Accounts live in the `vendors` table, hand-maintained via a small CLI:
+
+  ```bash
+  docker compose exec backend python -m scripts.manage_vendors \
+      add --code acme --name "Acme Corp" --quota 50000 --expires 2026-08-01
+  docker compose exec backend python -m scripts.manage_vendors list      # api_key shown masked
+  docker compose exec backend python -m scripts.manage_vendors update --code acme --quota 100000
+  docker compose exec backend python -m scripts.manage_vendors disable --code acme
+  ```
+
+  `--quota` is required (non-negative integer; `0` = no token access). The `api_key` is auto-generated and printed once on `add`; give it to the company. Usage (embedding + completion tokens) is tallied per request in `vendor_usage` and checked against the quota; the quota is a **soft cap** — concurrent requests may slightly exceed it.
+- Companies log in from the header control (the key is sent as `X-API-Key`, stored in `localStorage`). Errors use `{"error": {"code", "message"}}` — the UI maps `login_required` / `quota_exceeded` / `account_expired` / `account_disabled` to a prompt while browsing keeps working.
+
+> These are **demo-grade access keys**: `api_key` is stored in plaintext and the `X-API-Key` header is never written to logs, but this is not a production credential store (no hashing, rotation, or per-vendor rate limiting). Per-vendor accounts here replace the earlier "deferred" note; hardening the store remains future work.
 
 ## Tests
 

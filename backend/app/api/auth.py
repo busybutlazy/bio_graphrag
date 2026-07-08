@@ -9,9 +9,13 @@ When no keys are configured the guard is a no-op — the local Docker demo and t
 test suite run without credentials. Configure keys in any exposed deployment.
 """
 
+from datetime import date
+
 from fastapi import Header, HTTPException
 
+from app.api.errors import APIError
 from app.core.config import settings
+from app.db import vendors as vendors_db
 
 
 def parse_api_keys(raw: str) -> dict[str, str]:
@@ -38,3 +42,27 @@ async def require_admin(x_api_key: str | None = Header(default=None)) -> str:
     if x_api_key is None or x_api_key not in keys:
         raise HTTPException(status_code=401, detail="invalid or missing API key")
     return keys[x_api_key]
+
+
+async def require_vendor(x_api_key: str | None = Header(default=None)) -> vendors_db.Vendor:
+    """Gate the token-spending endpoints on a valid company account.
+
+    Closed by default: with no account (or an unknown key) every request is
+    rejected — there is no "open when unconfigured" fallback. Precedence:
+      no/unknown key -> 401 login_required
+      known but inactive -> 403 account_disabled
+      expired -> 403 account_expired
+      over quota -> 403 quota_exceeded  (token_quota 0 = no token access)
+    """
+    if not x_api_key:
+        raise APIError(401, "login_required", "請先登入公司帳號以使用問答功能。")
+    vendor = await vendors_db.get_vendor(x_api_key)
+    if vendor is None:
+        raise APIError(401, "login_required", "請先登入公司帳號以使用問答功能。")
+    if not vendor.active:
+        raise APIError(403, "account_disabled", "此帳號已停用,請聯絡管理員。")
+    if vendor.expires_at is not None and vendor.expires_at < date.today():
+        raise APIError(403, "account_expired", "此帳號已到期,請聯絡管理員。")
+    if await vendors_db.tokens_used(vendor.vendor_code) >= vendor.token_quota:
+        raise APIError(403, "quota_exceeded", "本公司 token 額度已用盡,請聯絡管理員。")
+    return vendor
