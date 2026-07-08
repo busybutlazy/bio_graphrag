@@ -22,18 +22,27 @@ class Vendor:
     active: bool
 
 
-async def get_vendor(api_key: str) -> Vendor | None:
+async def get_vendor_with_usage(api_key: str) -> tuple[Vendor, int] | None:
+    """Fetch the vendor and its cumulative token usage in one round-trip.
+
+    Returns ``(vendor, tokens_used)`` or ``None`` if the key is unknown. Folding
+    the usage sum into the same query keeps ``require_vendor`` to a single DB hit.
+    """
     async with connection() as conn:
         row = await conn.fetchrow(
             """
-            SELECT vendor_code, name, api_key, expires_at, token_quota, active
-            FROM vendors WHERE api_key = $1
+            SELECT v.vendor_code, v.name, v.api_key, v.expires_at, v.token_quota, v.active,
+                   COALESCE(
+                       (SELECT SUM(u.tokens_used) FROM vendor_usage u
+                        WHERE u.vendor_code = v.vendor_code), 0
+                   ) AS used
+            FROM vendors v WHERE v.api_key = $1
             """,
             api_key,
         )
     if row is None:
         return None
-    return Vendor(
+    vendor = Vendor(
         vendor_code=row["vendor_code"],
         name=row["name"],
         api_key=row["api_key"],
@@ -41,6 +50,7 @@ async def get_vendor(api_key: str) -> Vendor | None:
         token_quota=row["token_quota"],
         active=row["active"],
     )
+    return vendor, row["used"]
 
 
 async def tokens_used(vendor_code: str) -> int:

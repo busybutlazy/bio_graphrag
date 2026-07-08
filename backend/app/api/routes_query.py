@@ -20,6 +20,15 @@ from app.schemas.query import (
 router = APIRouter()
 
 
+async def _record_usage_safe(vendor_code: str, tokens: int, endpoint: str) -> None:
+    """Best-effort usage write: a DB hiccup here must not fail an answer that was
+    already produced (and paid for). Mirrors query_logs.log_query's stance."""
+    try:
+        await vendors_db.record_usage(vendor_code, tokens, endpoint)
+    except Exception:
+        pass
+
+
 @router.post("/query", response_model=QueryResponse)
 async def query(body: QueryRequest, vendor: Vendor = Depends(require_vendor)) -> QueryResponse:
     started = time.perf_counter()
@@ -45,7 +54,7 @@ async def query(body: QueryRequest, vendor: Vendor = Depends(require_vendor)) ->
         return QueryResponse(**result)
     finally:
         if usage.total > 0:
-            await vendors_db.record_usage(vendor.vendor_code, usage.total, "/query")
+            await _record_usage_safe(vendor.vendor_code, usage.total, "/query")
 
 
 @router.post("/check-answer", response_model=CheckAnswerResponse)
@@ -72,4 +81,4 @@ async def check_answer(
         )
     finally:
         if usage.total > 0:
-            await vendors_db.record_usage(vendor.vendor_code, usage.total, "/check-answer")
+            await _record_usage_safe(vendor.vendor_code, usage.total, "/check-answer")

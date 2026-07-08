@@ -56,13 +56,14 @@ async def require_vendor(x_api_key: str | None = Header(default=None)) -> vendor
     """
     if not x_api_key:
         raise APIError(401, "login_required", "請先登入公司帳號以使用問答功能。")
-    vendor = await vendors_db.get_vendor(x_api_key)
-    if vendor is None:
+    found = await vendors_db.get_vendor_with_usage(x_api_key)
+    if found is None:
         raise APIError(401, "login_required", "請先登入公司帳號以使用問答功能。")
+    vendor, used = found
     if not vendor.active:
         raise APIError(403, "account_disabled", "此帳號已停用,請聯絡管理員。")
     if vendor.expires_at is not None and vendor.expires_at < date.today():
         raise APIError(403, "account_expired", "此帳號已到期,請聯絡管理員。")
-    if await vendors_db.tokens_used(vendor.vendor_code) >= vendor.token_quota:
+    if used >= vendor.token_quota:
         raise APIError(403, "quota_exceeded", "本公司 token 額度已用盡,請聯絡管理員。")
     return vendor

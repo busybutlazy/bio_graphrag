@@ -99,10 +99,12 @@ The token-spending tutor endpoints (`POST /query`, `POST /check-answer`) are gat
   docker compose exec backend python -m scripts.manage_vendors disable --code acme
   ```
 
-  `--quota` is required (non-negative integer; `0` = no token access). The `api_key` is auto-generated and printed once on `add`; give it to the company. Usage (embedding + completion tokens) is tallied per request in `vendor_usage` and checked against the quota; the quota is a **soft cap** — concurrent requests may slightly exceed it.
+  `--quota` is required (non-negative integer; `0` = no token access). The `api_key` is auto-generated and printed once on `add`; give it to the company. Usage (embedding + completion tokens) is tallied per request in `vendor_usage` and checked against the quota; the quota is a **soft cap** — it is checked at the *start* of a request, so both concurrent requests and the single request that crosses the threshold can overshoot by up to roughly one request's worth of tokens.
 - Companies log in from the header control (the key is sent as `X-API-Key`, stored in `localStorage`). Errors use `{"error": {"code", "message"}}` — the UI maps `login_required` / `quota_exceeded` / `account_expired` / `account_disabled` to a prompt while browsing keeps working.
 
 > These are **demo-grade access keys**: `api_key` is stored in plaintext and the `X-API-Key` header is never written to logs, but this is not a production credential store (no hashing, rotation, or per-vendor rate limiting). Per-vendor accounts here replace the earlier "deferred" note; hardening the store remains future work.
+>
+> The vendor key is a **low-value, disposable credential** (worst case if leaked: that company's token quota is spent — it cannot mutate the graph or reach `/admin`). A static SPA must keep the key somewhere its own JS can read, so making it un-stealable would require a server-side session layer that is out of scope here. The security posture is therefore **blast-radius control, not prevention** — the per-vendor quota, expiry, and `disable` switch bound the damage — plus **enabling TLS on any exposed deployment** so the header isn't sniffable in transit.
 
 ## Tests
 

@@ -18,6 +18,8 @@ import asyncio
 import secrets
 from datetime import date
 
+import asyncpg
+
 from app.db import vendors as vendors_db
 from app.db.pool import connection
 
@@ -29,23 +31,30 @@ def _mask(key: str) -> str:
 def _parse_expires(value: str | None) -> date | None:
     if value is None:
         return None
-    return date.fromisoformat(value)
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise SystemExit(f"invalid --expires '{value}': expected YYYY-MM-DD")
 
 
 async def cmd_add(args: argparse.Namespace) -> None:
     key = args.key or secrets.token_urlsafe(24)
+    expires = _parse_expires(args.expires)
     async with connection() as conn:
-        await conn.execute(
-            """
-            INSERT INTO vendors (vendor_code, name, api_key, expires_at, token_quota, active)
-            VALUES ($1, $2, $3, $4, $5, true)
-            """,
-            args.code,
-            args.name,
-            key,
-            _parse_expires(args.expires),
-            args.quota,
-        )
+        try:
+            await conn.execute(
+                """
+                INSERT INTO vendors (vendor_code, name, api_key, expires_at, token_quota, active)
+                VALUES ($1, $2, $3, $4, $5, true)
+                """,
+                args.code,
+                args.name,
+                key,
+                expires,
+                args.quota,
+            )
+        except asyncpg.UniqueViolationError:
+            raise SystemExit(f"vendor_code '{args.code}' or that --key already exists")
     print(f"created vendor '{args.code}' ({args.name})")
     print(f"  api_key (shown once — give this to the company): {key}")
     print(f"  quota={args.quota}  expires={args.expires or 'never'}")

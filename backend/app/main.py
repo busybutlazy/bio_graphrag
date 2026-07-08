@@ -23,6 +23,16 @@ async def _api_error_handler(_: Request, exc: APIError) -> JSONResponse:
     )
 
 
+@app.exception_handler(Exception)
+async def _unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    # Keep the error contract consistent: unexpected failures use the same
+    # {error:{code,message}} shape, without leaking internals to the client.
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"code": "internal_error", "message": "伺服器發生未預期的錯誤。"}},
+    )
+
+
 app.include_router(health_router)
 app.include_router(nodes_router)
 app.include_router(query_router)
