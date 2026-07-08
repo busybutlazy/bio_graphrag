@@ -22,15 +22,25 @@ function E(tag, props, ...kids) {
 function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 function shortId(id) { const p = String(id).split(':'); return p[p.length - 1]; }
 
+/* Admin endpoints accept a named API key when the server is configured with one
+   (settings.admin_api_keys). The demo runs open, so this is empty by default;
+   set it once from the console: localStorage.setItem('adminApiKey', '<key>'). */
+function authHeaders() {
+  const key = localStorage.getItem('adminApiKey');
+  return key ? { 'X-API-Key': key } : {};
+}
+
 const api = {
   async get(path) {
-    const r = await fetch(path);
+    const r = await fetch(path, { headers: authHeaders() });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
     return r.json();
   },
   async post(path, body) {
     const r = await fetch(path, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
     return r.json();

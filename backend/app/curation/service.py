@@ -1,11 +1,16 @@
 import json
 import uuid
 
+import anyio
 import asyncpg
 
-from app.core.config import settings
 from app.db.neo4j_driver import get_driver
+from app.db.pool import connection
 from ingestion.pipeline import load_neo4j
+from ingestion.pipeline.normalize_concepts import (
+    VALID_NODE_TYPES,
+    VALID_RELATIONSHIP_TYPES,
+)
 
 
 class CurationError(Exception):
@@ -15,14 +20,22 @@ class CurationError(Exception):
         super().__init__(message)
 
 
-async def _connect() -> asyncpg.Connection:
-    return await asyncpg.connect(
-        host=settings.postgres_host,
-        port=settings.postgres_port,
-        database=settings.postgres_db,
-        user=settings.postgres_user,
-        password=settings.postgres_password,
-    )
+def _validate_curation_payload(item_type: str, payload: dict) -> None:
+    """Reject payloads that can't be safely written to Neo4j on approval.
+
+    The human create path used to store arbitrary payloads verbatim; a bad
+    ``type`` then reached Cypher label interpolation at approval time. Validate
+    against the same whitelists the ingestion pipeline uses so illegal types are
+    rejected up front (422) instead of failing — or injecting — on approval.
+    """
+    if item_type not in {"node", "edge"}:
+        raise CurationError(422, f"item_type must be 'node' or 'edge', got {item_type!r}")
+    if not isinstance(payload, dict) or not payload.get("id"):
+        raise CurationError(422, "payload.id is required")
+    node_type = payload.get("type")
+    allowed = VALID_NODE_TYPES if item_type == "node" else VALID_RELATIONSHIP_TYPES
+    if node_type not in allowed:
+        raise CurationError(422, f"invalid {item_type} type: {node_type!r}")
 
 
 def _load_payload(row: asyncpg.Record) -> dict:
@@ -55,8 +68,7 @@ async def _log_change(
 
 
 async def list_items(status: str | None, item_type: str | None) -> list[dict]:
-    conn = await _connect()
-    try:
+    async with connection() as conn:
         query = "SELECT * FROM curation_items WHERE 1=1"
         params: list[str] = []
         if status:
@@ -68,15 +80,13 @@ async def list_items(status: str | None, item_type: str | None) -> list[dict]:
         query += " ORDER BY created_at DESC"
         rows = await conn.fetch(query, *params)
         return [{**dict(row), "payload": _load_payload(row)} for row in rows]
-    finally:
-        await conn.close()
 
 
 async def create_item(item_type: str, action: str, payload: dict, reason: str | None) -> str:
+    _validate_curation_payload(item_type, payload)
     payload = {**payload, "status": "proposed"}
     item_id = f"curation:{payload['id']}"
-    conn = await _connect()
-    try:
+    async with connection() as conn:
         await conn.execute(
             """
             INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by, reason)
@@ -84,14 +94,11 @@ async def create_item(item_type: str, action: str, payload: dict, reason: str | 
             """,
             item_id, item_type, action, json.dumps(payload), reason,
         )
-    finally:
-        await conn.close()
     return item_id
 
 
 async def approve_item(item_id: str, reviewer: str, reason: str | None) -> dict:
-    conn = await _connect()
-    try:
+    async with connection() as conn:
         row = await conn.fetchrow("SELECT * FROM curation_items WHERE item_id = $1", item_id)
         if row is None:
             raise CurationError(404, f"curation item {item_id} not found")
@@ -102,10 +109,8 @@ async def approve_item(item_id: str, reviewer: str, reason: str | None) -> dict:
         payload["status"] = "approved"
 
         driver = get_driver()
-        if row["item_type"] == "node":
-            load_neo4j.write_nodes(driver, [payload])
-        else:
-            load_neo4j.write_edges(driver, [payload])
+        writer = load_neo4j.write_nodes if row["item_type"] == "node" else load_neo4j.write_edges
+        await anyio.to_thread.run_sync(writer, driver, [payload])
 
         await conn.execute(
             """
@@ -119,13 +124,10 @@ async def approve_item(item_id: str, reviewer: str, reason: str | None) -> dict:
             actor=reviewer, reason=reason, curation_item_id=row["id"], after_state=payload,
         )
         return {"item_id": item_id, "status": "approved"}
-    finally:
-        await conn.close()
 
 
 async def reject_item(item_id: str, reviewer: str, reason: str | None) -> dict:
-    conn = await _connect()
-    try:
+    async with connection() as conn:
         row = await conn.fetchrow("SELECT * FROM curation_items WHERE item_id = $1", item_id)
         if row is None:
             raise CurationError(404, f"curation item {item_id} not found")
@@ -145,13 +147,22 @@ async def reject_item(item_id: str, reviewer: str, reason: str | None) -> dict:
             actor=reviewer, reason=reason, curation_item_id=row["id"],
         )
         return {"item_id": item_id, "status": "rejected"}
-    finally:
-        await conn.close()
 
 
 def _merge_nodes_in_neo4j(source_id: str, target_id: str) -> None:
     driver = get_driver()
     with driver.session() as session:
+        present = {
+            r["id"]
+            for r in session.run(
+                "MATCH (n) WHERE n.id IN $ids RETURN n.id AS id",
+                ids=[source_id, target_id],
+            )
+        }
+        for node_id in (source_id, target_id):
+            if node_id not in present:
+                raise CurationError(404, f"node {node_id} not found")
+
         outgoing = session.run(
             "MATCH (a {id: $source_id})-[r]->(b) WHERE b.id <> $target_id "
             "RETURN type(r) AS type, properties(r) AS props, b.id AS other_id, r.id AS rel_id",
@@ -184,48 +195,47 @@ def _merge_nodes_in_neo4j(source_id: str, target_id: str) -> None:
 
 
 async def merge_nodes(source_node_id: str, target_node_id: str, reason: str, actor: str) -> dict:
-    _merge_nodes_in_neo4j(source_node_id, target_node_id)
+    await anyio.to_thread.run_sync(_merge_nodes_in_neo4j, source_node_id, target_node_id)
 
-    conn = await _connect()
-    try:
+    async with connection() as conn:
         await _log_change(
             conn, action="merge", target_type="node", target_id=source_node_id,
             actor=actor, reason=reason, after_state={"merged_into": target_node_id},
         )
-    finally:
-        await conn.close()
     return {"source_node_id": source_node_id, "target_node_id": target_node_id, "status": "merged"}
 
 
-async def delete_node(node_id: str, reason: str, actor: str) -> dict:
+def _deprecate_node_in_neo4j(node_id: str) -> str | None:
     driver = get_driver()
     with driver.session() as session:
         result = session.run(
             "MATCH (n {id: $id}) SET n.status = 'deprecated' RETURN n.id AS id", id=node_id
         ).single()
-    if result is None:
-        raise CurationError(404, f"node {node_id} not found")
-
-    conn = await _connect()
-    try:
-        await _log_change(conn, action="delete", target_type="node", target_id=node_id, actor=actor, reason=reason)
-    finally:
-        await conn.close()
-    return {"node_id": node_id, "status": "deprecated"}
+    return result["id"] if result is not None else None
 
 
-async def delete_edge(edge_id: str, reason: str, actor: str) -> dict:
+def _deprecate_edge_in_neo4j(edge_id: str) -> str | None:
     driver = get_driver()
     with driver.session() as session:
         result = session.run(
             "MATCH ()-[r {id: $id}]->() SET r.status = 'deprecated' RETURN r.id AS id LIMIT 1", id=edge_id
         ).single()
-    if result is None:
+    return result["id"] if result is not None else None
+
+
+async def delete_node(node_id: str, reason: str, actor: str) -> dict:
+    if await anyio.to_thread.run_sync(_deprecate_node_in_neo4j, node_id) is None:
+        raise CurationError(404, f"node {node_id} not found")
+
+    async with connection() as conn:
+        await _log_change(conn, action="delete", target_type="node", target_id=node_id, actor=actor, reason=reason)
+    return {"node_id": node_id, "status": "deprecated"}
+
+
+async def delete_edge(edge_id: str, reason: str, actor: str) -> dict:
+    if await anyio.to_thread.run_sync(_deprecate_edge_in_neo4j, edge_id) is None:
         raise CurationError(404, f"edge {edge_id} not found")
 
-    conn = await _connect()
-    try:
+    async with connection() as conn:
         await _log_change(conn, action="delete", target_type="edge", target_id=edge_id, actor=actor, reason=reason)
-    finally:
-        await conn.close()
     return {"edge_id": edge_id, "status": "deprecated"}

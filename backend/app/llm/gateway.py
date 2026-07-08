@@ -45,7 +45,10 @@ def _openai_answer(context: str, question: str) -> str:
             {"role": "user", "content": f"參考資料:\n{context}\n\n問題:{question}"},
         ],
     )
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    if not content:
+        return "抱歉,目前無法產生回答,請稍後再試。"
+    return content.strip()
 
 
 def _fallback_answer(context: str, question: str) -> str:
@@ -95,7 +98,10 @@ def _openai_check(
         ],
         response_format={"type": "json_object"},
     )
-    parsed = json.loads(response.choices[0].message.content)
+    try:
+        parsed = json.loads(response.choices[0].message.content or "{}")
+    except json.JSONDecodeError:
+        parsed = {}
     hit_ids = set(parsed.get("misconception_ids", []))
     detected = [n for n in misconception_nodes if n["id"] in hit_ids]
     return {

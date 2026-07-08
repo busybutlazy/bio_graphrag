@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.api.auth import require_admin
 from app.curation import service
 from app.schemas.curation import (
     ApproveRejectRequest,
@@ -10,7 +11,7 @@ from app.schemas.curation import (
     MergeNodesRequest,
 )
 
-router = APIRouter(prefix="/admin")
+router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
 
 
 @router.get("/curation/items", response_model=list[CurationItemResponse])
@@ -24,7 +25,10 @@ async def list_curation_items(
 
 @router.post("/curation/items", status_code=201)
 async def create_curation_item(body: CurationItemCreate) -> dict:
-    item_id = await service.create_item(body.item_type, body.action, body.payload, body.reason)
+    try:
+        item_id = await service.create_item(body.item_type, body.action, body.payload, body.reason)
+    except service.CurationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     return {"item_id": item_id, "status": "proposed"}
 
 
@@ -46,7 +50,10 @@ async def reject_curation_item(item_id: str, body: ApproveRejectRequest) -> dict
 
 @router.post("/graph/merge-nodes")
 async def merge_nodes_endpoint(body: MergeNodesRequest) -> dict:
-    return await service.merge_nodes(body.source_node_id, body.target_node_id, body.reason, actor="human")
+    try:
+        return await service.merge_nodes(body.source_node_id, body.target_node_id, body.reason, actor="human")
+    except service.CurationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 @router.post("/graph/delete-node")

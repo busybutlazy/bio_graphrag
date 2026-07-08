@@ -8,6 +8,8 @@ question
   -> LLM answer
 """
 
+import anyio
+
 from app.core.config import settings
 from app.db.neo4j_driver import get_driver
 from app.graph.cypher_templates import expand_from_seeds
@@ -35,7 +37,9 @@ async def retrieve(question: str, top_k: int, graph_depth: int) -> dict:
                 seen.add(cid)
                 seed_ids.append(cid)
 
-    subgraph = expand_from_seeds(get_driver(), seed_ids, graph_depth, MAX_RETURNED_NODES)
+    subgraph = await anyio.to_thread.run_sync(
+        expand_from_seeds, get_driver(), seed_ids, graph_depth, MAX_RETURNED_NODES
+    )
     composed = context_composer.compose(chunk_hits, subgraph)
     composed["vector_hits"] = len(chunk_hits)
     composed["graph_depth"] = graph_depth
@@ -46,7 +50,9 @@ async def answer_query(
     question: str, top_k: int, graph_depth: int, include_debug: bool
 ) -> dict:
     composed = await retrieve(question, top_k, graph_depth)
-    answer = gateway.generate_answer(composed["context_text"], question)
+    answer = await anyio.to_thread.run_sync(
+        gateway.generate_answer, composed["context_text"], question
+    )
 
     result = {
         "answer": answer,

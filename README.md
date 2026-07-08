@@ -73,6 +73,19 @@ curl -X POST http://localhost:8000/admin/curation/items/curation:hormone:example
 
 Every approve/reject/merge/delete is recorded in `graph_change_logs` with actor, action, and reason.
 
+### Securing `/admin`
+
+The `/admin/*` endpoints (curation + evaluation) accept a named API key. Configure keys as a comma-separated `vendor:key` list:
+
+```bash
+# .env
+ADMIN_API_KEYS=acme:key1,globex:key2
+```
+
+Requests must then send `X-API-Key: key1`; the matched vendor name is attributed to the action. **When `ADMIN_API_KEYS` is empty (the default) auth is disabled**, so a fresh clone and the test suite run open — set it in any exposed deployment. The demo UI reads its key from `localStorage.setItem('adminApiKey', '<key>')`.
+
+> Per-vendor accounts with usage quotas and expiry are intentionally out of scope for this demo (physical DB isolation and rate limiting are deferred); the named-key gate is the minimal control that keeps the destructive graph-mutation endpoints from being open to anyone who can reach the API.
+
 ## Tests
 
 ```bash

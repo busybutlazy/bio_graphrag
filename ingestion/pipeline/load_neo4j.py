@@ -1,4 +1,19 @@
+import re
+
 from neo4j import Driver
+
+# Neo4j labels and relationship types are identifiers that can't be parameterised,
+# so we interpolate them into Cypher. Guard the interpolation: a type must be a
+# plain identifier. Callers should also whitelist the value (see
+# normalize_concepts), but this keeps the raw string out of the query text no
+# matter which path reaches here.
+_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _safe_type(type_name: str) -> str:
+    if not isinstance(type_name, str) or not _IDENTIFIER.match(type_name):
+        raise ValueError(f"unsafe graph type: {type_name!r}")
+    return type_name
 
 
 def clear_graph(driver: Driver) -> None:
@@ -11,7 +26,7 @@ def write_nodes(driver: Driver, nodes: list[dict]) -> None:
         for node in nodes:
             session.run(
                 f"""
-                MERGE (n:{node['type']} {{id: $id}})
+                MERGE (n:{_safe_type(node['type'])} {{id: $id}})
                 SET n.label = $label,
                     n.status = $status,
                     n.description = $description,
@@ -32,7 +47,7 @@ def write_edges(driver: Driver, edges: list[dict]) -> None:
             session.run(
                 f"""
                 MATCH (a {{id: $source}}), (b {{id: $target}})
-                MERGE (a)-[r:{edge['type']} {{id: $id}}]->(b)
+                MERGE (a)-[r:{_safe_type(edge['type'])} {{id: $id}}]->(b)
                 SET r += $props
                 """,
                 source=edge["source"],

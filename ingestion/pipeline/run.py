@@ -18,6 +18,8 @@ from ingestion.pipeline import (
 
 
 async def run() -> dict:
+    # `change_me` defaults are placeholders for the local Docker demo; override
+    # every credential via environment variables in any exposed deployment.
     job_id = f"job:{uuid.uuid4()}"
     stats: dict = {}
     status = "running"

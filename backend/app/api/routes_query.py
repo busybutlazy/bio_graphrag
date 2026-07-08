@@ -1,5 +1,6 @@
 import time
 
+import anyio
 from fastapi import APIRouter
 
 from app.db import query_logs
@@ -43,8 +44,9 @@ async def check_answer(body: CheckAnswerRequest) -> CheckAnswerResponse:
     supporting_nodes = composed["supporting_nodes"]
     misconception_nodes = [n for n in supporting_nodes if n["type"] == "Misconception"]
 
-    verdict = gateway.check_misconception(
-        composed["context_text"], question, body.student_answer, misconception_nodes
+    verdict = await anyio.to_thread.run_sync(
+        gateway.check_misconception,
+        composed["context_text"], question, body.student_answer, misconception_nodes,
     )
     return CheckAnswerResponse(
         is_correct=verdict["is_correct"],

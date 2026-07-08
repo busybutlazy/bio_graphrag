@@ -15,9 +15,8 @@ import time
 import uuid
 from pathlib import Path
 
-import asyncpg
-
 from app.core.config import settings
+from app.db.pool import connection
 from app.eval import metrics
 from app.rag import pipeline
 from ingestion.pipeline.parse_source import DATA_DIR
@@ -84,7 +83,9 @@ async def run_evaluation(persist: bool = True) -> dict:
         "latency_mean_ms": round(sum(latencies) / len(latencies), 1),
         "top_k": TOP_K,
         "graph_depth": GRAPH_DEPTH,
-        "mode": "openai" if settings.openai_api_key else "offline",
+        # Mirror the retrieval/gateway condition so the reported mode matches the
+        # path actually taken (both require provider AND key).
+        "mode": "openai" if (settings.llm_provider == "openai" and settings.openai_api_key) else "offline",
         "thresholds": {
             "recall_at_k": RECALL_THRESHOLD,
             "grounded_pass_rate": GROUNDED_THRESHOLD,
@@ -106,43 +107,35 @@ async def run_evaluation(persist: bool = True) -> dict:
 async def _persist(report: dict) -> None:
     summary = report["summary"]
     try:
-        conn = await asyncpg.connect(
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            database=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-        )
-    except Exception:
-        return
-    try:
-        run_uuid = await conn.fetchval(
-            """
-            INSERT INTO evaluation_runs (run_id, finished_at, metrics, notes)
-            VALUES ($1, now(), $2, $3)
-            RETURNING id
-            """,
-            summary["run_id"],
-            json.dumps(summary),
-            f"mode={summary['mode']} passed={summary['passed']}",
-        )
-        for it in report["items"]:
-            await conn.execute(
+        async with connection() as conn:
+            run_uuid = await conn.fetchval(
                 """
-                INSERT INTO evaluation_items
-                    (run_id, question_id, question, expected_nodes, retrieved_nodes, passed, notes)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                INSERT INTO evaluation_runs (run_id, finished_at, metrics, notes)
+                VALUES ($1, now(), $2, $3)
+                RETURNING id
                 """,
-                run_uuid,
-                it["question_id"],
-                it["question"],
-                json.dumps(it["expected_node_ids"]),
-                json.dumps(it["retrieved_chunk_ids"]),
-                it["passed"],
-                f"recall={it['recall_at_k']} grounded={it['grounded_pass']} latency_ms={it['latency_ms']}",
+                summary["run_id"],
+                json.dumps(summary),
+                f"mode={summary['mode']} passed={summary['passed']}",
             )
-    finally:
-        await conn.close()
+            for it in report["items"]:
+                await conn.execute(
+                    """
+                    INSERT INTO evaluation_items
+                        (run_id, question_id, question, expected_nodes, retrieved_nodes, passed, notes)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    """,
+                    run_uuid,
+                    it["question_id"],
+                    it["question"],
+                    json.dumps(it["expected_node_ids"]),
+                    json.dumps(it["retrieved_chunk_ids"]),
+                    it["passed"],
+                    f"recall={it['recall_at_k']} grounded={it['grounded_pass']} latency_ms={it['latency_ms']}",
+                )
+    except Exception:
+        # Persistence is best-effort; a missing/unreachable DB must not fail eval.
+        return
 
 
 def to_markdown(report: dict) -> str:

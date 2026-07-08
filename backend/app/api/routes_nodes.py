@@ -1,3 +1,4 @@
+import anyio
 from fastapi import APIRouter, HTTPException, Query
 
 from app.db import chunks as chunks_db
@@ -37,5 +38,7 @@ async def concept_map(body: ConceptMapRequest) -> ConceptMapResponse:
     else:
         seed_ids = await chunks_db.concept_ids_by_topic(body.topic)
 
-    subgraph = expand_from_seeds(get_driver(), seed_ids, body.depth, MAX_RETURNED_NODES)
+    subgraph = await anyio.to_thread.run_sync(
+        expand_from_seeds, get_driver(), seed_ids, body.depth, MAX_RETURNED_NODES
+    )
     return ConceptMapResponse(nodes=subgraph["nodes"], edges=subgraph["edges"])

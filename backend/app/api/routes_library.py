@@ -1,3 +1,4 @@
+import anyio
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -38,7 +39,7 @@ async def library() -> LibraryResponse:
     groups: list[LibraryGroup] = []
     for topic in topics:
         concept_ids = await chunks_db.concept_ids_by_topic(topic)
-        nodes = fetch_nodes_brief(driver, concept_ids)
+        nodes = await anyio.to_thread.run_sync(fetch_nodes_brief, driver, concept_ids)
         groups.append(
             LibraryGroup(
                 topic=topic,
@@ -47,7 +48,7 @@ async def library() -> LibraryResponse:
                 nodes=[NodeRef(**n) for n in nodes],
             )
         )
-    counts = graph_counts(driver)
+    counts = await anyio.to_thread.run_sync(graph_counts, driver)
     return LibraryResponse(
         groups=groups,
         total_nodes=counts["nodes"],
