@@ -14,6 +14,13 @@ venv/
 # Generated evaluation reports
 reports/
 
+# Private IP: per-chapter extraction profiles (keep local, not public)
+/prompts/profiles/*.profile.md
+!/prompts/profiles/example.profile.md
+
+# Private IP: real extracted knowledge (only data/sample/* is public demo data)
+/data/private/
+
 # Node (future frontend)
 node_modules/
 dist/
