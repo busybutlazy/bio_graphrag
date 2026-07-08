@@ -130,7 +130,7 @@ an honest reading of the numbers are in `docs/evaluation.md`.
 - `backend/` — FastAPI service
 - `ingestion/` — ingestion pipeline (parse → normalize → build chunks → embed → load Neo4j/Qdrant/Postgres)
 - `schema/` — Neo4j node/relationship types, DB schema, LLM extraction guidelines
-- `prompts/` — LLM extraction prompt templates
+- `prompts/` — public LLM extraction base template; per-chapter profile overlays (`prompts/profiles/*.profile.md`) and real extracted knowledge stay local (gitignored) as IP — see `prompts/profiles/README.md`
 - `docs/` — project plan and API contract
-- `scripts/` — helper scripts (`wait_for_services.sh`)
+- `scripts/` — helper scripts (`wait_for_services.sh`; `manage_vendors.py` vendor-account CLI)
 - `data/sample/` — sample hormone-regulation concepts/edges/documents/chunks JSON
