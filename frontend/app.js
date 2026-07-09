@@ -100,6 +100,7 @@ const VIEWS = [
   { id: 'chat', label: '問答', render: renderChat },
   { id: 'graph', label: '圖譜', render: renderGraph },
   { id: 'library', label: '典藏', render: renderLibrary },
+  { id: 'ingest', label: '解析', render: renderIngest },
   { id: 'curation', label: '審訂', render: renderCuration },
   { id: 'eval', label: '評估', render: renderEval },
 ];
@@ -555,6 +556,240 @@ async function renderCuration(host) {
     catch (err) { clear(notice); notice.append(E('div', { class: 'notice err' }, err.message)); }
   }
   loadQueue();
+}
+
+/* ============================================================
+   INGEST / 解析 — document extraction (interface public, run locked)
+   ============================================================ */
+const OWNER_STORE = 'ingestOwnerToken';
+// sessionStorage, not localStorage: the owner token is a long-lived secret, so
+// scope it to the tab session rather than persisting it at rest across visits.
+const getOwner = () => sessionStorage.getItem(OWNER_STORE) || '';
+const setOwner = (t) => { if (t) sessionStorage.setItem(OWNER_STORE, t); else sessionStorage.removeItem(OWNER_STORE); };
+
+const STRAT_LABELS = {
+  fixed: '固定長度', recursive: '遞迴切塊', markdown_header: '標題切塊',
+};
+
+/* run needs an extra owner-token header on top of the admin key */
+async function ingestRun(body, ownerToken) {
+  const r = await fetch('/admin/ingest/run', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+      ...(ownerToken ? { 'X-Ingest-Owner-Token': ownerToken } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw await apiError(r);
+  return r.json();
+}
+
+async function renderIngest(host) {
+  clear(host);
+  const opts = await api.get('/admin/ingest/options');
+
+  const state = {
+    source: opts.sources[0] ? opts.sources[0].key : '',
+    strategy: opts.default_strategy || 'recursive',
+    params: { chunk_size: 500, chunk_overlap: 80, max_section_size: 800 },
+  };
+
+  host.append(E('div', { class: 'page-head' },
+    E('div', { class: 'eyebrow' }, 'EXTRACTION · 解析流程'),
+    E('div', { class: 'page-title', style: 'margin-top:8px;font-size:30px' }, '文件解析與收錄'),
+    E('div', { class: 'page-sub' },
+      '將原始章節切塊、逐塊送 LLM 抽取候選節點/關係,寫入審訂佇列(proposed)。' +
+      '預覽不消耗 token;實際注入僅限資料庫擁有者。')));
+
+  const wrap = E('div', { class: 'ing-wrap' });
+  host.append(wrap);
+
+  const steps = E('div', { class: 'ing-steps' });
+  const results = E('div', { class: 'ing-results' });
+
+  // ---- step 1: source ----
+  const sourceSel = E('select', { class: 'ing-select', onchange: (e) => { state.source = e.target.value; } },
+    ...opts.sources.map((s) => E('option', { value: s.key }, `${s.filename}  ·  ${s.scope}`)));
+  if (!opts.sources.length) sourceSel.append(E('option', { value: '' }, '（尚無可匯入的章節檔）'));
+
+  // ---- step 2/3: strategy + params (repainted together) ----
+  const stratRow = E('div', { class: 'pill-row' });
+  const paramsHost = E('div');
+
+  function paintStrategy() {
+    clear(stratRow);
+    opts.strategies.forEach((s) => stratRow.append(E('button', {
+      class: 'pill' + (s.name === state.strategy ? ' on cha' : ''),
+      title: s.description,
+      onclick: () => { state.strategy = s.name; paintStrategy(); paintParams(); },
+    }, STRAT_LABELS[s.name] || s.name)));
+  }
+  function numParam(key, label) {
+    return E('div', { class: 'ing-param' },
+      E('label', {}, label),
+      E('input', {
+        type: 'number', value: String(state.params[key]),
+        oninput: (e) => { state.params[key] = Number(e.target.value); },
+      }));
+  }
+  function paintParams() {
+    clear(paramsHost);
+    const box = E('div', { class: 'ing-params' });
+    if (state.strategy === 'markdown_header') {
+      box.append(numParam('max_section_size', 'MAX_SECTION_SIZE'));
+    } else {
+      box.append(numParam('chunk_size', 'CHUNK_SIZE'), numParam('chunk_overlap', 'CHUNK_OVERLAP'));
+    }
+    paramsHost.append(box);
+  }
+  paintStrategy();
+  paintParams();
+
+  // ---- step 4: profiles (informational) ----
+  const profileRow = E('div', { class: 'pill-row' });
+  if (opts.profiles.length) {
+    opts.profiles.forEach((p) => profileRow.append(E('span', { class: 'pill' }, p)));
+  } else {
+    profileRow.append(E('span', { class: 'muted', style: 'font-size:12px' }, '（本機無私有 profile;將使用通用 base 模板）'));
+  }
+
+  function step(n, code, title, hint, body, accent) {
+    return E('div', { class: 'ing-step' + (accent ? ' accent' : '') },
+      E('div', { class: 'ing-rail' }, E('div', { class: 'ing-num' }, String(n)),
+        n < 4 ? E('div', { class: 'ing-line' }) : null),
+      E('div', { class: 'ing-body' },
+        E('div', { class: 'ing-h' }, E('span', { class: 't' }, title), E('span', { class: 'c' }, code)),
+        hint ? E('div', { class: 'ing-hint' }, hint) : null,
+        body));
+  }
+
+  steps.append(
+    step(1, 'SOURCE', '來源文件', '選擇要解析的章節檔(公開示範或本機私有 IP)。', sourceSel, true),
+    step(2, 'CHUNK', '切塊策略', '不同切法影響每塊的語意完整度與抽取品質。', stratRow),
+    step(3, 'PARAMS', '切塊參數', null, paramsHost),
+    step(4, 'PROFILE', '領域補充 Profile',
+      '由文件 front-matter 的 extraction_profile 指定,疊加在 base 抽取 prompt 之上。', profileRow, true),
+  );
+  wrap.append(steps);
+
+  // ---- action bar ----
+  const notice = E('div');
+  const ownerInput = E('input', {
+    class: 'owner-input', type: 'password', placeholder: '擁有者權杖', value: getOwner(),
+  });
+  const previewBtn = E('button', { class: 'btn-ghost', onclick: doPreview }, '預覽 · 不消耗 token');
+  const runBtn = E('button', { class: 'lockbtn', onclick: doRun },
+    E('span', { class: 'lk' }, '🔒'), '執行注入');
+
+  wrap.append(E('div', { class: 'ing-actionbar' },
+    E('div', { class: 'ing-note' },
+      '預覽只做切塊與組 prompt,零 token、零寫入。執行注入會呼叫 LLM 並寫入 proposed 知識,' +
+      '需正確的擁有者權杖(X-Ingest-Owner-Token)——預設對所有人上鎖。'),
+    E('div', { class: 'ing-actions' }, previewBtn, ownerInput, runBtn)));
+  wrap.append(notice, results);
+
+  function buildBody() {
+    const cp = state.strategy === 'markdown_header'
+      ? { max_section_size: state.params.max_section_size }
+      : { chunk_size: state.params.chunk_size, chunk_overlap: state.params.chunk_overlap };
+    return { source: state.source, strategy: state.strategy, chunk_params: cp };
+  }
+
+  function setBusy(busy, which) {
+    previewBtn.disabled = busy; runBtn.disabled = busy;
+    if (busy) { clear(notice); results.replaceChildren(E('div', { class: 'loading' }, which === 'run' ? '注入中…' : '解析預覽中…')); }
+  }
+
+  async function doPreview() {
+    if (!state.source) return;
+    setBusy(true, 'preview');
+    try { renderPreview(results, await api.post('/admin/ingest/preview', buildBody())); }
+    catch (err) { clear(results); notice.replaceChildren(E('div', { class: 'notice err' }, err.message)); }
+    finally { previewBtn.disabled = false; runBtn.disabled = false; }
+  }
+
+  async function doRun() {
+    if (!state.source) return;
+    const token = ownerInput.value.trim();
+    setOwner(token);
+    setBusy(true, 'run');
+    try { renderRunResult(results, await ingestRun(buildBody(), token)); clear(notice); }
+    catch (err) {
+      clear(results);
+      const msg = err.code === 'ingest_locked'
+        ? '🔒 ' + err.message
+        : err.code === 'llm_not_configured' ? err.message : ('注入失敗：' + err.message);
+      notice.replaceChildren(E('div', { class: 'notice err' }, msg));
+    }
+    finally { previewBtn.disabled = false; runBtn.disabled = false; }
+  }
+}
+
+function renderPreview(host, rep) {
+  clear(host);
+  host.append(E('div', { class: 'cite-head', style: 'margin:0 0 4px' },
+    E('span', { class: 'badge' }, `PREVIEW · ${rep.chunks.length} CHUNKS · 0 TOKEN`)));
+
+  // system prompt (collapsible)
+  const sysBlock = E('pre', { class: 'prompt-block', style: 'display:none' }, rep.system_prompt || '');
+  const sysToggle = E('button', { class: 'prompt-toggle', style: 'padding-left:0' }, '＋ 系統 PROMPT(含 profile 疊加)');
+  sysToggle.addEventListener('click', () => {
+    const open = sysBlock.style.display === 'none';
+    sysBlock.style.display = open ? 'block' : 'none';
+    sysToggle.textContent = (open ? '－' : '＋') + ' 系統 PROMPT(含 profile 疊加)';
+  });
+  host.append(sysToggle, sysBlock);
+
+  rep.chunks.forEach((ch, i) => {
+    const promptBlock = E('pre', { class: 'prompt-block', style: 'display:none' }, ch.user_prompt || '');
+    const toggle = E('button', { class: 'prompt-toggle' }, '＋ 檢視送給 LLM 的 user prompt');
+    toggle.addEventListener('click', () => {
+      const open = promptBlock.style.display === 'none';
+      promptBlock.style.display = open ? 'block' : 'none';
+      toggle.textContent = (open ? '－' : '＋') + ' 檢視送給 LLM 的 user prompt';
+    });
+    host.append(E('div', { class: 'chunk-card' },
+      E('div', { class: 'chunk-head' },
+        E('span', { class: 'cid' }, String(i + 1).padStart(2, '0')),
+        E('span', { class: 'mono', style: 'font-size:10px;color:var(--muted)' }, ch.chunk_id),
+        E('span', { class: 'meta' }, `${(ch.content || '').length} 字`)),
+      E('div', { class: 'chunk-text' }, ch.content),
+      toggle, promptBlock));
+  });
+}
+
+function renderRunResult(host, rep) {
+  clear(host);
+  const s = rep.stats || {};
+  const tile = (k, v, cls) => E('div', { class: 'tile ' + (cls || '') },
+    E('div', { class: 'k' }, k), E('div', { class: 'v' }, String(v)));
+  host.append(E('div', { class: 'tiles' },
+    tile('CHUNKS', s.chunks ?? 0),
+    tile('候選節點', s.proposed_nodes ?? 0, 'pass'),
+    tile('候選關係', s.proposed_edges ?? 0, 'pass'),
+    tile('失敗塊', s.failed_chunks ?? 0, s.failed_chunks ? 'fail' : ''),
+    tile('TOKENS', s.tokens ?? 0)));
+
+  host.append(E('div', { class: 'notice ok' },
+    `已將 ${s.proposed_nodes ?? 0} 個節點、${s.proposed_edges ?? 0} 個關係寫入審訂佇列(proposed)。` +
+    '前往「審訂」分頁批准後才會進入 approved 知識圖譜。'));
+
+  rep.chunks.forEach((ch, i) => {
+    const ids = E('div', { class: 'pid-chips' });
+    (ch.proposed_node_ids || []).forEach((id) => ids.append(E('span', { class: 'pid' }, shortId(id))));
+    (ch.proposed_edge_ids || []).forEach((id) => ids.append(E('span', { class: 'pid edge' }, shortId(id))));
+    host.append(E('div', { class: 'chunk-card' },
+      E('div', { class: 'chunk-head' },
+        E('span', { class: 'cid' }, String(i + 1).padStart(2, '0')),
+        E('span', { class: 'mono', style: 'font-size:10px;color:var(--muted)' }, ch.chunk_id),
+        E('span', { class: 'meta' }, ch.extraction_failed ? '抽取失敗' : `${ch.tokens} tok`)),
+      E('div', { class: 'chunk-text' }, ch.content),
+      ch.extraction_failed
+        ? E('div', { class: 'chunk-fail' }, '⚠ 此塊抽取失敗(已跳過,不影響其他塊)')
+        : ids));
+  });
 }
 
 /* ============================================================

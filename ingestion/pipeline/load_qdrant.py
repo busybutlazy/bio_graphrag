@@ -1,7 +1,15 @@
 import hashlib
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 COLLECTION_NAME = "biology_chunks"
 
@@ -17,6 +25,24 @@ def ensure_collection(client: QdrantClient, dim: int) -> None:
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
         )
+
+
+def delete_chunks_for_doc(client: QdrantClient, doc_id: str) -> None:
+    """Drop a document's existing points before a re-ingest (mirrors the PG side).
+
+    No-op when the collection does not exist yet (first ingest).
+    """
+    existing = {c.name for c in client.get_collections().collections}
+    if COLLECTION_NAME not in existing:
+        return
+    client.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=FilterSelector(
+            filter=Filter(
+                must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+            )
+        ),
+    )
 
 
 def load_chunks(client: QdrantClient, chunks: list[dict], embeddings: dict[str, list[float]]) -> int:

@@ -8,6 +8,7 @@ from app.api.errors import APIError
 from app.api.routes_curation import router as curation_router
 from app.api.routes_eval import router as eval_router
 from app.api.routes_health import router as health_router
+from app.api.routes_ingest import router as ingest_router
 from app.api.routes_library import router as library_router
 from app.api.routes_nodes import router as nodes_router
 from app.api.routes_query import router as query_router
@@ -39,6 +40,7 @@ app.include_router(query_router)
 app.include_router(library_router)
 app.include_router(curation_router)
 app.include_router(eval_router)
+app.include_router(ingest_router)
 
 
 @app.get("/", include_in_schema=False)

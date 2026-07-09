@@ -73,6 +73,45 @@ curl -X POST http://localhost:8000/admin/curation/items/curation:hormone:example
 
 Every approve/reject/merge/delete is recorded in `graph_change_logs` with actor, action, and reason.
 
+### Document ingestion (LLM extraction)
+
+`make seed-sample` loads a hand-curated graph. The **document ingestion** path instead takes a raw chapter file and uses an LLM to *propose* nodes/edges, which then go through the same human curation before they reach the approved graph. Chapter files are markdown with a YAML-style front-matter block:
+
+```markdown
+---
+doc_id: doc:sample:hormone_regulation_demo
+title: 激素與體內恆定
+topic: blood_glucose_regulation
+grade_level: 高二
+source_type: sample
+extraction_profile: endocrine   # optional; overlays prompts/profiles/<name>.profile.md
+---
+# 激素與體內恆定
+…章節內文…
+```
+
+Public demo chapters live in `data/sample/chapters/`; real chapters go in `data/private/chapters/` (gitignored IP). The pipeline is: `parse → chunk → per-chunk (existing-concept lookup → prompt → LLM extract → schema-validate → stage as proposed) → write chunks/embeddings → job log`. Chunks are written immediately and reference the freshly-proposed concept ids; retrieval still only reads `approved` nodes, so nothing surfaces to students until a human approves it.
+
+Three admin endpoints — **the interface is public, the action is locked**:
+
+```bash
+# 1. See chunk strategies, params, profiles, and ingestable source files
+curl http://localhost:8000/admin/ingest/options
+
+# 2. Dry-run preview: chunk + assemble the exact prompts, ZERO token spend, no writes
+curl -X POST http://localhost:8000/admin/ingest/preview -H "Content-Type: application/json" \
+  -d '{"source":"data/sample/chapters/demo.md","strategy":"markdown_header"}'
+
+# 3. Real run: spends tokens + stages proposed knowledge — owner-token locked
+curl -X POST http://localhost:8000/admin/ingest/run -H "Content-Type: application/json" \
+  -H "X-Ingest-Owner-Token: <your-secret>" \
+  -d '{"source":"data/sample/chapters/demo.md","strategy":"recursive","chunk_params":{"chunk_size":500,"chunk_overlap":80}}'
+```
+
+Three chunk strategies are selectable per request: `fixed` (fixed characters + overlap), `recursive` (paragraph/sentence-hierarchy splitting, size-controlled), and `markdown_header` (split on `#`/`##`/`###`, oversized sections fall back to recursive). The chosen strategy and params are recorded in `ingestion_jobs.stats`.
+
+**Two-layer auth on purpose.** `options` and `preview` need only an admin key, so an interviewer can explore every strategy and see the assembled prompts for free. `run` additionally requires `X-Ingest-Owner-Token` matching `INGEST_OWNER_SECRET` — **closed by default** (empty secret locks it for everyone). Real extraction also needs `OPENAI_API_KEY`; without it `run` returns a clean `llm_not_configured` error instead of staging nothing.
+
 ### Securing `/admin`
 
 The `/admin/*` endpoints (curation + evaluation) accept a named API key. Configure keys as a comma-separated `vendor:key` list:
@@ -128,9 +167,9 @@ an honest reading of the numbers are in `docs/evaluation.md`.
 ## Project Layout
 
 - `backend/` — FastAPI service
-- `ingestion/` — ingestion pipeline (parse → normalize → build chunks → embed → load Neo4j/Qdrant/Postgres)
+- `ingestion/` — two paths: `pipeline/` seed loader (structured JSON → Neo4j/Qdrant/Postgres, `make seed-sample`) and `extract/` document ingestion (raw chapter → chunk → LLM extract → staged for curation)
 - `schema/` — Neo4j node/relationship types, DB schema, LLM extraction guidelines
 - `prompts/` — public LLM extraction base template; per-chapter profile overlays (`prompts/profiles/*.profile.md`) and real extracted knowledge stay local (gitignored) as IP — see `prompts/profiles/README.md`
 - `docs/` — project plan and API contract
 - `scripts/` — helper scripts (`wait_for_services.sh`; `manage_vendors.py` vendor-account CLI)
-- `data/sample/` — sample hormone-regulation concepts/edges/documents/chunks JSON
+- `data/sample/` — sample hormone-regulation concepts/edges/documents/chunks JSON; `data/sample/chapters/` public demo chapter for document ingestion (real chapters live in gitignored `data/private/chapters/`)
