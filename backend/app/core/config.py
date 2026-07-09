@@ -29,5 +29,13 @@ class Settings(BaseSettings):
     # so the local demo and tests run open. Set this in any exposed deployment.
     admin_api_keys: str = ""
 
+    # Second, owner-only gate on the ingest *run* endpoint (the button that
+    # spends tokens and writes proposed knowledge). Unlike admin_api_keys this is
+    # closed by default: when empty the run endpoint is locked for everyone, so
+    # an interviewer with a demo admin key can browse options and dry-run
+    # previews but cannot trigger a real ingest. Set to your private secret to
+    # unlock it for yourself only.
+    ingest_owner_secret: str = ""
+
 
 settings = Settings()

@@ -44,6 +44,28 @@ async def require_admin(x_api_key: str | None = Header(default=None)) -> str:
     return keys[x_api_key]
 
 
+async def require_ingest_owner(
+    x_ingest_owner_token: str | None = Header(default=None),
+) -> None:
+    """Second gate on the ingest run endpoint — owner-only, closed by default.
+
+    Applied *on top of* ``require_admin``: a caller must already hold a valid
+    admin key to reach the endpoint, and then present the owner token to
+    actually run. When ``ingest_owner_secret`` is unset the write path is locked
+    for everyone (no "open when unconfigured" fallback) — this deliberately
+    keeps the token-spending, graph-mutating action off-limits in the public
+    demo while the surrounding options/preview endpoints stay browsable.
+    """
+    secret = settings.ingest_owner_secret
+    if not secret or x_ingest_owner_token != secret:
+        raise APIError(
+            403,
+            "ingest_locked",
+            "知識注入僅限資料庫擁有者操作:此動作會消耗 token 並改變知識圖譜內容,"
+            "需提供正確的 X-Ingest-Owner-Token。",
+        )
+
+
 async def require_vendor(x_api_key: str | None = Header(default=None)) -> vendors_db.Vendor:
     """Gate the token-spending endpoints on a valid company account.
 

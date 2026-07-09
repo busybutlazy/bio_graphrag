@@ -48,6 +48,15 @@ async def upsert_chunks(conn: asyncpg.Connection, chunks: list[dict]) -> None:
         )
 
 
+async def delete_chunks_for_doc(conn: asyncpg.Connection, doc_id: str) -> None:
+    """Remove a document's existing chunks before a re-ingest.
+
+    A re-run may pick a different chunk strategy, so chunk ids/counts change and
+    a plain upsert would leave stale rows. Deletes are scoped to ``doc_id``.
+    """
+    await conn.execute("DELETE FROM chunks WHERE doc_id = $1", doc_id)
+
+
 async def start_ingestion_job(conn: asyncpg.Connection, job_id: str, source_path: str) -> None:
     await conn.execute(
         "INSERT INTO ingestion_jobs (job_id, status, source_path) VALUES ($1, 'running', $2)",
