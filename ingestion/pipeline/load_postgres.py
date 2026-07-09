@@ -81,28 +81,42 @@ async def finish_ingestion_job(
     )
 
 
-async def stage_extraction_output(conn: asyncpg.Connection, candidate: dict) -> tuple[bool, str | None]:
+async def stage_extraction_output(
+    conn: asyncpg.Connection, candidate: dict
+) -> tuple[bool, str | None, int, int]:
+    """Stage validated nodes/edges as proposed curation items.
+
+    Returns ``(ok, error, staged_nodes, staged_edges)`` where the two counts are
+    rows *actually* inserted — duplicates hit ``ON CONFLICT DO NOTHING`` and are
+    excluded, so callers can report an honest proposed-count.
+    """
     try:
         validate_extraction.validate_extraction_output(candidate)
     except jsonschema.ValidationError as exc:
-        return False, str(exc)
+        return False, str(exc), 0, 0
 
+    staged_nodes = 0
     for node in candidate["nodes"]:
-        await conn.execute(
+        row = await conn.fetchrow(
             """
             INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by)
             VALUES ($1, 'node', 'create', $2, 'proposed', 'llm')
             ON CONFLICT (item_id) DO NOTHING
+            RETURNING item_id
             """,
             f"curation:{node['id']}", json.dumps(node),
         )
+        staged_nodes += row is not None
+    staged_edges = 0
     for edge in candidate["edges"]:
-        await conn.execute(
+        row = await conn.fetchrow(
             """
             INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by)
             VALUES ($1, 'edge', 'create', $2, 'proposed', 'llm')
             ON CONFLICT (item_id) DO NOTHING
+            RETURNING item_id
             """,
             f"curation:{edge['id']}", json.dumps(edge),
         )
-    return True, None
+        staged_edges += row is not None
+    return True, None, staged_nodes, staged_edges

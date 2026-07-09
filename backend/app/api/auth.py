@@ -9,6 +9,7 @@ When no keys are configured the guard is a no-op — the local Docker demo and t
 test suite run without credentials. Configure keys in any exposed deployment.
 """
 
+import hmac
 from datetime import date
 
 from fastapi import Header, HTTPException
@@ -57,7 +58,7 @@ async def require_ingest_owner(
     demo while the surrounding options/preview endpoints stay browsable.
     """
     secret = settings.ingest_owner_secret
-    if not secret or x_ingest_owner_token != secret:
+    if not secret or not hmac.compare_digest(x_ingest_owner_token or "", secret):
         raise APIError(
             403,
             "ingest_locked",

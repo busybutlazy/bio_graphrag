@@ -562,8 +562,10 @@ async function renderCuration(host) {
    INGEST / 解析 — document extraction (interface public, run locked)
    ============================================================ */
 const OWNER_STORE = 'ingestOwnerToken';
-const getOwner = () => localStorage.getItem(OWNER_STORE) || '';
-const setOwner = (t) => { if (t) localStorage.setItem(OWNER_STORE, t); else localStorage.removeItem(OWNER_STORE); };
+// sessionStorage, not localStorage: the owner token is a long-lived secret, so
+// scope it to the tab session rather than persisting it at rest across visits.
+const getOwner = () => sessionStorage.getItem(OWNER_STORE) || '';
+const setOwner = (t) => { if (t) sessionStorage.setItem(OWNER_STORE, t); else sessionStorage.removeItem(OWNER_STORE); };
 
 const STRAT_LABELS = {
   fixed: '固定長度', recursive: '遞迴切塊', markdown_header: '標題切塊',

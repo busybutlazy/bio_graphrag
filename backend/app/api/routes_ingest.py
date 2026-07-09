@@ -88,7 +88,11 @@ def _resolve_source(key: str) -> Path:
     allowed chapter directories (path-traversal guard)."""
     candidate = (_REPO_ROOT / key).resolve()
     for directory in _SOURCE_DIRS:
-        if candidate.is_relative_to(directory.resolve()) and candidate.is_file():
+        if (
+            candidate.is_relative_to(directory.resolve())
+            and candidate.is_file()
+            and candidate.suffix == ".md"
+        ):
             return candidate
     raise APIError(404, "source_not_found", f"找不到可匯入的來源檔:{key}")
 

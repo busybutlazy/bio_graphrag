@@ -8,6 +8,7 @@ base so the public repo still runs.
 """
 
 import re
+from functools import lru_cache
 from pathlib import Path
 
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
@@ -17,11 +18,13 @@ PROFILES_DIR = PROMPTS_DIR / "profiles"
 _FENCE_RE = re.compile(r"```text\n(.*?)```", re.DOTALL)
 
 
+@lru_cache(maxsize=1)
 def _load_base_blocks() -> tuple[str, str]:
     """Return (system_prompt, user_template) from the base markdown doc.
 
     The doc keeps the two runtime blocks as the first two ```text fenced blocks:
-    the system prompt, then the user-prompt template.
+    the system prompt, then the user-prompt template. Cached: the base template
+    is static at runtime and this is called once per chunk.
     """
     text = BASE_PROMPT_PATH.read_text(encoding="utf-8")
     blocks = _FENCE_RE.findall(text)

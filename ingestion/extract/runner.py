@@ -20,6 +20,7 @@ reviewer can see the chunking and the exact prompts before anything is spent.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import asdict, dataclass, field
 
@@ -119,7 +120,11 @@ async def _extract_chunk(
     tokens = 0
     for _ in range(retries + 1):
         try:
-            candidate, call_tokens = extract_fn(system_prompt, user_prompt)
+            # extract_fn is a sync/blocking call (OpenAI client) — run it off the
+            # event loop so a multi-chunk ingest doesn't stall other requests.
+            candidate, call_tokens = await asyncio.to_thread(
+                extract_fn, system_prompt, user_prompt
+            )
             tokens += call_tokens
             validate_extraction.validate_extraction_output(candidate)
             return candidate, tokens
@@ -235,7 +240,9 @@ async def ingest_document(
                 chunk_report.extraction_failed = True
                 failed_chunks += 1
             else:
-                ok, stage_error = await load_postgres.stage_extraction_output(pg_conn, candidate)
+                ok, stage_error, staged_nodes, staged_edges = (
+                    await load_postgres.stage_extraction_output(pg_conn, candidate)
+                )
                 if not ok:
                     # Should not happen (already validated), but stay defensive.
                     chunk_report.extraction_failed = True
@@ -246,20 +253,27 @@ async def ingest_document(
                     concept_ids = node_ids
                     chunk_report.proposed_node_ids = node_ids
                     chunk_report.proposed_edge_ids = edge_ids
-                    proposed_nodes += len(node_ids)
-                    proposed_edges += len(edge_ids)
+                    # count rows actually inserted, not proposed: duplicates hit
+                    # ON CONFLICT DO NOTHING and must not inflate the stats.
+                    proposed_nodes += staged_nodes
+                    proposed_edges += staged_edges
 
             chunk_rows.append(_chunk_row(doc, chunk_id, content, concept_ids))
             report.chunks.append(chunk_report)
 
         # ---- persist document + chunks + embeddings --------------------------
+        # Compute embeddings first: it is the most failure-prone external call
+        # (may hit the OpenAI embeddings API). Doing it before any delete keeps a
+        # failure from leaving the doc half-written across PG and Qdrant. Blocking
+        # calls (embed, Qdrant) run off the event loop.
+        embeddings = await asyncio.to_thread(embed_chunks.embed_chunks, chunk_rows)
+
         await load_postgres.upsert_documents(pg_conn, [doc.document_row()])
         # re-ingest may change chunk count/ids → clear the doc's old chunks first
         await load_postgres.delete_chunks_for_doc(pg_conn, doc.doc_id)
-        load_qdrant.delete_chunks_for_doc(qdrant, doc.doc_id)
+        await asyncio.to_thread(load_qdrant.delete_chunks_for_doc, qdrant, doc.doc_id)
         await load_postgres.upsert_chunks(pg_conn, chunk_rows)
-        embeddings = embed_chunks.embed_chunks(chunk_rows)
-        load_qdrant.load_chunks(qdrant, chunk_rows, embeddings)
+        await asyncio.to_thread(load_qdrant.load_chunks, qdrant, chunk_rows, embeddings)
     except Exception as exc:
         status = "failed"
         error_message = str(exc)
