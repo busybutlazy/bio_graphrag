@@ -1,0 +1,402 @@
+[
+  {
+    "id": "blood_glucose_case_001",
+    "domain": "blood_glucose_regulation",
+    "source_text": "胰島素會降低血糖濃度。",
+    "proposal": {
+      "proposed_nodes": [
+        {
+          "id": "hormone:insulin",
+          "type": "Hormone",
+          "label": "胰島素",
+          "description": "由胰島β細胞分泌、降低血糖的激素。",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        },
+        {
+          "id": "physiological_variable:blood_glucose",
+          "type": "PhysiologicalVariable",
+          "label": "血糖",
+          "description": "血液中的葡萄糖濃度。",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        },
+        {
+          "id": "regulatory_effect:insulin_decreases_blood_glucose",
+          "type": "RegulatoryEffect",
+          "label": "胰島素降低血糖",
+          "description": "胰島素造成血糖下降的單一調控效果(fact node)。",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        }
+      ],
+      "proposed_edges": [
+        {
+          "id": "e:c1:has_effect",
+          "type": "HAS_EFFECT",
+          "source": "hormone:insulin",
+          "target": "regulatory_effect:insulin_decreases_blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        },
+        {
+          "id": "e:c1:on_variable",
+          "type": "ON_VARIABLE",
+          "source": "regulatory_effect:insulin_decreases_blood_glucose",
+          "target": "physiological_variable:blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        },
+        {
+          "id": "e:c1:decreases",
+          "type": "DECREASES",
+          "source": "regulatory_effect:insulin_decreases_blood_glucose",
+          "target": "physiological_variable:blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        }
+      ],
+      "context_nodes": [],
+      "context_edges": [],
+      "confidence": 0.96,
+      "applied_rule_ids": ["single_regulatory_effect"],
+      "uncertain_points": [],
+      "possible_over_inference": [],
+      "possible_schema_gap": false
+    },
+    "did_not_understand_as": [
+      "胰島素直接分解血糖中的葡萄糖",
+      "血糖下降造成胰島素分泌"
+    ],
+    "expert_review": {
+      "status": "approved",
+      "notes": "方向正確,符合教材;胰島素降血糖建成獨立事實節點。",
+      "schema_gap_type": null,
+      "reviewed_by": "domain_expert",
+      "reviewed_at": "2026-07-09"
+    },
+    "gold": { "promote": true, "gold_id": "blood_glucose_case_001" }
+  },
+  {
+    "id": "blood_glucose_case_002",
+    "domain": "blood_glucose_regulation",
+    "source_text": "升糖素會促進肝醣分解,使血糖上升。",
+    "proposal": {
+      "proposed_nodes": [
+        {
+          "id": "hormone:glucagon",
+          "type": "Hormone",
+          "label": "升糖素",
+          "description": "由胰島α細胞分泌、升高血糖的激素。",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        },
+        {
+          "id": "process:glycogenolysis",
+          "type": "Process",
+          "label": "肝醣分解",
+          "description": "肝醣分解為葡萄糖的生理流程(升糖素升高血糖的中介機制)。",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        },
+        {
+          "id": "physiological_variable:blood_glucose",
+          "type": "PhysiologicalVariable",
+          "label": "血糖",
+          "description": "血液中的葡萄糖濃度。",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        },
+        {
+          "id": "regulatory_effect:glucagon_increases_blood_glucose",
+          "type": "RegulatoryEffect",
+          "label": "升糖素升高血糖",
+          "description": "升糖素造成血糖上升的單一調控效果(fact node)。",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        }
+      ],
+      "proposed_edges": [
+        {
+          "id": "e:c2:has_effect",
+          "type": "HAS_EFFECT",
+          "source": "hormone:glucagon",
+          "target": "regulatory_effect:glucagon_increases_blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        },
+        {
+          "id": "e:c2:on_variable",
+          "type": "ON_VARIABLE",
+          "source": "regulatory_effect:glucagon_increases_blood_glucose",
+          "target": "physiological_variable:blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        },
+        {
+          "id": "e:c2:increases",
+          "type": "INCREASES",
+          "source": "regulatory_effect:glucagon_increases_blood_glucose",
+          "target": "physiological_variable:blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        },
+        {
+          "id": "e:c2:causes_mechanism",
+          "type": "CAUSES",
+          "source": "hormone:glucagon",
+          "target": "process:glycogenolysis",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        }
+      ],
+      "context_nodes": [],
+      "context_edges": [],
+      "confidence": 0.9,
+      "applied_rule_ids": ["regulatory_effect_with_mechanism"],
+      "uncertain_points": [
+        "現行 schema 無『效果透過某 process 實現』的專用邊,mechanism 暫以 CAUSES 掛在 Hormone 上。"
+      ],
+      "possible_over_inference": [],
+      "possible_schema_gap": false
+    },
+    "did_not_understand_as": [
+      "升糖素直接把血糖變高,與肝醣分解無關",
+      "升糖素只是與血糖上升相關,沒有方向"
+    ],
+    "expert_review": {
+      "status": "approved",
+      "notes": "肝醣分解以獨立 Process 節點保留,未被壓縮成『升糖素使血糖上升』;方向正確。",
+      "schema_gap_type": null,
+      "reviewed_by": "domain_expert",
+      "reviewed_at": "2026-07-09"
+    },
+    "gold": { "promote": true, "gold_id": "blood_glucose_case_002" }
+  },
+  {
+    "id": "blood_glucose_case_003",
+    "domain": "blood_glucose_regulation",
+    "source_text": "當血糖濃度升高時,胰島 β 細胞會分泌胰島素。",
+    "proposal": {
+      "proposed_nodes": [
+        {
+          "id": "physiological_variable:blood_glucose",
+          "type": "PhysiologicalVariable",
+          "label": "血糖",
+          "description": "血液中的葡萄糖濃度。",
+          "source_chunk_id": "chunk:blood_glucose_case_003"
+        },
+        {
+          "id": "structure:pancreatic_beta_cell",
+          "type": "Structure",
+          "label": "胰島β細胞 / pancreatic beta cell",
+          "description": "胰島中分泌胰島素的β細胞。現行 schema 無 CellType,暫以 Structure 表達,細胞層級語意保留在 label。",
+          "source_chunk_id": "chunk:blood_glucose_case_003"
+        },
+        {
+          "id": "hormone:insulin",
+          "type": "Hormone",
+          "label": "胰島素",
+          "description": "由胰島β細胞分泌、降低血糖的激素。",
+          "source_chunk_id": "chunk:blood_glucose_case_003"
+        }
+      ],
+      "proposed_edges": [
+        {
+          "id": "e:c3:secretes",
+          "type": "SECRETES",
+          "source": "structure:pancreatic_beta_cell",
+          "target": "hormone:insulin",
+          "source_chunk_id": "chunk:blood_glucose_case_003"
+        },
+        {
+          "id": "e:c3:regulates_secretion",
+          "type": "REGULATES_SECRETION_OF",
+          "source": "physiological_variable:blood_glucose",
+          "target": "hormone:insulin",
+          "properties": { "trigger_direction": "increase" },
+          "source_chunk_id": "chunk:blood_glucose_case_003"
+        }
+      ],
+      "context_nodes": [],
+      "context_edges": [],
+      "confidence": 0.92,
+      "applied_rule_ids": ["secretion_trigger"],
+      "uncertain_points": [],
+      "possible_over_inference": [],
+      "possible_schema_gap": false
+    },
+    "did_not_understand_as": [
+      "胰島素造成血糖上升",
+      "血糖升高是胰島素作用的結果"
+    ],
+    "expert_review": {
+      "status": "approved",
+      "notes": "血糖升高被理解為『觸發胰島素分泌』(REGULATES_SECRETION_OF),而非胰島素造成的結果,方向正確。β細胞暫以 Structure 表達可接受。",
+      "schema_gap_type": null,
+      "reviewed_by": "domain_expert",
+      "reviewed_at": "2026-07-09"
+    },
+    "gold": { "promote": true, "gold_id": "blood_glucose_case_003" }
+  },
+  {
+    "id": "blood_glucose_case_004",
+    "domain": "blood_glucose_regulation",
+    "source_text": "胰島素與升糖素在血糖調控上具有拮抗作用。",
+    "proposal": {
+      "proposed_nodes": [
+        {
+          "id": "interaction:insulin_glucagon_blood_glucose",
+          "type": "Interaction",
+          "label": "胰島素-升糖素血糖拮抗",
+          "description": "胰島素與升糖素透過方向相反的兩個調控效果,在血糖上呈現拮抗。",
+          "properties": {
+            "interaction_type": "antagonism",
+            "scope": "blood_glucose_regulation"
+          },
+          "source_chunk_id": "chunk:blood_glucose_case_004"
+        }
+      ],
+      "proposed_edges": [
+        {
+          "id": "e:c4:uses_effect_insulin",
+          "type": "USES_EFFECT",
+          "source": "interaction:insulin_glucagon_blood_glucose",
+          "target": "regulatory_effect:insulin_decreases_blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_004"
+        },
+        {
+          "id": "e:c4:uses_effect_glucagon",
+          "type": "USES_EFFECT",
+          "source": "interaction:insulin_glucagon_blood_glucose",
+          "target": "regulatory_effect:glucagon_increases_blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_004"
+        },
+        {
+          "id": "e:c4:on_variable",
+          "type": "ON_VARIABLE",
+          "source": "interaction:insulin_glucagon_blood_glucose",
+          "target": "physiological_variable:blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_004"
+        }
+      ],
+      "context_nodes": [
+        {
+          "id": "hormone:insulin",
+          "type": "Hormone",
+          "label": "胰島素",
+          "description": "由胰島β細胞分泌、降低血糖的激素。",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        },
+        {
+          "id": "hormone:glucagon",
+          "type": "Hormone",
+          "label": "升糖素",
+          "description": "由胰島α細胞分泌、升高血糖的激素。",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        },
+        {
+          "id": "physiological_variable:blood_glucose",
+          "type": "PhysiologicalVariable",
+          "label": "血糖",
+          "description": "血液中的葡萄糖濃度。",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        },
+        {
+          "id": "regulatory_effect:insulin_decreases_blood_glucose",
+          "type": "RegulatoryEffect",
+          "label": "胰島素降低血糖",
+          "description": "胰島素造成血糖下降的單一調控效果(fact node)。",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        },
+        {
+          "id": "regulatory_effect:glucagon_increases_blood_glucose",
+          "type": "RegulatoryEffect",
+          "label": "升糖素升高血糖",
+          "description": "升糖素造成血糖上升的單一調控效果(fact node)。",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        }
+      ],
+      "context_edges": [
+        {
+          "id": "e:c1:has_effect",
+          "type": "HAS_EFFECT",
+          "source": "hormone:insulin",
+          "target": "regulatory_effect:insulin_decreases_blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_001"
+        },
+        {
+          "id": "e:c2:has_effect",
+          "type": "HAS_EFFECT",
+          "source": "hormone:glucagon",
+          "target": "regulatory_effect:glucagon_increases_blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_002"
+        }
+      ],
+      "confidence": 0.88,
+      "applied_rule_ids": ["antagonistic_interaction"],
+      "uncertain_points": [
+        "本句本身未陳述兩個方向效果;Interaction 依賴 Case 1、Case 2 已提出的 RegulatoryEffect(既有概念重用)。"
+      ],
+      "possible_over_inference": [],
+      "possible_schema_gap": false,
+      "references_existing": [
+        "regulatory_effect:insulin_decreases_blood_glucose",
+        "regulatory_effect:glucagon_increases_blood_glucose"
+      ]
+    },
+    "did_not_understand_as": [
+      "胰島素抑制升糖素",
+      "升糖素抑制胰島素"
+    ],
+    "expert_review": {
+      "status": "approved",
+      "notes": "拮抗被理解為『在血糖上、透過兩個反向效果』,而非激素間直接互相抑制;Interaction 正確引用既有的兩個 fact node。",
+      "schema_gap_type": null,
+      "reviewed_by": "domain_expert",
+      "reviewed_at": "2026-07-09"
+    },
+    "gold": { "promote": true, "gold_id": "blood_glucose_case_004" }
+  },
+  {
+    "id": "blood_glucose_case_005",
+    "domain": "hormone_metabolism_regulation",
+    "source_text": "甲狀腺素會增強腎上腺素對代謝作用的效果。",
+    "proposal": {
+      "proposed_nodes": [
+        {
+          "id": "hormone:thyroxine",
+          "type": "Hormone",
+          "label": "甲狀腺素",
+          "description": "甲狀腺分泌、提高整體代謝率的激素。",
+          "source_chunk_id": "chunk:blood_glucose_case_005"
+        },
+        {
+          "id": "hormone:adrenaline",
+          "type": "Hormone",
+          "label": "腎上腺素",
+          "description": "腎上腺髓質分泌、促進代謝與應激反應的激素。",
+          "source_chunk_id": "chunk:blood_glucose_case_005"
+        },
+        {
+          "id": "physiological_variable:metabolic_rate",
+          "type": "PhysiologicalVariable",
+          "label": "代謝率",
+          "description": "身體的整體代謝速率。",
+          "source_chunk_id": "chunk:blood_glucose_case_005"
+        }
+      ],
+      "proposed_edges": [],
+      "context_nodes": [],
+      "context_edges": [],
+      "confidence": 0.55,
+      "applied_rule_ids": [],
+      "uncertain_points": [
+        "核心關係『甲狀腺素增強腎上腺素對代謝的效果』無法用現行任一 edge 表達。"
+      ],
+      "possible_over_inference": [
+        "若強行建成『甲狀腺素 INCREASES 代謝率』或『腎上腺素 INCREASES 代謝率』兩個獨立效果,會遺失『甲狀腺素調節另一激素效果強度』的核心語意。"
+      ],
+      "possible_schema_gap": true
+    },
+    "did_not_understand_as": [
+      "甲狀腺素單獨提高代謝率",
+      "腎上腺素單獨提高代謝率",
+      "甲狀腺素與腎上腺素之間是單純的因果關係"
+    ],
+    "expert_review": {
+      "status": "schema_gap",
+      "notes": "這是 permissive/增強效果:甲狀腺素不是直接影響代謝率,而是改變腎上腺素對代謝率的作用強度。現行 schema 無法表達,列入 backlog。",
+      "schema_gap_type": "permissive_effect",
+      "reviewed_by": "domain_expert",
+      "reviewed_at": "2026-07-09"
+    },
+    "gold": { "promote": true, "gold_id": "blood_glucose_case_005" }
+  }
+]
