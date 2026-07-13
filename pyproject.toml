@@ -1,0 +1,18 @@
+# Tooling config for lint (ruff) and type-check (mypy).
+# Runtime deps live in backend/requirements.txt; dev tools in backend/requirements-dev.txt.
+# See `make lint` / `make format` and .github/workflows/ci.yml.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["**/__pycache__"]
+
+[tool.ruff.lint]
+# Default rules (pyflakes + a slice of pycodestyle) plus import sorting.
+extend-select = ["I"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true   # third-party libs (fastapi, asyncpg, neo4j, qdrant...) ship without stubs
+explicit_package_bases = true
+mypy_path = "backend"

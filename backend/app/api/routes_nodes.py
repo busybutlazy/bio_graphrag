@@ -36,6 +36,8 @@ async def concept_map(body: ConceptMapRequest) -> ConceptMapResponse:
     if body.node_ids:
         seed_ids = body.node_ids
     else:
+        # ConceptMapRequest._require_seed guarantees topic is set when node_ids is empty.
+        assert body.topic is not None
         seed_ids = await chunks_db.concept_ids_by_topic(body.topic)
 
     subgraph = await anyio.to_thread.run_sync(

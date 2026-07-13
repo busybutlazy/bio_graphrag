@@ -1,6 +1,41 @@
 # Biology GraphRAG Tutor
 
+[![CI](https://github.com/busybutlazy/bio_graphrag/actions/workflows/ci.yml/badge.svg)](https://github.com/busybutlazy/bio_graphrag/actions/workflows/ci.yml)
+
 Domain-specific GraphRAG system for high-school biology. See `docs/graph_plan.md` for the full project plan and phase breakdown, `schema/` for the graph/DB schema, and `docs/api_contract.md` for the API contract.
+
+## Architecture
+
+Four datastores, each with one job; all student-facing retrieval reads **only `status='approved'`** knowledge, and an LLM only ever *proposes* graph changes — a human approves them before they reach retrieval.
+
+```mermaid
+flowchart LR
+    U["學生 / Reviewer"] -->|"HTTP :8080"| NG["nginx"]
+    NG --> SPA["靜態 SPA · frontend/"]
+    NG --> API["FastAPI backend"]
+
+    subgraph R["混合檢索 — 只讀 approved"]
+      direction TB
+      API -->|"① 向量 / lexical fallback"| QD["Qdrant · chunk 向量"]
+      API -->|"① fallback"| PGCH["Postgres · chunks"]
+      API -->|"② BFS 圖擴展"| NEO["Neo4j · 知識圖譜"]
+      API -->|"③ grounded 回答"| GW["LLM Gateway · OpenAI 或離線"]
+    end
+
+    subgraph GOV["人工治理 — LLM 只提案"]
+      direction TB
+      API -->|"propose"| CIQ["Postgres · curation_items"]
+      CIQ -->|"human approve"| NEO
+      API -->|"每筆異動"| GL["Postgres · graph_change_logs"]
+    end
+
+    DOC["文件抽取 · ingestion/extract"] -->|"LLM 提案 = proposed"| CIQ
+    SEED["seed 載入 · ingestion/pipeline"] -->|"直接 approved"| NEO
+```
+
+- **Hybrid retrieval** (`app/rag/pipeline.py`): vector/lexical search over chunks → collect `concept_ids` → BFS the approved Neo4j subgraph (depth-limited, node-capped) → compose grounded context → LLM answer.
+- **Governance** (`app/curation/service.py`): propose → `curation_items` queue → human approve writes into Neo4j as `approved`; every mutation is appended to `graph_change_logs`.
+- **Offline mode**: with no `OPENAI_API_KEY`, retrieval falls back to lexical bigram search and answers are extractive — a fresh clone runs every screen with no secrets.
 
 ## Quick Start
 

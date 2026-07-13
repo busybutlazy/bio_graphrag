@@ -1,4 +1,4 @@
-.PHONY: up down logs test health seed seed-sample export-seed eval
+.PHONY: up down logs test health seed seed-sample export-seed eval lint format
 
 up:
 	docker compose up -d --build
@@ -32,3 +32,16 @@ export-seed:
 
 eval:
 	docker compose run --rm backend python -m app.eval.runner
+
+# Lint + type-check (needs dev tools: pip install -r backend/requirements-dev.txt).
+# Config lives in pyproject.toml. CI runs the same three commands.
+LINT_PATHS = backend/app ingestion backend/tests ingestion/tests scripts
+lint:
+	ruff check $(LINT_PATHS)
+	ruff format --check $(LINT_PATHS)
+	mypy backend/app ingestion scripts
+
+# Auto-fix imports + apply the formatter in place.
+format:
+	ruff check --fix $(LINT_PATHS)
+	ruff format $(LINT_PATHS)
