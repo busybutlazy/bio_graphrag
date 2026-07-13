@@ -19,6 +19,7 @@ from dataclasses import dataclass
 DEFAULT_CHUNK_SIZE = 500
 DEFAULT_CHUNK_OVERLAP = 80
 DEFAULT_MAX_SECTION_SIZE = 800
+DEFAULT_MIN_CHUNK_SIZE = 50
 
 # Separator hierarchy for recursive splitting: try to break on the most
 # semantic boundary first (blank line = paragraph), degrade to finer ones.
@@ -83,10 +84,13 @@ class RecursiveChunker(Chunker):
 
     chunk_size: int = DEFAULT_CHUNK_SIZE
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP
+    min_chunk_size: int = DEFAULT_MIN_CHUNK_SIZE
     name: str = "recursive"
 
     def __post_init__(self) -> None:
         _validate_size_overlap(self.chunk_size, self.chunk_overlap)
+        if self.min_chunk_size < 0 or self.min_chunk_size >= self.chunk_size:
+            raise ValueError("min_chunk_size must be in [0, chunk_size)")
 
     def chunk(self, text: str) -> list[str]:
         text = text.strip()
@@ -135,11 +139,19 @@ class RecursiveChunker(Chunker):
             else:
                 current += atom
         if current.strip():
-            chunks.append(current.strip())
+            tail = current.strip()
+            if chunks and len(tail) < self.min_chunk_size:
+                chunks[-1] = (chunks[-1] + " " + tail).strip()
+            else:
+                chunks.append(tail)
         return [c for c in chunks if c]
 
     def params(self) -> dict:
-        return {"chunk_size": self.chunk_size, "chunk_overlap": self.chunk_overlap}
+        return {
+            "chunk_size": self.chunk_size,
+            "chunk_overlap": self.chunk_overlap,
+            "min_chunk_size": self.min_chunk_size,
+        }
 
 
 @dataclass
