@@ -1,8 +1,7 @@
 import pytest
-from fastapi.testclient import TestClient
-
 from app.core.config import settings
 from app.main import app
+from fastapi.testclient import TestClient
 
 DEMO_SOURCE = "data/sample/chapters/demo.md"
 
@@ -50,13 +49,19 @@ def test_preview_returns_chunks_and_prompts_without_spend(client):
 def test_preview_strategy_switch_changes_chunk_count(client):
     coarse = client.post(
         "/admin/ingest/preview",
-        json={"source": DEMO_SOURCE, "strategy": "fixed",
-              "chunk_params": {"chunk_size": 5000, "chunk_overlap": 0}},
+        json={
+            "source": DEMO_SOURCE,
+            "strategy": "fixed",
+            "chunk_params": {"chunk_size": 5000, "chunk_overlap": 0},
+        },
     ).json()
     fine = client.post(
         "/admin/ingest/preview",
-        json={"source": DEMO_SOURCE, "strategy": "fixed",
-              "chunk_params": {"chunk_size": 80, "chunk_overlap": 0}},
+        json={
+            "source": DEMO_SOURCE,
+            "strategy": "fixed",
+            "chunk_params": {"chunk_size": 80, "chunk_overlap": 0},
+        },
     ).json()
     assert len(fine["chunks"]) > len(coarse["chunks"])
 

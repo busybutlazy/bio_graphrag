@@ -18,7 +18,7 @@ import asyncpg
 from neo4j import GraphDatabase
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = _REPO_ROOT / "data" / "seed"   # gitignored; data/sample/ is the public fallback
+DATA_DIR = _REPO_ROOT / "data" / "seed"  # gitignored; data/sample/ is the public fallback
 
 _STANDARD_NODE_PROPS = {"id", "label", "status", "description"}
 _STANDARD_EDGE_PROPS = {"id", "status"}
@@ -29,19 +29,20 @@ def _export_neo4j(driver) -> tuple[list[dict], list[dict]]:
     edges: list[dict] = []
     with driver.session() as session:
         for record in session.run(
-            "MATCH (n) WHERE n.status = 'approved' "
-            "RETURN n, labels(n) AS labels ORDER BY n.id"
+            "MATCH (n) WHERE n.status = 'approved' RETURN n, labels(n) AS labels ORDER BY n.id"
         ):
             props = dict(record["n"].items())
             extra = {k: v for k, v in props.items() if k not in _STANDARD_NODE_PROPS}
-            nodes.append({
-                "id": props["id"],
-                "type": record["labels"][0],
-                "label": props.get("label", ""),
-                "status": "approved",
-                "description": props.get("description", ""),
-                "properties": extra,
-            })
+            nodes.append(
+                {
+                    "id": props["id"],
+                    "type": record["labels"][0],
+                    "label": props.get("label", ""),
+                    "status": "approved",
+                    "description": props.get("description", ""),
+                    "properties": extra,
+                }
+            )
 
         for record in session.run(
             "MATCH (a)-[r]->(b) WHERE r.status = 'approved' "
@@ -49,14 +50,16 @@ def _export_neo4j(driver) -> tuple[list[dict], list[dict]]:
         ):
             props = dict(record["r"].items())
             extra = {k: v for k, v in props.items() if k not in _STANDARD_EDGE_PROPS}
-            edges.append({
-                "id": props.get("id", ""),
-                "type": record["rel_type"],
-                "source": record["source"],
-                "target": record["target"],
-                "status": "approved",
-                "properties": extra,
-            })
+            edges.append(
+                {
+                    "id": props.get("id", ""),
+                    "type": record["rel_type"],
+                    "source": record["source"],
+                    "target": record["target"],
+                    "status": "approved",
+                    "properties": extra,
+                }
+            )
 
     return nodes, edges
 
@@ -109,8 +112,10 @@ async def run() -> None:
     _write(DATA_DIR / "biology_sample_documents.json", documents)
     _write(DATA_DIR / "biology_sample_chunks.json", chunks)
 
-    print(f"exported: {len(nodes)} nodes, {len(edges)} edges, "
-          f"{len(documents)} documents, {len(chunks)} chunks")
+    print(
+        f"exported: {len(nodes)} nodes, {len(edges)} edges, "
+        f"{len(documents)} documents, {len(chunks)} chunks"
+    )
     print(f"→ {DATA_DIR}")
 
 

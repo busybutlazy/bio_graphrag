@@ -51,7 +51,9 @@ async def reject_curation_item(item_id: str, body: ApproveRejectRequest) -> dict
 @router.post("/graph/merge-nodes")
 async def merge_nodes_endpoint(body: MergeNodesRequest) -> dict:
     try:
-        return await service.merge_nodes(body.source_node_id, body.target_node_id, body.reason, actor="human")
+        return await service.merge_nodes(
+            body.source_node_id, body.target_node_id, body.reason, actor="human"
+        )
     except service.CurationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 

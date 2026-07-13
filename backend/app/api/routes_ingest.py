@@ -60,7 +60,9 @@ class ChunkParams(BaseModel):
 
 
 class IngestRequest(BaseModel):
-    source: str = Field(description="source key from GET /options, e.g. data/sample/chapters/demo.md")
+    source: str = Field(
+        description="source key from GET /options, e.g. data/sample/chapters/demo.md"
+    )
     strategy: str = Field(default=ingest_runner.DEFAULT_STRATEGY)
     chunk_params: ChunkParams = Field(default_factory=ChunkParams)
 
@@ -75,11 +77,13 @@ def _list_sources() -> list[dict]:
             continue
         scope = directory.parent.name  # "sample" or "private"
         for path in sorted(directory.glob("*.md")):
-            sources.append({
-                "key": str(path.relative_to(_REPO_ROOT)),
-                "filename": path.name,
-                "scope": scope,
-            })
+            sources.append(
+                {
+                    "key": str(path.relative_to(_REPO_ROOT)),
+                    "filename": path.name,
+                    "scope": scope,
+                }
+            )
     return sources
 
 

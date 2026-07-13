@@ -19,7 +19,6 @@ import secrets
 from datetime import date
 
 import asyncpg
-
 from app.db import vendors as vendors_db
 from app.db.pool import connection
 

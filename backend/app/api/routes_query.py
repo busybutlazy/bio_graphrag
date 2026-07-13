@@ -70,7 +70,10 @@ async def check_answer(
 
         verdict, check_usage = await anyio.to_thread.run_sync(
             gateway.check_misconception,
-            composed["context_text"], question, body.student_answer, misconception_nodes,
+            composed["context_text"],
+            question,
+            body.student_answer,
+            misconception_nodes,
         )
         usage.add(check_usage)
         return CheckAnswerResponse(

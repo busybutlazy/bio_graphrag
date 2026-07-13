@@ -27,13 +27,15 @@ def _write_chapter(tmp_path):
 
 def _valid_candidate(chunk_id: str) -> dict:
     return {
-        "nodes": [{
-            "id": "hormone:test_sample_insulin",
-            "type": "Hormone",
-            "label": "胰島素",
-            "description": "降低血糖的激素",
-            "source_chunk_id": chunk_id,
-        }],
+        "nodes": [
+            {
+                "id": "hormone:test_sample_insulin",
+                "type": "Hormone",
+                "label": "胰島素",
+                "description": "降低血糖的激素",
+                "source_chunk_id": chunk_id,
+            }
+        ],
         "edges": [],
     }
 
@@ -69,12 +71,16 @@ async def test_dry_run_strategy_switch_changes_chunk_count(tmp_path):
     path = _write_chapter(tmp_path)
 
     coarse = await runner.ingest_document(
-        source_path=path, strategy="fixed",
-        chunk_params={"chunk_size": 1000, "chunk_overlap": 0}, dry_run=True,
+        source_path=path,
+        strategy="fixed",
+        chunk_params={"chunk_size": 1000, "chunk_overlap": 0},
+        dry_run=True,
     )
     fine = await runner.ingest_document(
-        source_path=path, strategy="fixed",
-        chunk_params={"chunk_size": 20, "chunk_overlap": 0}, dry_run=True,
+        source_path=path,
+        strategy="fixed",
+        chunk_params={"chunk_size": 20, "chunk_overlap": 0},
+        dry_run=True,
     )
     assert len(fine.chunks) > len(coarse.chunks)
     assert coarse.stats["chunk_params"]["chunk_size"] == 1000
@@ -135,14 +141,20 @@ async def test_full_run_is_idempotent_on_chunk_count(tmp_path, pg_conn, qdrant_c
 
     try:
         r1 = await runner.ingest_document(
-            source_path=path, strategy="fixed",
+            source_path=path,
+            strategy="fixed",
             chunk_params={"chunk_size": 40, "chunk_overlap": 10},
-            extract_fn=fake_extract, pg_conn=pg_conn, qdrant=qdrant_client,
+            extract_fn=fake_extract,
+            pg_conn=pg_conn,
+            qdrant=qdrant_client,
         )
         r2 = await runner.ingest_document(
-            source_path=path, strategy="fixed",
+            source_path=path,
+            strategy="fixed",
             chunk_params={"chunk_size": 40, "chunk_overlap": 10},
-            extract_fn=fake_extract, pg_conn=pg_conn, qdrant=qdrant_client,
+            extract_fn=fake_extract,
+            pg_conn=pg_conn,
+            qdrant=qdrant_client,
         )
         count = await pg_conn.fetchval("SELECT count(*) FROM chunks WHERE doc_id = $1", DOC_ID)
         assert count == r1.stats["chunks"] == r2.stats["chunks"]
@@ -159,9 +171,12 @@ async def test_failed_extraction_flags_chunk_but_job_succeeds(tmp_path, pg_conn,
 
     try:
         report = await runner.ingest_document(
-            source_path=path, strategy="fixed",
+            source_path=path,
+            strategy="fixed",
             chunk_params={"chunk_size": 1000, "chunk_overlap": 0},
-            extract_fn=bad_extract, pg_conn=pg_conn, qdrant=qdrant_client,
+            extract_fn=bad_extract,
+            pg_conn=pg_conn,
+            qdrant=qdrant_client,
         )
         assert report.status == "success"  # job survives per-chunk extraction failure
         assert report.stats["failed_chunks"] == report.stats["chunks"]

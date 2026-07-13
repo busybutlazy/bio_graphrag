@@ -54,9 +54,9 @@ def fetch_nodes_brief(driver: Driver, node_ids: list[str]) -> list[dict]:
 def graph_counts(driver: Driver) -> dict:
     """Count approved nodes and edges (for the Library summary)."""
     with driver.session() as session:
-        nodes = session.run(
-            "MATCH (n) WHERE n.status = 'approved' RETURN count(n) AS c"
-        ).single()["c"]
+        nodes = session.run("MATCH (n) WHERE n.status = 'approved' RETURN count(n) AS c").single()[
+            "c"
+        ]
         edges = session.run(
             "MATCH ()-[r]->() WHERE r.status = 'approved' RETURN count(r) AS c"
         ).single()["c"]
@@ -101,9 +101,7 @@ def _bfs_expand(
     return nodes, edges
 
 
-def expand_from_seeds(
-    driver: Driver, seed_ids: list[str], depth: int, node_limit: int
-) -> dict:
+def expand_from_seeds(driver: Driver, seed_ids: list[str], depth: int, node_limit: int) -> dict:
     """BFS an approved subgraph starting from seed nodes.
 
     Seeds that are missing or not approved are silently dropped. Returns

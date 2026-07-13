@@ -26,7 +26,7 @@ def write_nodes(driver: Driver, nodes: list[dict]) -> None:
         for node in nodes:
             session.run(
                 f"""
-                MERGE (n:{_safe_type(node['type'])} {{id: $id}})
+                MERGE (n:{_safe_type(node["type"])} {{id: $id}})
                 SET n.label = $label,
                     n.status = $status,
                     n.description = $description,
@@ -47,7 +47,7 @@ def write_edges(driver: Driver, edges: list[dict]) -> None:
             session.run(
                 f"""
                 MATCH (a {{id: $source}}), (b {{id: $target}})
-                MERGE (a)-[r:{_safe_type(edge['type'])} {{id: $id}}]->(b)
+                MERGE (a)-[r:{_safe_type(edge["type"])} {{id: $id}}]->(b)
                 SET r += $props
                 """,
                 source=edge["source"],
@@ -57,7 +57,9 @@ def write_edges(driver: Driver, edges: list[dict]) -> None:
             )
 
 
-def load(driver: Driver, nodes: list[dict], edges: list[dict], clear: bool = True) -> tuple[int, int]:
+def load(
+    driver: Driver, nodes: list[dict], edges: list[dict], clear: bool = True
+) -> tuple[int, int]:
     if clear:
         clear_graph(driver)
     write_nodes(driver, nodes)

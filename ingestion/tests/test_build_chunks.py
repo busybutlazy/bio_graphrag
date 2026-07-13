@@ -11,24 +11,40 @@ def test_sample_chunks_concept_ids_resolve_to_real_nodes():
 
 
 def test_build_rejects_unknown_concept_id():
-    nodes = [{
-        "id": "hormone:x", "type": "Hormone", "label": "X",
-        "status": "approved", "description": "test",
-    }]
-    chunks = [{
-        "chunk_id": "chunk:test:001", "doc_id": "doc:test:001",
-        "content": "test", "concept_ids": ["hormone:does_not_exist"],
-        "topic": "test", "grade_level": "高二", "source_type": "sample",
-    }]
+    nodes = [
+        {
+            "id": "hormone:x",
+            "type": "Hormone",
+            "label": "X",
+            "status": "approved",
+            "description": "test",
+        }
+    ]
+    chunks = [
+        {
+            "chunk_id": "chunk:test:001",
+            "doc_id": "doc:test:001",
+            "content": "test",
+            "concept_ids": ["hormone:does_not_exist"],
+            "topic": "test",
+            "grade_level": "高二",
+            "source_type": "sample",
+        }
+    ]
     with pytest.raises(build_chunks.ChunkValidationError):
         build_chunks.build(chunks, nodes)
 
 
 def test_build_rejects_missing_field():
-    nodes = [{
-        "id": "hormone:x", "type": "Hormone", "label": "X",
-        "status": "approved", "description": "test",
-    }]
+    nodes = [
+        {
+            "id": "hormone:x",
+            "type": "Hormone",
+            "label": "X",
+            "status": "approved",
+            "description": "test",
+        }
+    ]
     chunks = [{"chunk_id": "chunk:test:001", "doc_id": "doc:test:001"}]
     with pytest.raises(build_chunks.ChunkValidationError):
         build_chunks.build(chunks, nodes)

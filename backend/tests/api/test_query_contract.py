@@ -9,9 +9,8 @@ forbidden bulk/raw endpoints must simply not exist (404).
 """
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app.main import app
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 

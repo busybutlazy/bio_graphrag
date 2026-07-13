@@ -60,7 +60,13 @@ async def _log_change(
             (change_id, curation_item_id, action, target_type, target_id, actor, reason, before_state, after_state)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         """,
-        change_id, curation_item_id, action, target_type, target_id, actor, reason,
+        change_id,
+        curation_item_id,
+        action,
+        target_type,
+        target_id,
+        actor,
+        reason,
         json.dumps(before_state) if before_state is not None else None,
         json.dumps(after_state) if after_state is not None else None,
     )
@@ -79,7 +85,11 @@ async def list_items(status: str | None, item_type: str | None) -> list[dict]:
         query += " ORDER BY created_at DESC"
         rows = await conn.fetch(query, *params)
         return [
-            {**dict(row), "payload": _load_json(row["payload"]), "schema_check": _load_json(row["schema_check"])}
+            {
+                **dict(row),
+                "payload": _load_json(row["payload"]),
+                "schema_check": _load_json(row["schema_check"]),
+            }
             for row in rows
         ]
 
@@ -94,7 +104,11 @@ async def create_item(item_type: str, action: str, payload: dict, reason: str | 
             INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by, reason)
             VALUES ($1, $2, $3, $4, 'proposed', 'human', $5)
             """,
-            item_id, item_type, action, json.dumps(payload), reason,
+            item_id,
+            item_type,
+            action,
+            json.dumps(payload),
+            reason,
         )
     return item_id
 
@@ -119,11 +133,19 @@ async def approve_item(item_id: str, reviewer: str, reason: str | None) -> dict:
             UPDATE curation_items SET status = 'approved', reviewed_by = $2, reason = $3, reviewed_at = now()
             WHERE item_id = $1
             """,
-            item_id, reviewer, reason,
+            item_id,
+            reviewer,
+            reason,
         )
         await _log_change(
-            conn, action="approve", target_type=row["item_type"], target_id=payload["id"],
-            actor=reviewer, reason=reason, curation_item_id=row["id"], after_state=payload,
+            conn,
+            action="approve",
+            target_type=row["item_type"],
+            target_id=payload["id"],
+            actor=reviewer,
+            reason=reason,
+            curation_item_id=row["id"],
+            after_state=payload,
         )
         return {"item_id": item_id, "status": "approved"}
 
@@ -142,11 +164,18 @@ async def reject_item(item_id: str, reviewer: str, reason: str | None) -> dict:
             UPDATE curation_items SET status = 'rejected', reviewed_by = $2, reason = $3, reviewed_at = now()
             WHERE item_id = $1
             """,
-            item_id, reviewer, reason,
+            item_id,
+            reviewer,
+            reason,
         )
         await _log_change(
-            conn, action="reject", target_type=row["item_type"], target_id=payload["id"],
-            actor=reviewer, reason=reason, curation_item_id=row["id"],
+            conn,
+            action="reject",
+            target_type=row["item_type"],
+            target_id=payload["id"],
+            actor=reviewer,
+            reason=reason,
+            curation_item_id=row["id"],
         )
         return {"item_id": item_id, "status": "rejected"}
 
@@ -168,31 +197,40 @@ def _merge_nodes_in_neo4j(source_id: str, target_id: str) -> None:
         outgoing = session.run(
             "MATCH (a {id: $source_id})-[r]->(b) WHERE b.id <> $target_id "
             "RETURN type(r) AS type, properties(r) AS props, b.id AS other_id, r.id AS rel_id",
-            source_id=source_id, target_id=target_id,
+            source_id=source_id,
+            target_id=target_id,
         ).data()
         incoming = session.run(
             "MATCH (b)-[r]->(a {id: $source_id}) WHERE b.id <> $target_id "
             "RETURN type(r) AS type, properties(r) AS props, b.id AS other_id, r.id AS rel_id",
-            source_id=source_id, target_id=target_id,
+            source_id=source_id,
+            target_id=target_id,
         ).data()
 
         for rel in outgoing:
             session.run(
                 f"MATCH (t {{id: $target_id}}), (o {{id: $other_id}}) "
                 f"MERGE (t)-[r2:{rel['type']} {{id: $rel_id}}]->(o) SET r2 += $props",
-                target_id=target_id, other_id=rel["other_id"], rel_id=rel["rel_id"], props=rel["props"],
+                target_id=target_id,
+                other_id=rel["other_id"],
+                rel_id=rel["rel_id"],
+                props=rel["props"],
             )
         for rel in incoming:
             session.run(
                 f"MATCH (t {{id: $target_id}}), (o {{id: $other_id}}) "
                 f"MERGE (o)-[r2:{rel['type']} {{id: $rel_id}}]->(t) SET r2 += $props",
-                target_id=target_id, other_id=rel["other_id"], rel_id=rel["rel_id"], props=rel["props"],
+                target_id=target_id,
+                other_id=rel["other_id"],
+                rel_id=rel["rel_id"],
+                props=rel["props"],
             )
 
         session.run("MATCH (a {id: $source_id})-[r]-() DELETE r", source_id=source_id)
         session.run(
             "MATCH (a {id: $source_id}) SET a.status = 'merged', a.merged_into = $target_id",
-            source_id=source_id, target_id=target_id,
+            source_id=source_id,
+            target_id=target_id,
         )
 
 
@@ -201,8 +239,13 @@ async def merge_nodes(source_node_id: str, target_node_id: str, reason: str, act
 
     async with connection() as conn:
         await _log_change(
-            conn, action="merge", target_type="node", target_id=source_node_id,
-            actor=actor, reason=reason, after_state={"merged_into": target_node_id},
+            conn,
+            action="merge",
+            target_type="node",
+            target_id=source_node_id,
+            actor=actor,
+            reason=reason,
+            after_state={"merged_into": target_node_id},
         )
     return {"source_node_id": source_node_id, "target_node_id": target_node_id, "status": "merged"}
 
@@ -220,7 +263,8 @@ def _deprecate_edge_in_neo4j(edge_id: str) -> str | None:
     driver = get_driver()
     with driver.session() as session:
         result = session.run(
-            "MATCH ()-[r {id: $id}]->() SET r.status = 'deprecated' RETURN r.id AS id LIMIT 1", id=edge_id
+            "MATCH ()-[r {id: $id}]->() SET r.status = 'deprecated' RETURN r.id AS id LIMIT 1",
+            id=edge_id,
         ).single()
     return result["id"] if result is not None else None
 
@@ -230,7 +274,9 @@ async def delete_node(node_id: str, reason: str, actor: str) -> dict:
         raise CurationError(404, f"node {node_id} not found")
 
     async with connection() as conn:
-        await _log_change(conn, action="delete", target_type="node", target_id=node_id, actor=actor, reason=reason)
+        await _log_change(
+            conn, action="delete", target_type="node", target_id=node_id, actor=actor, reason=reason
+        )
     return {"node_id": node_id, "status": "deprecated"}
 
 
@@ -239,5 +285,7 @@ async def delete_edge(edge_id: str, reason: str, actor: str) -> dict:
         raise CurationError(404, f"edge {edge_id} not found")
 
     async with connection() as conn:
-        await _log_change(conn, action="delete", target_type="edge", target_id=edge_id, actor=actor, reason=reason)
+        await _log_change(
+            conn, action="delete", target_type="edge", target_id=edge_id, actor=actor, reason=reason
+        )
     return {"edge_id": edge_id, "status": "deprecated"}

@@ -20,9 +20,7 @@ class LLMNotConfigured(RuntimeError):
 
 
 def is_configured() -> bool:
-    return os.getenv("LLM_PROVIDER", "openai") == "openai" and bool(
-        os.getenv("OPENAI_API_KEY", "")
-    )
+    return os.getenv("LLM_PROVIDER", "openai") == "openai" and bool(os.getenv("OPENAI_API_KEY", ""))
 
 
 def extract(system_prompt: str, user_prompt: str) -> tuple[dict, int]:

@@ -1,9 +1,8 @@
 import pytest
-from fastapi.testclient import TestClient
-from neo4j import GraphDatabase
-
 from app.core.config import settings
 from app.main import app
+from fastapi.testclient import TestClient
+from neo4j import GraphDatabase
 
 
 @pytest.fixture

@@ -85,7 +85,9 @@ async def run_evaluation(persist: bool = True) -> dict:
         "graph_depth": GRAPH_DEPTH,
         # Mirror the retrieval/gateway condition so the reported mode matches the
         # path actually taken (both require provider AND key).
-        "mode": "openai" if (settings.llm_provider == "openai" and settings.openai_api_key) else "offline",
+        "mode": "openai"
+        if (settings.llm_provider == "openai" and settings.openai_api_key)
+        else "offline",
         "thresholds": {
             "recall_at_k": RECALL_THRESHOLD,
             "grounded_pass_rate": GROUNDED_THRESHOLD,

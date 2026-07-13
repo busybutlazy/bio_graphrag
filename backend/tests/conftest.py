@@ -2,8 +2,8 @@ import asyncio
 
 import asyncpg
 import pytest
-
 from app.core.config import settings
+
 from ingestion.pipeline import load_postgres
 
 

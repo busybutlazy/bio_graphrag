@@ -38,14 +38,14 @@ def delete_chunks_for_doc(client: QdrantClient, doc_id: str) -> None:
     client.delete(
         collection_name=COLLECTION_NAME,
         points_selector=FilterSelector(
-            filter=Filter(
-                must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
-            )
+            filter=Filter(must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))])
         ),
     )
 
 
-def load_chunks(client: QdrantClient, chunks: list[dict], embeddings: dict[str, list[float]]) -> int:
+def load_chunks(
+    client: QdrantClient, chunks: list[dict], embeddings: dict[str, list[float]]
+) -> int:
     if not chunks:
         return 0
 

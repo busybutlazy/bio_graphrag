@@ -15,8 +15,7 @@ from app.db.neo4j_driver import get_driver
 from app.graph.cypher_templates import expand_from_seeds
 from app.llm import gateway
 from app.llm.usage import UsageAccumulator
-from app.rag import context_composer
-from app.rag import retriever_vector
+from app.rag import context_composer, retriever_vector
 
 # Hard cap on nodes returned from a single retrieval (docs/api_contract.md).
 MAX_RETURNED_NODES = 30

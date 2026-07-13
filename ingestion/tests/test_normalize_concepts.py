@@ -10,29 +10,45 @@ def test_sample_nodes_and_edges_are_valid():
 
 
 def test_validate_nodes_rejects_missing_field():
-    nodes = [{"id": "hormone:x", "type": "Hormone", "label": "X", "status": "approved"}]  # no description
+    nodes = [
+        {"id": "hormone:x", "type": "Hormone", "label": "X", "status": "approved"}
+    ]  # no description
     with pytest.raises(normalize_concepts.ValidationError):
         normalize_concepts.validate_nodes(nodes)
 
 
 def test_validate_nodes_rejects_unknown_type():
-    nodes = [{
-        "id": "hormone:x", "type": "NotARealType", "label": "X",
-        "status": "approved", "description": "test",
-    }]
+    nodes = [
+        {
+            "id": "hormone:x",
+            "type": "NotARealType",
+            "label": "X",
+            "status": "approved",
+            "description": "test",
+        }
+    ]
     with pytest.raises(normalize_concepts.ValidationError):
         normalize_concepts.validate_nodes(nodes)
 
 
 def test_validate_edges_rejects_dangling_reference():
-    nodes = [{
-        "id": "hormone:x", "type": "Hormone", "label": "X",
-        "status": "approved", "description": "test",
-    }]
-    edges = [{
-        "id": "edge:x_targets_y", "type": "TARGETS",
-        "source": "hormone:x", "target": "structure:does_not_exist",
-        "status": "approved",
-    }]
+    nodes = [
+        {
+            "id": "hormone:x",
+            "type": "Hormone",
+            "label": "X",
+            "status": "approved",
+            "description": "test",
+        }
+    ]
+    edges = [
+        {
+            "id": "edge:x_targets_y",
+            "type": "TARGETS",
+            "source": "hormone:x",
+            "target": "structure:does_not_exist",
+            "status": "approved",
+        }
+    ]
     with pytest.raises(normalize_concepts.ValidationError):
         normalize_concepts.validate_edges(nodes, edges)

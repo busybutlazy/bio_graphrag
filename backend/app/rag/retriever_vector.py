@@ -18,9 +18,7 @@ def _semantic_enabled() -> bool:
     return settings.llm_provider == "openai" and bool(settings.openai_api_key)
 
 
-async def retrieve(
-    question: str, top_k: int, acc: UsageAccumulator | None = None
-) -> list[dict]:
+async def retrieve(question: str, top_k: int, acc: UsageAccumulator | None = None) -> list[dict]:
     """Return up to top_k chunk hits: {chunk_id, doc_id, content, concept_ids, score}.
 
     Embedding tokens (semantic mode only) are added to ``acc`` when provided.

@@ -122,9 +122,7 @@ async def _extract_chunk(
         try:
             # extract_fn is a sync/blocking call (OpenAI client) — run it off the
             # event loop so a multi-chunk ingest doesn't stall other requests.
-            candidate, call_tokens = await asyncio.to_thread(
-                extract_fn, system_prompt, user_prompt
-            )
+            candidate, call_tokens = await asyncio.to_thread(extract_fn, system_prompt, user_prompt)
             tokens += call_tokens
             validate_extraction.validate_extraction_output(candidate)
             return candidate, tokens
@@ -187,15 +185,17 @@ async def ingest_document(
     if dry_run:
         for index, content in enumerate(pieces):
             chunk_id = _make_chunk_id(doc.doc_id, index)
-            report.chunks.append(ChunkReport(
-                chunk_id=chunk_id,
-                content=content,
-                user_prompt=build_extraction_prompt.build_user_prompt(
+            report.chunks.append(
+                ChunkReport(
                     chunk_id=chunk_id,
-                    existing_concepts=existing_concepts,
-                    chunk_text=content,
-                ),
-            ))
+                    content=content,
+                    user_prompt=build_extraction_prompt.build_user_prompt(
+                        chunk_id=chunk_id,
+                        existing_concepts=existing_concepts,
+                        chunk_text=content,
+                    ),
+                )
+            )
         report.status = "preview"
         report.stats = {
             "chunks": len(pieces),
@@ -240,9 +240,12 @@ async def ingest_document(
                 chunk_report.extraction_failed = True
                 failed_chunks += 1
             else:
-                ok, stage_error, staged_nodes, staged_edges = (
-                    await load_postgres.stage_extraction_output(pg_conn, candidate)
-                )
+                (
+                    ok,
+                    stage_error,
+                    staged_nodes,
+                    staged_edges,
+                ) = await load_postgres.stage_extraction_output(pg_conn, candidate)
                 if not ok:
                     # Should not happen (already validated), but stay defensive.
                     chunk_report.extraction_failed = True
@@ -291,7 +294,11 @@ async def ingest_document(
         report.status = status
         report.error_message = error_message
         await load_postgres.finish_ingestion_job(
-            pg_conn, job_id, status, report.stats, error_message,
+            pg_conn,
+            job_id,
+            status,
+            report.stats,
+            error_message,
         )
 
     return report

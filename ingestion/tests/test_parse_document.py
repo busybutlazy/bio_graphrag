@@ -29,8 +29,12 @@ def test_parse_full_front_matter(tmp_path):
 
 def test_document_row_shape_matches_loader():
     doc = pd.ParsedDocument(
-        doc_id="doc:x", title="X", body="b", topic="t",
-        grade_level="高二", source_type="sample",
+        doc_id="doc:x",
+        title="X",
+        body="b",
+        topic="t",
+        grade_level="高二",
+        source_type="sample",
     )
     row = doc.document_row()
     assert set(row) == {"doc_id", "title", "topic", "grade_level", "source_type"}

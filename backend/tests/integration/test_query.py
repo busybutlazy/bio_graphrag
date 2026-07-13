@@ -3,11 +3,11 @@ from datetime import date, timedelta
 
 import asyncpg
 import pytest
-from fastapi.testclient import TestClient
-
 from app.core.config import settings
 from app.db import vendors as vendors_db
 from app.main import app
+from fastapi.testclient import TestClient
+
 from ingestion.pipeline import run as ingestion_run
 
 # Token endpoints (/query, /check-answer) are closed by default; tests seed a
@@ -18,8 +18,11 @@ MAIN_KEY = "test-key-main"
 
 async def _connect():
     return await asyncpg.connect(
-        host=settings.postgres_host, port=settings.postgres_port, database=settings.postgres_db,
-        user=settings.postgres_user, password=settings.postgres_password,
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        database=settings.postgres_db,
+        user=settings.postgres_user,
+        password=settings.postgres_password,
     )
 
 
@@ -33,7 +36,12 @@ async def _seed_vendor(code, key, quota, expires=None, active=True):
             INSERT INTO vendors (vendor_code, name, api_key, expires_at, token_quota, active)
             VALUES ($1, $2, $3, $4, $5, $6)
             """,
-            code, code, key, expires, quota, active,
+            code,
+            code,
+            key,
+            expires,
+            quota,
+            active,
         )
     finally:
         await conn.close()
@@ -62,7 +70,8 @@ def seeded_client():
 
 def test_query_returns_grounded_answer(seeded_client):
     resp = seeded_client.post(
-        "/query", json={"question": "胰島素如何降低血糖?", "top_k": 5, "graph_depth": 1},
+        "/query",
+        json={"question": "胰島素如何降低血糖?", "top_k": 5, "graph_depth": 1},
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -78,9 +87,7 @@ def test_query_debug_hidden_by_default(seeded_client):
 
 
 def test_query_debug_visible_when_requested_in_local_env(seeded_client):
-    resp = seeded_client.post(
-        "/query", json={"question": "血糖如何調節?", "include_debug": True}
-    )
+    resp = seeded_client.post("/query", json={"question": "血糖如何調節?", "include_debug": True})
     assert resp.status_code == 200
     debug = resp.json()["retrieval_debug"]
     assert debug is not None
@@ -125,9 +132,7 @@ def test_check_answer_rejects_overlong_answer_when_authed(seeded_client):
 
 
 def test_query_unknown_key_rejected(seeded_client):
-    resp = seeded_client.post(
-        "/query", json={"question": "血糖"}, headers={"X-API-Key": "nope"}
-    )
+    resp = seeded_client.post("/query", json={"question": "血糖"}, headers={"X-API-Key": "nope"})
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "login_required"
 
@@ -146,7 +151,9 @@ def test_query_disabled_vendor_rejected(seeded_client):
 
 def test_query_expired_vendor_rejected(seeded_client):
     yesterday = date.today() - timedelta(days=1)
-    asyncio.run(_seed_vendor("test_vendor_expired", "test-key-expired", quota=1000, expires=yesterday))
+    asyncio.run(
+        _seed_vendor("test_vendor_expired", "test-key-expired", quota=1000, expires=yesterday)
+    )
     try:
         resp = seeded_client.post(
             "/query", json={"question": "血糖"}, headers={"X-API-Key": "test-key-expired"}

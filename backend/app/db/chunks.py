@@ -39,9 +39,7 @@ async def all_topics() -> list[str]:
 async def concept_ids_by_topic(topic: str) -> list[str]:
     """Distinct concept_ids referenced by chunks whose topic matches."""
     async with connection() as conn:
-        rows = await conn.fetch(
-            "SELECT concept_ids FROM chunks WHERE topic = $1", topic
-        )
+        rows = await conn.fetch("SELECT concept_ids FROM chunks WHERE topic = $1", topic)
     seen: dict[str, None] = {}
     for row in rows:
         for cid in _decode_concept_ids(row["concept_ids"]):
@@ -62,9 +60,7 @@ async def lexical_search(question: str, top_k: int) -> list[dict]:
     chunks is fine.
     """
     async with connection() as conn:
-        rows = await conn.fetch(
-            "SELECT chunk_id, doc_id, content, concept_ids FROM chunks"
-        )
+        rows = await conn.fetch("SELECT chunk_id, doc_id, content, concept_ids FROM chunks")
 
     q_bigrams = _bigrams(question)
     scored = []

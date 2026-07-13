@@ -49,7 +49,8 @@ def check_node(node: dict) -> dict:
     expected_type = _PREFIX_TO_TYPE.get(prefix)
     prefix_ok = expected_type == node_type
     prefix_detail = (
-        None if prefix_ok
+        None
+        if prefix_ok
         else f"prefix '{prefix}' expects type '{expected_type}', got '{node_type}'"
     )
 

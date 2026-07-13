@@ -4,8 +4,7 @@ from pathlib import Path
 import asyncpg
 import jsonschema
 
-from ingestion.pipeline import validate_extraction
-from ingestion.pipeline import schema_checker
+from ingestion.pipeline import schema_checker, validate_extraction
 
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
 
@@ -32,7 +31,11 @@ async def upsert_documents(conn: asyncpg.Connection, documents: list[dict]) -> N
                 source_type = EXCLUDED.source_type,
                 updated_at = now()
             """,
-            doc["doc_id"], doc["title"], doc["topic"], doc["grade_level"], doc["source_type"],
+            doc["doc_id"],
+            doc["title"],
+            doc["topic"],
+            doc["grade_level"],
+            doc["source_type"],
         )
 
 
@@ -49,8 +52,13 @@ async def upsert_chunks(conn: asyncpg.Connection, chunks: list[dict]) -> None:
                 grade_level = EXCLUDED.grade_level,
                 source_type = EXCLUDED.source_type
             """,
-            chunk["chunk_id"], chunk["doc_id"], chunk["content"],
-            json.dumps(chunk["concept_ids"]), chunk["topic"], chunk["grade_level"], chunk["source_type"],
+            chunk["chunk_id"],
+            chunk["doc_id"],
+            chunk["content"],
+            json.dumps(chunk["concept_ids"]),
+            chunk["topic"],
+            chunk["grade_level"],
+            chunk["source_type"],
         )
 
 
@@ -66,7 +74,8 @@ async def delete_chunks_for_doc(conn: asyncpg.Connection, doc_id: str) -> None:
 async def start_ingestion_job(conn: asyncpg.Connection, job_id: str, source_path: str) -> None:
     await conn.execute(
         "INSERT INTO ingestion_jobs (job_id, status, source_path) VALUES ($1, 'running', $2)",
-        job_id, source_path,
+        job_id,
+        source_path,
     )
 
 
@@ -83,7 +92,10 @@ async def finish_ingestion_job(
         SET status = $2, stats = $3, error_message = $4, finished_at = now()
         WHERE job_id = $1
         """,
-        job_id, status, json.dumps(stats), error_message,
+        job_id,
+        status,
+        json.dumps(stats),
+        error_message,
     )
 
 
@@ -111,7 +123,9 @@ async def stage_extraction_output(
             ON CONFLICT (item_id) DO NOTHING
             RETURNING item_id
             """,
-            f"curation:{node['id']}", json.dumps(node), json.dumps(check),
+            f"curation:{node['id']}",
+            json.dumps(node),
+            json.dumps(check),
         )
         staged_nodes += row is not None
     staged_edges = 0
@@ -124,7 +138,9 @@ async def stage_extraction_output(
             ON CONFLICT (item_id) DO NOTHING
             RETURNING item_id
             """,
-            f"curation:{edge['id']}", json.dumps(edge), json.dumps(check),
+            f"curation:{edge['id']}",
+            json.dumps(edge),
+            json.dumps(check),
         )
         staged_edges += row is not None
     return True, None, staged_nodes, staged_edges

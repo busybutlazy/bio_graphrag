@@ -1,5 +1,4 @@
 import pytest
-
 from app.db.neo4j_client import check_neo4j
 from app.db.postgres import check_postgres
 from app.db.qdrant_client import check_qdrant

@@ -2,11 +2,11 @@ import asyncio
 
 import asyncpg
 import pytest
+from app.core.config import settings
+from app.main import app
 from fastapi.testclient import TestClient
 from neo4j import GraphDatabase
 
-from app.core.config import settings
-from app.main import app
 from ingestion.pipeline import run as ingestion_run
 
 
@@ -18,7 +18,8 @@ def client():
 @pytest.fixture
 def neo4j_driver():
     driver = GraphDatabase.driver(
-        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password),
+        settings.neo4j_uri,
+        auth=(settings.neo4j_username, settings.neo4j_password),
     )
     yield driver
     driver.close()
@@ -31,8 +32,11 @@ def _cleanup_node(driver, node_id: str) -> None:
 
 async def _delete_test_curation_items() -> None:
     conn = await asyncpg.connect(
-        host=settings.postgres_host, port=settings.postgres_port, database=settings.postgres_db,
-        user=settings.postgres_user, password=settings.postgres_password,
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        database=settings.postgres_db,
+        user=settings.postgres_user,
+        password=settings.postgres_password,
     )
     try:
         await conn.execute("DELETE FROM graph_change_logs WHERE target_id LIKE '%test_curation%'")
@@ -49,8 +53,11 @@ def cleanup_curation_items():
 
 async def _fetch_change_log(target_id: str):
     conn = await asyncpg.connect(
-        host=settings.postgres_host, port=settings.postgres_port, database=settings.postgres_db,
-        user=settings.postgres_user, password=settings.postgres_password,
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        database=settings.postgres_db,
+        user=settings.postgres_user,
+        password=settings.postgres_password,
     )
     try:
         return await conn.fetchrow(
@@ -63,12 +70,20 @@ async def _fetch_change_log(target_id: str):
 
 def test_proposed_node_not_written_until_reviewed(client, neo4j_driver):
     payload = {
-        "id": "hormone:test_curation_pending", "type": "Hormone",
-        "label": "Test Pending Hormone", "description": "test",
+        "id": "hormone:test_curation_pending",
+        "type": "Hormone",
+        "label": "Test Pending Hormone",
+        "description": "test",
     }
-    resp = client.post("/admin/curation/items", json={
-        "item_type": "node", "action": "create", "payload": payload, "reason": "test",
-    })
+    resp = client.post(
+        "/admin/curation/items",
+        json={
+            "item_type": "node",
+            "action": "create",
+            "payload": payload,
+            "reason": "test",
+        },
+    )
     assert resp.status_code == 201
 
     with neo4j_driver.session() as session:
@@ -78,17 +93,29 @@ def test_proposed_node_not_written_until_reviewed(client, neo4j_driver):
 
 def test_reject_never_writes_to_neo4j_and_logs_change(client, neo4j_driver):
     payload = {
-        "id": "hormone:test_curation_reject", "type": "Hormone",
-        "label": "Test Reject Hormone", "description": "test",
+        "id": "hormone:test_curation_reject",
+        "type": "Hormone",
+        "label": "Test Reject Hormone",
+        "description": "test",
     }
-    create_resp = client.post("/admin/curation/items", json={
-        "item_type": "node", "action": "create", "payload": payload, "reason": "test proposal",
-    })
+    create_resp = client.post(
+        "/admin/curation/items",
+        json={
+            "item_type": "node",
+            "action": "create",
+            "payload": payload,
+            "reason": "test proposal",
+        },
+    )
     item_id = create_resp.json()["item_id"]
 
-    reject_resp = client.post(f"/admin/curation/items/{item_id}/reject", json={
-        "reviewer": "test_reviewer", "reason": "not needed",
-    })
+    reject_resp = client.post(
+        f"/admin/curation/items/{item_id}/reject",
+        json={
+            "reviewer": "test_reviewer",
+            "reason": "not needed",
+        },
+    )
     assert reject_resp.status_code == 200
     assert reject_resp.json()["status"] == "rejected"
 
@@ -104,22 +131,36 @@ def test_reject_never_writes_to_neo4j_and_logs_change(client, neo4j_driver):
 
 def test_approve_writes_to_neo4j_and_logs_change(client, neo4j_driver):
     payload = {
-        "id": "hormone:test_curation_approve", "type": "Hormone",
-        "label": "Test Approve Hormone", "description": "test",
+        "id": "hormone:test_curation_approve",
+        "type": "Hormone",
+        "label": "Test Approve Hormone",
+        "description": "test",
     }
-    create_resp = client.post("/admin/curation/items", json={
-        "item_type": "node", "action": "create", "payload": payload, "reason": "test proposal",
-    })
+    create_resp = client.post(
+        "/admin/curation/items",
+        json={
+            "item_type": "node",
+            "action": "create",
+            "payload": payload,
+            "reason": "test proposal",
+        },
+    )
     item_id = create_resp.json()["item_id"]
 
-    approve_resp = client.post(f"/admin/curation/items/{item_id}/approve", json={
-        "reviewer": "test_reviewer", "reason": "looks good",
-    })
+    approve_resp = client.post(
+        f"/admin/curation/items/{item_id}/approve",
+        json={
+            "reviewer": "test_reviewer",
+            "reason": "looks good",
+        },
+    )
     assert approve_resp.status_code == 200
     assert approve_resp.json()["status"] == "approved"
 
     with neo4j_driver.session() as session:
-        record = session.run("MATCH (n {id: $id}) RETURN n.status AS status", id=payload["id"]).single()
+        record = session.run(
+            "MATCH (n {id: $id}) RETURN n.status AS status", id=payload["id"]
+        ).single()
     assert record is not None
     assert record["status"] == "approved"
 
@@ -133,9 +174,13 @@ def test_approve_writes_to_neo4j_and_logs_change(client, neo4j_driver):
 def test_delete_edge_soft_deletes_and_is_excluded_from_neighbors(client, neo4j_driver):
     asyncio.run(ingestion_run.run())
 
-    delete_resp = client.post("/admin/graph/delete-edge", json={
-        "edge_id": "edge:pancreas_secretes_insulin", "reason": "test soft delete",
-    })
+    delete_resp = client.post(
+        "/admin/graph/delete-edge",
+        json={
+            "edge_id": "edge:pancreas_secretes_insulin",
+            "reason": "test soft delete",
+        },
+    )
     assert delete_resp.status_code == 200
     assert delete_resp.json()["status"] == "deprecated"
 
@@ -145,7 +190,8 @@ def test_delete_edge_soft_deletes_and_is_excluded_from_neighbors(client, neo4j_d
 
     with neo4j_driver.session() as session:
         record = session.run(
-            "MATCH ()-[r {id: $id}]->() RETURN r.status AS status LIMIT 1", id="edge:pancreas_secretes_insulin"
+            "MATCH ()-[r {id: $id}]->() RETURN r.status AS status LIMIT 1",
+            id="edge:pancreas_secretes_insulin",
         ).single()
     assert record["status"] == "deprecated"
 
@@ -175,15 +221,21 @@ def test_merge_nodes_redirects_relationships_and_marks_merged(client, neo4j_driv
             id=duplicate_id,
         )
 
-    merge_resp = client.post("/admin/graph/merge-nodes", json={
-        "source_node_id": duplicate_id, "target_node_id": "hormone:adh", "reason": "duplicate of ADH",
-    })
+    merge_resp = client.post(
+        "/admin/graph/merge-nodes",
+        json={
+            "source_node_id": duplicate_id,
+            "target_node_id": "hormone:adh",
+            "reason": "duplicate of ADH",
+        },
+    )
     assert merge_resp.status_code == 200
     assert merge_resp.json()["status"] == "merged"
 
     with neo4j_driver.session() as session:
         source_record = session.run(
-            "MATCH (n {id: $id}) RETURN n.status AS status, n.merged_into AS merged_into", id=duplicate_id
+            "MATCH (n {id: $id}) RETURN n.status AS status, n.merged_into AS merged_into",
+            id=duplicate_id,
         ).single()
         redirected = session.run(
             "MATCH (a {id: 'hormone:adh'})-[r:BINDS_TO {id: 'edge:test_duplicate_binds_to'}]->(b) RETURN b.id AS id"

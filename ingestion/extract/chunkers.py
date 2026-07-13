@@ -110,10 +110,7 @@ class RecursiveChunker(Chunker):
             return [text]
         if sep_index >= len(_RECURSIVE_SEPARATORS):
             # No separator left: hard-cut the oversized run into size windows.
-            return [
-                text[i : i + self.chunk_size]
-                for i in range(0, len(text), self.chunk_size)
-            ]
+            return [text[i : i + self.chunk_size] for i in range(0, len(text), self.chunk_size)]
         sep = _RECURSIVE_SEPARATORS[sep_index]
         if sep not in text:
             return self._split(text, sep_index + 1)
@@ -222,8 +219,7 @@ def get_chunker(strategy: str, **params) -> Chunker:
         cls = _STRATEGIES[strategy]
     except KeyError:
         raise ValueError(
-            f"unknown chunk strategy {strategy!r}; "
-            f"choose from {available_strategies()}"
+            f"unknown chunk strategy {strategy!r}; choose from {available_strategies()}"
         ) from None
     valid = cls.__dataclass_fields__  # type: ignore[attr-defined]
     kwargs = {k: v for k, v in params.items() if k in valid and k != "name"}

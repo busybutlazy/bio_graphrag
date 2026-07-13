@@ -57,10 +57,7 @@ def _openai_answer(context: str, question: str) -> tuple[str, TokenUsage]:
 def _fallback_answer(context: str, question: str) -> str:
     if not context.strip():
         return "目前知識庫中找不到與此問題相關的內容,無法作答。"
-    return (
-        "（離線示範模式:未設定 LLM,以下為依知識庫檢索結果整理的節錄)\n\n"
-        + context.strip()
-    )
+    return "（離線示範模式:未設定 LLM,以下為依知識庫檢索結果整理的節錄)\n\n" + context.strip()
 
 
 # --- misconception check ------------------------------------------------------
