@@ -540,9 +540,25 @@ async function renderCuration(host) {
       const summary = it.item_type === 'node'
         ? `${p.type}  ${p.label || ''}\n${p.id}`
         : `${p.source}  —${p.type}→  ${p.target}\n${p.id}`;
+
+      const sc = it.schema_check;
+      let schemaBadge = null;
+      if (sc) {
+        const allPassed = sc.passed;
+        const failedChecks = (sc.checks || []).filter(c => !c.passed);
+        const tip = allPassed
+          ? 'Schema 自動檢查通過'
+          : '⚠ Schema 問題：' + failedChecks.map(c => c.detail || c.name).join('、');
+        schemaBadge = E('span', {
+          class: allPassed ? 'schema-badge schema-ok' : 'schema-badge schema-warn',
+          title: tip,
+        }, allPassed ? '✓ Schema' : '⚠ Schema');
+      }
+
       const card = E('div', { class: 'qitem' },
         E('div', { class: 'h' }, E('span', { class: 'tag tag-proposed' }, it.item_type.toUpperCase()),
-          E('span', { class: 'mono', style: 'font-size:10px;color:var(--muted)' }, it.action)),
+          E('span', { class: 'mono', style: 'font-size:10px;color:var(--muted)' }, it.action),
+          schemaBadge),
         E('div', { class: 'pay' }, summary),
         it.reason ? E('div', { class: 'muted', style: 'font-size:11px' }, '理由：' + it.reason) : null);
       const acts = E('div', { class: 'acts' },

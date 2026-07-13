@@ -135,6 +135,9 @@ input, textarea, select { font-family: var(--sans); }
 .tag-approved { background: var(--matcha); color: #fff; }
 .tag-proposed { background: #F0E2D6; color: var(--bengara); }
 .tag-neutral { background: var(--keisen-2); color: var(--text-2); }
+.schema-badge { font-family: var(--sans); font-size: 10px; padding: 2px 7px; border-radius: 3px; white-space: nowrap; cursor: default; }
+.schema-ok   { background: #E6F4EA; color: #2D6A4F; }
+.schema-warn { background: #FFF3CD; color: #856404; }
 
 /* type dots */
 .tdot { width: 8px; height: 8px; flex: none; display: inline-block; }
