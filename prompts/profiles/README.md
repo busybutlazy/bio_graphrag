@@ -5,8 +5,17 @@
 
 ## 對應方式
 
-document 掛一個 profile 名(`biology_sample_documents.json` 等來源的
-`extraction_profile` 欄位)。萃取某文件的 chunk 時:
+document 掛一個 profile 名,設定在章節 `.md` 檔的 front-matter 裡:
+
+```markdown
+---
+doc_id: doc:private:endocrine_thyroid
+title: 甲狀腺與代謝調節
+extraction_profile: endocrine   ← 這行對應到 endocrine.profile.md
+---
+```
+
+萃取某文件的 chunk 時:
 
 1. 讀 base system prompt(型別清單 + 通用判準)。
 2. 若該文件的 `extraction_profile` 指到的 `<name>.profile.md` **存在於本地**,

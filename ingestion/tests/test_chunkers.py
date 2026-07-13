@@ -70,6 +70,42 @@ def test_recursive_hard_splits_unbreakable_run():
     assert "".join(parts) == text
 
 
+# --- merge-back (min_chunk_size) ----------------------------------------------
+
+
+def test_recursive_short_tail_merges_into_previous_chunk():
+    # Two 50-char blocks + 5-char tail; tail is below min_chunk_size so it
+    # must be appended to the previous chunk, not returned as a standalone piece.
+    long1 = "A" * 50
+    long2 = "B" * 50
+    short_tail = "C" * 5
+    text = long1 + " " + long2 + " " + short_tail
+    ch = chunkers.RecursiveChunker(chunk_size=50, chunk_overlap=0, min_chunk_size=20)
+    parts = ch.chunk(text)
+    assert not any(p == short_tail for p in parts), "short tail must not be a standalone chunk"
+    assert any(short_tail in p for p in parts), "short tail content must not be discarded"
+    assert all(len(p) >= 20 for p in parts)
+
+
+def test_recursive_only_chunk_below_min_is_kept():
+    # When there is no previous chunk to merge into, a short piece must be
+    # returned as-is rather than discarded.
+    text = "x" * 5
+    ch = chunkers.RecursiveChunker(chunk_size=50, chunk_overlap=0, min_chunk_size=20)
+    parts = ch.chunk(text)
+    assert parts == ["x" * 5]
+
+
+def test_recursive_tail_exactly_at_min_size_is_standalone():
+    # len(tail) == min_chunk_size must NOT trigger merge-back (condition is strict <).
+    long1 = "A" * 50
+    tail_at_boundary = "B" * 20  # exactly min_chunk_size
+    text = long1 + " " + tail_at_boundary
+    ch = chunkers.RecursiveChunker(chunk_size=50, chunk_overlap=0, min_chunk_size=20)
+    parts = ch.chunk(text)
+    assert parts[-1] == tail_at_boundary, "tail at min_chunk_size boundary must be its own chunk"
+
+
 # --- markdown_header ----------------------------------------------------------
 
 

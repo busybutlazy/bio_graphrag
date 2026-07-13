@@ -8,16 +8,16 @@ Domain-specific GraphRAG system for high-school biology. See `docs/graph_plan.md
 cp .env.example .env
 make up
 make health
-make seed-sample
+make seed
 # then open the demo UI:
-open http://localhost:8000/        # served by the FastAPI backend
+open http://localhost:8080/        # served via nginx → FastAPI backend
 ```
 
-`make seed-sample` runs the ingestion pipeline: parses the sample source files, validates them, embeds chunks, and loads Neo4j (44 nodes / 84 relationships), Qdrant (`biology_chunks` collection), and PostgreSQL (`documents`/`chunks`/`ingestion_jobs`) — safe to re-run.
+`make seed` loads seed data into Neo4j, Qdrant, and PostgreSQL — safe to re-run. It reads from `data/seed/` if present (your real exported knowledge); otherwise falls back to the public demo data in `data/sample/` (44 nodes / 84 relationships, 8 chunks — enough to run all screens without any API key).
 
 ## Demo UI
 
-A static single-page UI (vanilla HTML/CSS/JS, no build step) is served by the backend at `http://localhost:8000/` — every screen is backed by a real endpoint, over the actual sample endocrine graph. The visual system reuses a supplied design handoff (本草 HONZŌ). Five screens:
+A static single-page UI (vanilla HTML/CSS/JS, no build step) is served at `http://localhost:8080/` (nginx → FastAPI backend) — every screen is backed by a real endpoint, over the actual sample endocrine graph. The visual system reuses a supplied design handoff (本草 HONZŌ). Five screens:
 
 | Screen | Endpoint(s) | What it shows |
 |---|---|---|
@@ -40,21 +40,21 @@ All request limits (question length, `top_k`, `graph_depth`, returned nodes/chun
 
 ```bash
 # Hybrid retrieval Q&A (vector search + graph expansion + grounded answer)
-curl -X POST http://localhost:8000/query -H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/query -H "Content-Type: application/json" \
   -d '{"question":"胰島素如何降低血糖?","top_k":5,"graph_depth":1}'
 
 # Single approved node
-curl "http://localhost:8000/nodes/interaction:insulin_glucagon_blood_glucose"
+curl "http://localhost:8080/nodes/interaction:insulin_glucagon_blood_glucose"
 
 # Local subgraph
-curl "http://localhost:8000/neighbors/hormone:insulin?depth=1"
+curl "http://localhost:8080/neighbors/hormone:insulin?depth=1"
 
 # Concept map from node ids or a topic
-curl -X POST http://localhost:8000/concept-map -H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/concept-map -H "Content-Type: application/json" \
   -d '{"topic":"blood_glucose_regulation","depth":1}'
 
 # Check a student's answer for misconceptions
-curl -X POST http://localhost:8000/check-answer -H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/check-answer -H "Content-Type: application/json" \
   -d '{"question":"血糖如何調節?","student_answer":"胰島素降低血糖,升糖素提高血糖。"}'
 ```
 
@@ -63,11 +63,11 @@ curl -X POST http://localhost:8000/check-answer -H "Content-Type: application/js
 Retrieval only ever reads `status = 'approved'` nodes/edges. New nodes/edges go through human curation first:
 
 ```bash
-curl -X POST http://localhost:8000/admin/curation/items \
+curl -X POST http://localhost:8080/admin/curation/items \
   -H "Content-Type: application/json" \
   -d '{"item_type":"node","action":"create","payload":{"id":"hormone:example","type":"Hormone","label":"Example","description":"..."},"reason":"why"}'
 
-curl -X POST http://localhost:8000/admin/curation/items/curation:hormone:example/approve \
+curl -X POST http://localhost:8080/admin/curation/items/curation:hormone:example/approve \
   -H "Content-Type: application/json" -d '{"reviewer":"you","reason":"looks correct"}'
 ```
 
@@ -75,7 +75,7 @@ Every approve/reject/merge/delete is recorded in `graph_change_logs` with actor,
 
 ### Document ingestion (LLM extraction)
 
-`make seed-sample` loads a hand-curated graph. The **document ingestion** path instead takes a raw chapter file and uses an LLM to *propose* nodes/edges, which then go through the same human curation before they reach the approved graph. Chapter files are markdown with a YAML-style front-matter block:
+`make seed` loads a hand-curated graph (or your real exported knowledge). The **document ingestion** path instead takes a raw chapter file and uses an LLM to *propose* nodes/edges, which then go through the same human curation before they reach the approved graph. Chapter files are markdown with a YAML-style front-matter block:
 
 ```markdown
 ---
@@ -96,14 +96,14 @@ Three admin endpoints — **the interface is public, the action is locked**:
 
 ```bash
 # 1. See chunk strategies, params, profiles, and ingestable source files
-curl http://localhost:8000/admin/ingest/options
+curl http://localhost:8080/admin/ingest/options
 
 # 2. Dry-run preview: chunk + assemble the exact prompts, ZERO token spend, no writes
-curl -X POST http://localhost:8000/admin/ingest/preview -H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/admin/ingest/preview -H "Content-Type: application/json" \
   -d '{"source":"data/sample/chapters/demo.md","strategy":"markdown_header"}'
 
 # 3. Real run: spends tokens + stages proposed knowledge — owner-token locked
-curl -X POST http://localhost:8000/admin/ingest/run -H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/admin/ingest/run -H "Content-Type: application/json" \
   -H "X-Ingest-Owner-Token: <your-secret>" \
   -d '{"source":"data/sample/chapters/demo.md","strategy":"recursive","chunk_params":{"chunk_size":500,"chunk_overlap":80}}'
 ```
@@ -166,10 +166,22 @@ an honest reading of the numbers are in `docs/evaluation.md`.
 
 ## Project Layout
 
-- `backend/` — FastAPI service
-- `ingestion/` — two paths: `pipeline/` seed loader (structured JSON → Neo4j/Qdrant/Postgres, `make seed-sample`) and `extract/` document ingestion (raw chapter → chunk → LLM extract → staged for curation)
+- `backend/` — FastAPI service (served via nginx on port 8080)
+- `ingestion/` — two paths: `pipeline/` seed loader (structured JSON → Neo4j/Qdrant/Postgres, `make seed`) and `extract/` document ingestion (raw chapter → chunk → LLM extract → staged for curation)
 - `schema/` — Neo4j node/relationship types, DB schema, LLM extraction guidelines
-- `prompts/` — public LLM extraction base template; per-chapter profile overlays (`prompts/profiles/*.profile.md`) and real extracted knowledge stay local (gitignored) as IP — see `prompts/profiles/README.md`
+- `prompts/` — public LLM extraction base template; per-chapter profile overlays (`prompts/profiles/*.profile.md`) stay local (gitignored) as IP — see `prompts/profiles/README.md`
 - `docs/` — project plan and API contract
-- `scripts/` — helper scripts (`wait_for_services.sh`; `manage_vendors.py` vendor-account CLI)
-- `data/sample/` — sample hormone-regulation concepts/edges/documents/chunks JSON; `data/sample/chapters/` public demo chapter for document ingestion (real chapters live in gitignored `data/private/chapters/`)
+- `scripts/` — helper scripts (`wait_for_services.sh`; `manage_vendors.py` vendor-account CLI; `export_seed.py` DB→seed exporter)
+- `data/sample/` — public demo seed: hormone-regulation concepts/edges/documents/chunks JSON; `data/sample/chapters/` demo chapter (real chapters live in gitignored `data/private/chapters/`)
+- `data/seed/` — **gitignored** real exported knowledge; populated by `make export-seed`; takes priority over `data/sample/` when present; copy manually when switching machines
+
+### Seed priority
+
+`make seed` auto-detects which data to load:
+
+| Directory | Source | When present |
+|---|---|---|
+| `data/seed/` | `make export-seed` snapshot of your real DB | Takes priority — your real extracted knowledge |
+| `data/sample/` | Public demo data (committed) | Fallback — always present for a fresh clone |
+
+**Workflow for switching machines:** run `make export-seed` on the source machine → copy `data/seed/` → run `make seed` on the target.
