@@ -43,6 +43,13 @@ def _load_payload(row: asyncpg.Record) -> dict:
     return json.loads(payload) if isinstance(payload, str) else payload
 
 
+def _load_schema_check(row: asyncpg.Record) -> dict | None:
+    raw = row["schema_check"]
+    if raw is None:
+        return None
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
 async def _log_change(
     conn: asyncpg.Connection,
     action: str,
@@ -79,7 +86,10 @@ async def list_items(status: str | None, item_type: str | None) -> list[dict]:
             query += f" AND item_type = ${len(params)}"
         query += " ORDER BY created_at DESC"
         rows = await conn.fetch(query, *params)
-        return [{**dict(row), "payload": _load_payload(row)} for row in rows]
+        return [
+            {**dict(row), "payload": _load_payload(row), "schema_check": _load_schema_check(row)}
+            for row in rows
+        ]
 
 
 async def create_item(item_type: str, action: str, payload: dict, reason: str | None) -> str:

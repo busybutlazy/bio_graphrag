@@ -5,12 +5,18 @@ import asyncpg
 import jsonschema
 
 from ingestion.pipeline import validate_extraction
+from ingestion.pipeline import schema_checker
 
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
+
+_MIGRATION_ADD_SCHEMA_CHECK = """
+ALTER TABLE curation_items ADD COLUMN IF NOT EXISTS schema_check JSONB;
+"""
 
 
 async def ensure_schema(conn: asyncpg.Connection) -> None:
     await conn.execute(SCHEMA_SQL)
+    await conn.execute(_MIGRATION_ADD_SCHEMA_CHECK)
 
 
 async def upsert_documents(conn: asyncpg.Connection, documents: list[dict]) -> None:
@@ -97,26 +103,28 @@ async def stage_extraction_output(
 
     staged_nodes = 0
     for node in candidate["nodes"]:
+        check = schema_checker.check_node(node)
         row = await conn.fetchrow(
             """
-            INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by)
-            VALUES ($1, 'node', 'create', $2, 'proposed', 'llm')
+            INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by, schema_check)
+            VALUES ($1, 'node', 'create', $2, 'proposed', 'llm', $3)
             ON CONFLICT (item_id) DO NOTHING
             RETURNING item_id
             """,
-            f"curation:{node['id']}", json.dumps(node),
+            f"curation:{node['id']}", json.dumps(node), json.dumps(check),
         )
         staged_nodes += row is not None
     staged_edges = 0
     for edge in candidate["edges"]:
+        check = schema_checker.check_edge(edge)
         row = await conn.fetchrow(
             """
-            INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by)
-            VALUES ($1, 'edge', 'create', $2, 'proposed', 'llm')
+            INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by, schema_check)
+            VALUES ($1, 'edge', 'create', $2, 'proposed', 'llm', $3)
             ON CONFLICT (item_id) DO NOTHING
             RETURNING item_id
             """,
-            f"curation:{edge['id']}", json.dumps(edge),
+            f"curation:{edge['id']}", json.dumps(edge), json.dumps(check),
         )
         staged_edges += row is not None
     return True, None, staged_nodes, staged_edges
