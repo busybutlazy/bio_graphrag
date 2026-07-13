@@ -21,6 +21,9 @@ reports/
 # Private IP: real extracted knowledge (only data/sample/* is public demo data)
 /data/private/
 
+# Real seed export — copy manually when switching machines (make export-seed to regenerate)
+/data/seed/
+
 # Node (future frontend)
 node_modules/
 dist/
