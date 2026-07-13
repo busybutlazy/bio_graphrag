@@ -12,28 +12,15 @@ validate_extraction — these checks are additive, not a replacement.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
 
 from ingestion.pipeline.normalize_concepts import VALID_NODE_TYPES, VALID_RELATIONSHIP_TYPES
 
 _ID_RE = re.compile(r"^[a-z_]+:[a-z0-9_]+$")
 
+# ponytail-forge: derived from VALID_NODE_TYPES so it can't drift out of sync
+# when a type is added/renamed there.
 _PREFIX_TO_TYPE: dict[str, str] = {
-    "concept": "Concept",
-    "system": "System",
-    "process": "Process",
-    "structure": "Structure",
-    "molecule": "Molecule",
-    "hormone": "Hormone",
-    "receptor": "Receptor",
-    "physiological_variable": "PhysiologicalVariable",
-    "regulatory_effect": "RegulatoryEffect",
-    "interaction": "Interaction",
-    "feedback_loop": "FeedbackLoop",
-    "enzyme": "Enzyme",
-    "disease": "Disease",
-    "experiment": "Experiment",
-    "misconception": "Misconception",
+    re.sub(r"(?<!^)(?=[A-Z])", "_", t).lower(): t for t in VALID_NODE_TYPES
 }
 
 _MIN_DESCRIPTION_LEN = 10
@@ -91,8 +78,4 @@ def check_edge(edge: dict) -> dict:
 
 
 def _result(checks: list[dict]) -> dict:
-    return {
-        "passed": all(c["passed"] for c in checks),
-        "checks": checks,
-        "checked_at": datetime.now(timezone.utc).isoformat(),
-    }
+    return {"passed": all(c["passed"] for c in checks), "checks": checks}

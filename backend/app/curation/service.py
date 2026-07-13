@@ -38,16 +38,8 @@ def _validate_curation_payload(item_type: str, payload: dict) -> None:
         raise CurationError(422, f"invalid {item_type} type: {node_type!r}")
 
 
-def _load_payload(row: asyncpg.Record) -> dict:
-    payload = row["payload"]
-    return json.loads(payload) if isinstance(payload, str) else payload
-
-
-def _load_schema_check(row: asyncpg.Record) -> dict | None:
-    raw = row["schema_check"]
-    if raw is None:
-        return None
-    return json.loads(raw) if isinstance(raw, str) else raw
+def _load_json(value):
+    return json.loads(value) if isinstance(value, str) else value
 
 
 async def _log_change(
@@ -87,7 +79,7 @@ async def list_items(status: str | None, item_type: str | None) -> list[dict]:
         query += " ORDER BY created_at DESC"
         rows = await conn.fetch(query, *params)
         return [
-            {**dict(row), "payload": _load_payload(row), "schema_check": _load_schema_check(row)}
+            {**dict(row), "payload": _load_json(row["payload"]), "schema_check": _load_json(row["schema_check"])}
             for row in rows
         ]
 
@@ -115,7 +107,7 @@ async def approve_item(item_id: str, reviewer: str, reason: str | None) -> dict:
         if row["status"] != "proposed":
             raise CurationError(409, f"curation item {item_id} is not in proposed state")
 
-        payload = _load_payload(row)
+        payload = _load_json(row["payload"])
         payload["status"] = "approved"
 
         driver = get_driver()
@@ -144,7 +136,7 @@ async def reject_item(item_id: str, reviewer: str, reason: str | None) -> dict:
         if row["status"] != "proposed":
             raise CurationError(409, f"curation item {item_id} is not in proposed state")
 
-        payload = _load_payload(row)
+        payload = _load_json(row["payload"])
         await conn.execute(
             """
             UPDATE curation_items SET status = 'rejected', reviewed_by = $2, reason = $3, reviewed_at = now()
