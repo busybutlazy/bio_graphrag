@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -12,8 +13,18 @@ from app.api.routes_ingest import router as ingest_router
 from app.api.routes_library import router as library_router
 from app.api.routes_nodes import router as nodes_router
 from app.api.routes_query import router as query_router
+from app.db.pool import connection as db_connection
+from ingestion.pipeline.load_postgres import ensure_schema
 
-app = FastAPI(title="Biology GraphRAG Tutor")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    async with db_connection() as conn:
+        await ensure_schema(conn)
+    yield
+
+
+app = FastAPI(title="Biology GraphRAG Tutor", lifespan=lifespan)
 
 
 @app.exception_handler(APIError)
@@ -25,9 +36,18 @@ async def _api_error_handler(_: Request, exc: APIError) -> JSONResponse:
 
 
 @app.exception_handler(Exception)
-async def _unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
+async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
     # Keep the error contract consistent: unexpected failures use the same
     # {error:{code,message}} shape, without leaking internals to the client.
+    #
+    # StaticFiles (mounted at /app) streams the response body AFTER sending
+    # HTTP headers. If an I/O error occurs mid-stream, starlette's
+    # ExceptionMiddleware finds this handler but headers are already sent —
+    # it then raises RuntimeError("Caught handled exception, but response
+    # already started."). Skip the handler for that path and let the
+    # connection close naturally.
+    if request.url.path.startswith("/app"):
+        raise exc
     return JSONResponse(
         status_code=500,
         content={"error": {"code": "internal_error", "message": "伺服器發生未預期的錯誤。"}},
