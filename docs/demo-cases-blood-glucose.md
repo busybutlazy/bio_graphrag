@@ -32,11 +32,11 @@ regulatory_effect:insulin_decreases_blood_glucose ─DECREASES→ physiological_
 
 **原文**:升糖素會促進肝醣分解,使血糖上升。
 
-**Graph**
+**Graph**(新增:Glucagon、其 RegulatoryEffect、Glycogenolysis;blood_glucose 引用自 Case 1)
 ```
 hormone:glucagon ─HAS_EFFECT→ regulatory_effect:glucagon_increases_blood_glucose
-regulatory_effect:glucagon_increases_blood_glucose ─ON_VARIABLE→ physiological_variable:blood_glucose
-regulatory_effect:glucagon_increases_blood_glucose ─INCREASES→ physiological_variable:blood_glucose
+regulatory_effect:glucagon_increases_blood_glucose ─ON_VARIABLE→ physiological_variable:blood_glucose  (既有)
+regulatory_effect:glucagon_increases_blood_glucose ─INCREASES→ physiological_variable:blood_glucose  (既有)
 hormone:glucagon ─CAUSES→ process:glycogenolysis          ← mechanism(決策 D5)
 ```
 
@@ -53,10 +53,10 @@ hormone:glucagon ─CAUSES→ process:glycogenolysis          ← mechanism(決�
 
 **原文**:當血糖濃度升高時,胰島 β 細胞會分泌胰島素。
 
-**Graph**
+**Graph**(新增:β細胞;insulin、blood_glucose 引用自 Case 1)
 ```
-structure:pancreatic_beta_cell ─SECRETES→ hormone:insulin
-physiological_variable:blood_glucose ─REGULATES_SECRETION_OF→ hormone:insulin
+structure:pancreatic_beta_cell ─SECRETES→ hormone:insulin(既有)
+physiological_variable:blood_glucose(既有) ─REGULATES_SECRETION_OF→ hormone:insulin(既有)
         (edge properties: trigger_direction = increase)
 ```
 β 細胞用 `Structure`,label 保留「胰島β細胞 / pancreatic beta cell」(決策 D3);CellType 進 backlog。

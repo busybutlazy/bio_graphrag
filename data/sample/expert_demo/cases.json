@@ -50,10 +50,11 @@
           "source_chunk_id": "chunk:blood_glucose_case_001"
         }
       ],
-      "context_nodes": [],
-      "context_edges": [],
+      "references_existing": [],
       "confidence": 0.96,
-      "applied_rule_ids": ["single_regulatory_effect"],
+      "applied_rule_ids": [
+        "single_regulatory_effect"
+      ],
       "uncertain_points": [],
       "possible_over_inference": [],
       "possible_schema_gap": false
@@ -69,7 +70,10 @@
       "reviewed_by": "domain_expert",
       "reviewed_at": "2026-07-09"
     },
-    "gold": { "promote": true, "gold_id": "blood_glucose_case_001" }
+    "gold": {
+      "promote": true,
+      "gold_id": "blood_glucose_case_001"
+    }
   },
   {
     "id": "blood_glucose_case_002",
@@ -89,13 +93,6 @@
           "type": "Process",
           "label": "肝醣分解",
           "description": "肝醣分解為葡萄糖的生理流程(升糖素升高血糖的中介機制)。",
-          "source_chunk_id": "chunk:blood_glucose_case_002"
-        },
-        {
-          "id": "physiological_variable:blood_glucose",
-          "type": "PhysiologicalVariable",
-          "label": "血糖",
-          "description": "血液中的葡萄糖濃度。",
           "source_chunk_id": "chunk:blood_glucose_case_002"
         },
         {
@@ -136,10 +133,13 @@
           "source_chunk_id": "chunk:blood_glucose_case_002"
         }
       ],
-      "context_nodes": [],
-      "context_edges": [],
+      "references_existing": [
+        "physiological_variable:blood_glucose"
+      ],
       "confidence": 0.9,
-      "applied_rule_ids": ["regulatory_effect_with_mechanism"],
+      "applied_rule_ids": [
+        "regulatory_effect_with_mechanism"
+      ],
       "uncertain_points": [
         "現行 schema 無『效果透過某 process 實現』的專用邊,mechanism 暫以 CAUSES 掛在 Hormone 上。"
       ],
@@ -157,7 +157,10 @@
       "reviewed_by": "domain_expert",
       "reviewed_at": "2026-07-09"
     },
-    "gold": { "promote": true, "gold_id": "blood_glucose_case_002" }
+    "gold": {
+      "promote": true,
+      "gold_id": "blood_glucose_case_002"
+    }
   },
   {
     "id": "blood_glucose_case_003",
@@ -166,24 +169,10 @@
     "proposal": {
       "proposed_nodes": [
         {
-          "id": "physiological_variable:blood_glucose",
-          "type": "PhysiologicalVariable",
-          "label": "血糖",
-          "description": "血液中的葡萄糖濃度。",
-          "source_chunk_id": "chunk:blood_glucose_case_003"
-        },
-        {
           "id": "structure:pancreatic_beta_cell",
           "type": "Structure",
           "label": "胰島β細胞 / pancreatic beta cell",
           "description": "胰島中分泌胰島素的β細胞。現行 schema 無 CellType,暫以 Structure 表達,細胞層級語意保留在 label。",
-          "source_chunk_id": "chunk:blood_glucose_case_003"
-        },
-        {
-          "id": "hormone:insulin",
-          "type": "Hormone",
-          "label": "胰島素",
-          "description": "由胰島β細胞分泌、降低血糖的激素。",
           "source_chunk_id": "chunk:blood_glucose_case_003"
         }
       ],
@@ -200,14 +189,20 @@
           "type": "REGULATES_SECRETION_OF",
           "source": "physiological_variable:blood_glucose",
           "target": "hormone:insulin",
-          "properties": { "trigger_direction": "increase" },
+          "properties": {
+            "trigger_direction": "increase"
+          },
           "source_chunk_id": "chunk:blood_glucose_case_003"
         }
       ],
-      "context_nodes": [],
-      "context_edges": [],
+      "references_existing": [
+        "hormone:insulin",
+        "physiological_variable:blood_glucose"
+      ],
       "confidence": 0.92,
-      "applied_rule_ids": ["secretion_trigger"],
+      "applied_rule_ids": [
+        "secretion_trigger"
+      ],
       "uncertain_points": [],
       "possible_over_inference": [],
       "possible_schema_gap": false
@@ -223,7 +218,10 @@
       "reviewed_by": "domain_expert",
       "reviewed_at": "2026-07-09"
     },
-    "gold": { "promote": true, "gold_id": "blood_glucose_case_003" }
+    "gold": {
+      "promote": true,
+      "gold_id": "blood_glucose_case_003"
+    }
   },
   {
     "id": "blood_glucose_case_004",
@@ -266,70 +264,20 @@
           "source_chunk_id": "chunk:blood_glucose_case_004"
         }
       ],
-      "context_nodes": [
-        {
-          "id": "hormone:insulin",
-          "type": "Hormone",
-          "label": "胰島素",
-          "description": "由胰島β細胞分泌、降低血糖的激素。",
-          "source_chunk_id": "chunk:blood_glucose_case_001"
-        },
-        {
-          "id": "hormone:glucagon",
-          "type": "Hormone",
-          "label": "升糖素",
-          "description": "由胰島α細胞分泌、升高血糖的激素。",
-          "source_chunk_id": "chunk:blood_glucose_case_002"
-        },
-        {
-          "id": "physiological_variable:blood_glucose",
-          "type": "PhysiologicalVariable",
-          "label": "血糖",
-          "description": "血液中的葡萄糖濃度。",
-          "source_chunk_id": "chunk:blood_glucose_case_001"
-        },
-        {
-          "id": "regulatory_effect:insulin_decreases_blood_glucose",
-          "type": "RegulatoryEffect",
-          "label": "胰島素降低血糖",
-          "description": "胰島素造成血糖下降的單一調控效果(fact node)。",
-          "source_chunk_id": "chunk:blood_glucose_case_001"
-        },
-        {
-          "id": "regulatory_effect:glucagon_increases_blood_glucose",
-          "type": "RegulatoryEffect",
-          "label": "升糖素升高血糖",
-          "description": "升糖素造成血糖上升的單一調控效果(fact node)。",
-          "source_chunk_id": "chunk:blood_glucose_case_002"
-        }
-      ],
-      "context_edges": [
-        {
-          "id": "e:c1:has_effect",
-          "type": "HAS_EFFECT",
-          "source": "hormone:insulin",
-          "target": "regulatory_effect:insulin_decreases_blood_glucose",
-          "source_chunk_id": "chunk:blood_glucose_case_001"
-        },
-        {
-          "id": "e:c2:has_effect",
-          "type": "HAS_EFFECT",
-          "source": "hormone:glucagon",
-          "target": "regulatory_effect:glucagon_increases_blood_glucose",
-          "source_chunk_id": "chunk:blood_glucose_case_002"
-        }
+      "references_existing": [
+        "regulatory_effect:insulin_decreases_blood_glucose",
+        "regulatory_effect:glucagon_increases_blood_glucose",
+        "physiological_variable:blood_glucose"
       ],
       "confidence": 0.88,
-      "applied_rule_ids": ["antagonistic_interaction"],
+      "applied_rule_ids": [
+        "antagonistic_interaction"
+      ],
       "uncertain_points": [
         "本句本身未陳述兩個方向效果;Interaction 依賴 Case 1、Case 2 已提出的 RegulatoryEffect(既有概念重用)。"
       ],
       "possible_over_inference": [],
-      "possible_schema_gap": false,
-      "references_existing": [
-        "regulatory_effect:insulin_decreases_blood_glucose",
-        "regulatory_effect:glucagon_increases_blood_glucose"
-      ]
+      "possible_schema_gap": false
     },
     "did_not_understand_as": [
       "胰島素抑制升糖素",
@@ -342,7 +290,10 @@
       "reviewed_by": "domain_expert",
       "reviewed_at": "2026-07-09"
     },
-    "gold": { "promote": true, "gold_id": "blood_glucose_case_004" }
+    "gold": {
+      "promote": true,
+      "gold_id": "blood_glucose_case_004"
+    }
   },
   {
     "id": "blood_glucose_case_005",
@@ -373,8 +324,7 @@
         }
       ],
       "proposed_edges": [],
-      "context_nodes": [],
-      "context_edges": [],
+      "references_existing": [],
       "confidence": 0.55,
       "applied_rule_ids": [],
       "uncertain_points": [
@@ -397,6 +347,9 @@
       "reviewed_by": "domain_expert",
       "reviewed_at": "2026-07-09"
     },
-    "gold": { "promote": true, "gold_id": "blood_glucose_case_005" }
+    "gold": {
+      "promote": true,
+      "gold_id": "blood_glucose_case_005"
+    }
   }
 ]
