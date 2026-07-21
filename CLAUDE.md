@@ -22,7 +22,9 @@ make down          # stop; `docker compose down -v` also wipes the volumes
 make export-seed   # snapshot current DB (approved graph + chunks) → data/seed/
 ```
 
-App is served at `http://localhost:8080/` (nginx → FastAPI). The backend is **not** exposed directly; always go through port 8080.
+App is served at `http://localhost:8080/` (nginx → FastAPI). The backend is **not** exposed directly; always go through port 8080. Port 8080 is for local dev + CI (`make health`, `scripts/wait_for_services.sh`).
+
+Publicly the `nginx` container also joins the shared reverse-proxy network `web` (owned by `/home/jett/docker/nginx`, container `nginx-proxy`) as `bio-graphrag-nginx`, reached at `http://biograph.busybutlazy.com/` — routing config lives in `/home/jett/docker/nginx/conf.d/biograph.conf` (outside this repo), not in `docker-compose.yml`.
 
 Run a single test (the backend service already has all deps + DB access):
 

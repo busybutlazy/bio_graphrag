@@ -1,6 +1,10 @@
 services:
   nginx:
     image: nginx:1.27-alpine
+    container_name: bio-graphrag-nginx
+    # 8080 kept for local dev + CI health checks (wait_for_services.sh / make health).
+    # Public access goes through the shared nginx-proxy on the `web` network
+    # (server_name biograph.busybutlazy.com → this container:80).
     ports:
       - "8080:80"
     volumes:
@@ -8,6 +12,9 @@ services:
       - ./frontend:/usr/share/nginx/html:ro
     depends_on:
       - backend
+    networks:
+      - default
+      - web
 
   backend:
     build: ./backend
@@ -58,3 +65,10 @@ volumes:
   postgres_data:
   neo4j_data:
   qdrant_data:
+
+networks:
+  # Shared reverse-proxy network owned by /home/jett/docker/nginx (nginx-proxy).
+  # Only nginx joins it; backend + datastores stay on the default network.
+  web:
+    external: true
+    name: web
