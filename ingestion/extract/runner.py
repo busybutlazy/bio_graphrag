@@ -143,10 +143,8 @@ async def _extract_chunk(
             last_error = f"{type(exc).__name__}: {exc}"
             if attempt < retries:
                 attempt_prompt = (
-                    user_prompt
-                    + "\n\n上一次輸出未通過驗證。請修正以下錯誤後重新輸出完整 JSON；"
-                    "仍然只能輸出 schema 允許的 nodes 與 edges：\n"
-                    + last_error
+                    user_prompt + "\n\n上一次輸出未通過驗證。請修正以下錯誤後重新輸出完整 JSON；"
+                    "仍然只能輸出 schema 允許的 nodes 與 edges：\n" + last_error
                 )
             continue
     return None, tokens, last_error

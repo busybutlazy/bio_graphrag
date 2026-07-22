@@ -45,9 +45,15 @@ def delete_chunks_for_doc(client: QdrantClient, doc_id: str, dim: int | None = N
     No-op when the collection does not exist yet (first ingest).
     """
     existing = {c.name for c in client.get_collections().collections}
-    targets = [collection_name_for_dim(dim)] if dim is not None else [
-        name for name in existing if name == COLLECTION_NAME or name.startswith(f"{COLLECTION_NAME}_")
-    ]
+    targets = (
+        [collection_name_for_dim(dim)]
+        if dim is not None
+        else [
+            name
+            for name in existing
+            if name == COLLECTION_NAME or name.startswith(f"{COLLECTION_NAME}_")
+        ]
+    )
     for collection_name in targets:
         if collection_name in existing:
             client.delete(
