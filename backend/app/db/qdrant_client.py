@@ -2,7 +2,7 @@ from qdrant_client import QdrantClient
 
 from app.core.config import settings
 
-COLLECTION_NAME = "biology_chunks"
+from ingestion.pipeline.load_qdrant import collection_name_for_dim
 
 
 def check_qdrant() -> tuple[bool, str | None]:
@@ -18,7 +18,7 @@ def search_chunks(query_vector: list[float], top_k: int) -> list[dict]:
     """Return the top_k nearest chunk payloads with their similarity score."""
     client = QdrantClient(url=settings.qdrant_url, timeout=5)
     result = client.query_points(
-        collection_name=COLLECTION_NAME,
+        collection_name=collection_name_for_dim(len(query_vector)),
         query=query_vector,
         limit=top_k,
         with_payload=True,

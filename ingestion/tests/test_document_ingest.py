@@ -19,6 +19,12 @@ CHAPTER = (
 DOC_ID = "doc:test_sample:ingest"
 
 
+@pytest.fixture(autouse=True)
+def _force_offline_embeddings(monkeypatch):
+    """Unit tests must never spend tokens merely because the host has a key."""
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+
+
 def _write_chapter(tmp_path):
     path = tmp_path / "chapter.md"
     path.write_text(CHAPTER, encoding="utf-8")
@@ -38,6 +44,30 @@ def _valid_candidate(chunk_id: str) -> dict:
         ],
         "edges": [],
     }
+
+
+@pytest.mark.asyncio
+async def test_extract_retry_includes_validation_error():
+    prompts = []
+
+    def invalid_extract(system_prompt, user_prompt):
+        prompts.append(user_prompt)
+        return {"nodes": [{"type": "Hormone"}], "edges": []}, 5
+
+    candidate, tokens, error = await runner._extract_chunk(
+        extract_fn=invalid_extract,
+        system_prompt="system",
+        user_prompt="original",
+        retries=1,
+    )
+
+    assert candidate is None
+    assert tokens == 10
+    assert error and "ValidationError" in error
+    assert len(prompts) == 2
+    assert prompts[0] == "original"
+    assert "上一次輸出未通過驗證" in prompts[1]
+    assert "ValidationError" in prompts[1]
 
 
 # --- dry run: no DB, no spend -------------------------------------------------
@@ -181,6 +211,9 @@ async def test_failed_extraction_flags_chunk_but_job_succeeds(tmp_path, pg_conn,
         assert report.status == "success"  # job survives per-chunk extraction failure
         assert report.stats["failed_chunks"] == report.stats["chunks"]
         assert report.stats["proposed_nodes"] == 0
+        assert all(ch.extraction_error for ch in report.chunks)
+        assert "ValidationError" in report.chunks[0].extraction_error
+        assert report.stats["extraction_errors"][0]["chunk_id"] == report.chunks[0].chunk_id
         # chunk still written, with empty concept_ids
         row = await pg_conn.fetchrow("SELECT concept_ids FROM chunks WHERE doc_id = $1", DOC_ID)
         assert row is not None

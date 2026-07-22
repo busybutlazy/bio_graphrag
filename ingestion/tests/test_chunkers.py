@@ -56,7 +56,9 @@ def test_recursive_respects_size_budget():
 
 def test_recursive_prefers_paragraph_boundaries():
     text = "第一段內容。\n\n第二段內容。\n\n第三段內容。"
-    ch = chunkers.RecursiveChunker(chunk_size=12, chunk_overlap=0)
+    # The public API enforces chunk_size >= 100. This focused unit test uses a
+    # tiny synthetic input, so disable the independent short-tail merge limit.
+    ch = chunkers.RecursiveChunker(chunk_size=12, chunk_overlap=0, min_chunk_size=0)
     parts = ch.chunk(text)
     assert any("第一段" in p for p in parts)
     assert any("第三段" in p for p in parts)
