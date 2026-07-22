@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.errors import APIError
 from app.api.routes_curation import router as curation_router
 from app.api.routes_eval import router as eval_router
+from app.api.routes_expert_demo import router as expert_demo_router
 from app.api.routes_health import router as health_router
 from app.api.routes_ingest import router as ingest_router
 from app.api.routes_library import router as library_router
@@ -61,6 +62,7 @@ app.include_router(library_router)
 app.include_router(curation_router)
 app.include_router(eval_router)
 app.include_router(ingest_router)
+app.include_router(expert_demo_router)
 
 
 @app.get("/", include_in_schema=False)

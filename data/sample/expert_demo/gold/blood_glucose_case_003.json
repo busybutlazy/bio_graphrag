@@ -1,0 +1,10 @@
+{
+  "gold_id": "blood_glucose_case_003",
+  "expected_understanding": "當血糖升高時,胰島β細胞 / pancreatic beta cell會分泌胰島素。",
+  "is_gap": false,
+  "min_assertions": {
+    "has_node_types": ["Structure"],
+    "has_edge_types": ["SECRETES", "REGULATES_SECRETION_OF"],
+    "direction": null
+  }
+}

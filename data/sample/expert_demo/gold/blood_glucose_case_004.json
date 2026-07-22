@@ -1,0 +1,10 @@
+{
+  "gold_id": "blood_glucose_case_004",
+  "expected_understanding": "胰島素與升糖素透過方向相反的兩個調控效果,在血糖上呈現拮抗。",
+  "is_gap": false,
+  "min_assertions": {
+    "has_node_types": ["Interaction"],
+    "has_edge_types": ["USES_EFFECT", "ON_VARIABLE"],
+    "direction": null
+  }
+}

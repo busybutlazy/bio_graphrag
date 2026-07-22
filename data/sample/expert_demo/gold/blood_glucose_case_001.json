@@ -1,0 +1,10 @@
+{
+  "gold_id": "blood_glucose_case_001",
+  "expected_understanding": "胰島素會造成一個調控效果:使血糖下降。",
+  "is_gap": false,
+  "min_assertions": {
+    "has_node_types": ["Hormone", "PhysiologicalVariable", "RegulatoryEffect"],
+    "has_edge_types": ["HAS_EFFECT", "ON_VARIABLE", "DECREASES"],
+    "direction": "decrease"
+  }
+}

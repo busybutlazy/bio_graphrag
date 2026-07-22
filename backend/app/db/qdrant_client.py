@@ -1,7 +1,6 @@
 from qdrant_client import QdrantClient
 
 from app.core.config import settings
-
 from ingestion.pipeline.load_qdrant import collection_name_for_dim
 
 

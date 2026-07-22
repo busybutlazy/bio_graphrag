@@ -113,6 +113,25 @@ const TYPE_COLOR = {
 };
 const typeColor = (t) => TYPE_COLOR[t] || '#8A7D67';
 
+/* human-readable zh labels — so curators read biology, not schema codes.
+   value/API 一律仍用英文 code;這裡只影響「人要讀 / 要選」的地方。 */
+const NODE_TYPE_LABEL = {
+  Hormone: '激素', Structure: '構造', Receptor: '受體',
+  RegulatoryEffect: '調控效果', PhysiologicalVariable: '生理變數',
+  Interaction: '交互作用', FeedbackLoop: '回饋迴路', Concept: '概念',
+  System: '系統', Disease: '疾病', Misconception: '常見迷思',
+  Molecule: '分子', Enzyme: '酵素', Process: '生理過程', Variable: '生理變數',
+};
+const REL_TYPE_LABEL = {
+  SECRETES: '分泌', TARGETS: '作用於', BINDS_TO: '結合',
+  HAS_EFFECT: '產生調控效果', ON_VARIABLE: '作用在', INCREASES: '使其上升',
+  DECREASES: '使其下降', REGULATES_SECRETION_OF: '調控分泌',
+  PARTICIPATES_IN: '參與', USES_EFFECT: '運用效果', PREREQUISITE_OF: '是其先備',
+  CAUSES: '促成', COMMONLY_CONFUSED_WITH: '常被混淆為',
+};
+const nodeTypeLabel = (t) => NODE_TYPE_LABEL[t] || t;
+const phraseRelation = (r) => REL_TYPE_LABEL[r] || r;
+
 /* ---------- shell / router ---------- */
 const VIEWS = [
   { id: 'chat', label: '問答', render: renderChat },
@@ -120,6 +139,7 @@ const VIEWS = [
   { id: 'library', label: '典藏', render: renderLibrary },
   { id: 'ingest', label: '解析', render: renderIngest },
   { id: 'curation', label: '審訂', render: renderCuration },
+  { id: 'expert', label: '審閱', render: renderExpertDemo },
   { id: 'eval', label: '評估', render: renderEval },
 ];
 
@@ -483,6 +503,28 @@ async function renderLibrary(host) {
 const NODE_TYPES = ['Hormone', 'Structure', 'Receptor', 'RegulatoryEffect', 'PhysiologicalVariable', 'Interaction', 'FeedbackLoop', 'Concept', 'System', 'Disease', 'Misconception'];
 const REL_TYPES = ['SECRETES', 'TARGETS', 'BINDS_TO', 'HAS_EFFECT', 'ON_VARIABLE', 'INCREASES', 'DECREASES', 'REGULATES_SECRETION_OF', 'PARTICIPATES_IN', 'USES_EFFECT', 'PREREQUISITE_OF', 'CAUSES', 'COMMONLY_CONFUSED_WITH'];
 
+/* edge endpoints only carry ids; resolve to human labels for the review cards.
+   優先序:佇列同儕候選節點 → approved 圖(GET /nodes/{id}) → 退回短 id。
+   查不到必須靜默 fallback,不可讓審核卡片報錯。 */
+const nodeLabelCache = {};
+async function resolveNodeLabels(ids, localMap) {
+  const out = {};
+  const missing = [];
+  Array.from(new Set(ids.filter(Boolean))).forEach((id) => {
+    if (localMap[id]) out[id] = localMap[id];
+    else if (nodeLabelCache[id]) out[id] = nodeLabelCache[id];
+    else missing.push(id);
+  });
+  await Promise.all(missing.map(async (id) => {
+    try {
+      const d = await api.get('/nodes/' + encodeURIComponent(id));
+      const lbl = d.label || shortId(id);
+      nodeLabelCache[id] = lbl; out[id] = lbl;
+    } catch { out[id] = shortId(id); }
+  }));
+  return out;
+}
+
 async function renderCuration(host) {
   clear(host);
   host.append(E('div', { class: 'page-head', style: 'padding-bottom:0' },
@@ -501,33 +543,43 @@ async function renderCuration(host) {
   const formHost = E('div');
   left.append(E('div', { class: 'eyebrow', style: 'margin-bottom:14px' }, '提出候選'));
   const seg = E('div', { class: 'seg' },
-    E('button', { class: 'on', onclick: (e) => { itemType = 'node'; toggleSeg(e.target); paintForm(); } }, '節點 NODE'),
-    E('button', { onclick: (e) => { itemType = 'edge'; toggleSeg(e.target); paintForm(); } }, '關係 EDGE'));
+    E('button', { class: 'on', onclick: (e) => { itemType = 'node'; toggleSeg(e.target); paintForm(); } }, '概念'),
+    E('button', { onclick: (e) => { itemType = 'edge'; toggleSeg(e.target); paintForm(); } }, '關係'));
   function toggleSeg(btn) { seg.querySelectorAll('button').forEach((b) => b.classList.remove('on')); btn.classList.add('on'); }
   left.append(seg, notice, formHost);
 
-  function field(label, code, input) {
-    return E('div', { class: 'field' }, E('label', {}, label, E('span', { class: 'code' }, code)), input);
+  function field(label, input, hint) {
+    return E('div', { class: 'field' },
+      E('label', {}, label, hint ? E('span', { class: 'field-hint' }, hint) : null),
+      input);
   }
   function paintForm() {
     clear(formHost);
     if (itemType === 'node') {
-      const id = E('input', { placeholder: 'hormone:example' });
-      const type = E('select', {}, ...NODE_TYPES.map((t) => E('option', {}, t)));
-      const label = E('input', { placeholder: 'Example hormone' });
-      const desc = E('textarea', { placeholder: '節點說明…' });
-      const reason = E('input', { placeholder: '為何提出' });
-      formHost.append(field('id', 'ID', id), field('類型', 'TYPE', type), field('名稱', 'LABEL', label),
-        field('說明', 'DESC', desc), field('理由', 'REASON', reason),
+      const type = E('select', {}, ...NODE_TYPES.map((t) => E('option', { value: t }, nodeTypeLabel(t))));
+      const label = E('input', { placeholder: '例如:胰島素' });
+      const desc = E('textarea', { placeholder: '用一兩句話說明這個概念…' });
+      const id = E('input', { placeholder: 'hormone:insulin' });
+      const reason = E('input', { placeholder: '為什麼要新增這個概念?' });
+      formHost.append(
+        field('類型', type),
+        field('名稱', label),
+        field('說明', desc),
+        field('系統識別碼', id, '小寫英數與冒號,例如 hormone:insulin'),
+        field('提出理由', reason),
         E('button', { class: 'btn', onclick: () => submit({ item_type: 'node', action: 'create', reason: reason.value, payload: { id: id.value.trim(), type: type.value, label: label.value.trim(), description: desc.value.trim() } }) }, '提出候選'));
     } else {
-      const id = E('input', { placeholder: 'edge:example' });
-      const type = E('select', {}, ...REL_TYPES.map((t) => E('option', {}, t)));
-      const source = E('input', { placeholder: 'source node id' });
-      const target = E('input', { placeholder: 'target node id' });
-      const reason = E('input', { placeholder: '為何提出' });
-      formHost.append(field('id', 'ID', id), field('關係', 'TYPE', type), field('起點', 'SOURCE', source),
-        field('終點', 'TARGET', target), field('理由', 'REASON', reason),
+      const type = E('select', {}, ...REL_TYPES.map((t) => E('option', { value: t }, phraseRelation(t))));
+      const source = E('input', { placeholder: '起點概念的識別碼' });
+      const target = E('input', { placeholder: '終點概念的識別碼' });
+      const id = E('input', { placeholder: 'edge:insulin_decreases_glucose' });
+      const reason = E('input', { placeholder: '為什麼這兩個概念之間有這個關係?' });
+      formHost.append(
+        field('關係', type),
+        field('起點', source, '例如 hormone:insulin'),
+        field('終點', target, '例如 physiological_variable:blood_glucose'),
+        field('系統識別碼', id, '小寫英數與冒號'),
+        field('提出理由', reason),
         E('button', { class: 'btn', onclick: () => submit({ item_type: 'edge', action: 'create', reason: reason.value, payload: { id: id.value.trim(), type: type.value, source: source.value.trim(), target: target.value.trim() } }) }, '提出候選'));
     }
   }
@@ -551,38 +603,56 @@ async function renderCuration(host) {
     let items;
     try { items = await api.get('/admin/curation/items?status=proposed'); }
     catch (err) { clear(queue); queue.append(E('div', { class: 'notice err' }, err.message)); return; }
+    if (!items.length) { clear(queue); queue.append(E('div', { class: 'muted', style: 'font-size:12px' }, '目前沒有待審項目。可用左側表單提出一個。')); return; }
+
+    // resolve edge endpoint ids → human labels before painting
+    const localMap = {};
+    items.forEach((it) => { if (it.item_type === 'node' && it.payload && it.payload.id) localMap[it.payload.id] = it.payload.label || it.payload.id; });
+    const endpointIds = [];
+    items.forEach((it) => { if (it.item_type === 'edge') endpointIds.push(it.payload.source, it.payload.target); });
+    const labels = await resolveNodeLabels(endpointIds, localMap);
+
     clear(queue);
-    if (!items.length) { queue.append(E('div', { class: 'muted', style: 'font-size:12px' }, '目前沒有待審項目。可用左側表單提出一個。')); return; }
     items.forEach((it) => {
       const p = it.payload;
-      const summary = it.item_type === 'node'
-        ? `${p.type}  ${p.label || ''}\n${p.id}`
-        : `${p.source}  —${p.type}→  ${p.target}\n${p.id}`;
-
-      const sc = it.schema_check;
-      let schemaBadge = null;
-      if (sc) {
-        const allPassed = sc.passed;
-        const failedChecks = (sc.checks || []).filter(c => !c.passed);
-        const tip = allPassed
-          ? 'Schema 自動檢查通過'
-          : '⚠ Schema 問題：' + failedChecks.map(c => c.detail || c.name).join('、');
-        schemaBadge = E('span', {
-          class: allPassed ? 'schema-badge schema-ok' : 'schema-badge schema-warn',
-          title: tip,
-        }, allPassed ? '✓ Schema' : '⚠ Schema');
+      // headline reads as biology, not schema: 類型 + 名稱 / 關係句
+      let head;
+      if (it.item_type === 'node') {
+        head = E('div', { class: 'q-head' },
+          E('span', { class: 'q-kind', style: `--k:${typeColor(p.type)}` }, nodeTypeLabel(p.type)),
+          E('span', { class: 'q-name' }, p.label || labels[p.id] || shortId(p.id)));
+      } else {
+        head = E('div', { class: 'q-head q-edge' },
+          E('span', { class: 'q-name' }, labels[p.source] || shortId(p.source)),
+          E('span', { class: 'q-rel' }, phraseRelation(p.type)),
+          E('span', { class: 'q-name' }, labels[p.target] || shortId(p.target)));
       }
+      const desc = (it.item_type === 'node' && p.description) ? E('div', { class: 'q-desc' }, p.description) : null;
+      const reason = it.reason ? E('div', { class: 'q-reason' }, '提出理由：' + it.reason) : null;
 
-      const card = E('div', { class: 'qitem' },
-        E('div', { class: 'h' }, E('span', { class: 'tag tag-proposed' }, it.item_type.toUpperCase()),
-          E('span', { class: 'mono', style: 'font-size:10px;color:var(--muted)' }, it.action),
-          schemaBadge),
-        E('div', { class: 'pay' }, summary),
-        it.reason ? E('div', { class: 'muted', style: 'font-size:11px' }, '理由：' + it.reason) : null);
+      // technical details — collapsed by default so the engineer gate loses nothing
+      const sc = it.schema_check;
+      const schemaFailed = sc && !sc.passed;
+      const techRows = [
+        E('div', {}, `項目類型：${it.item_type} · 動作：${it.action}`),
+        E('div', {}, `id：${p.id}`),
+      ];
+      if (it.item_type === 'edge') techRows.push(E('div', {}, `原始關係：${p.source} —${p.type}→ ${p.target}`));
+      if (sc) {
+        const failed = (sc.checks || []).filter((c) => !c.passed);
+        techRows.push(E('div', { class: sc.passed ? 'ok' : 'warn' },
+          sc.passed ? 'Schema 自動檢查：通過'
+                    : 'Schema 自動檢查未過：' + failed.map((c) => c.detail || c.name).join('、')));
+      }
+      const tech = E('details', { class: 'q-tech' },
+        E('summary', {}, '技術細節', schemaFailed ? E('span', { class: 'q-warn' }, '⚠ schema 需注意') : null),
+        E('div', { class: 'q-tech-body' }, ...techRows));
+
       const acts = E('div', { class: 'acts' },
         E('button', { class: 'btn', onclick: () => decide(it.item_id, 'approve') }, '批准'),
         E('button', { class: 'btn-ghost', onclick: () => decide(it.item_id, 'reject') }, '拒絕'));
-      card.append(acts); queue.append(card);
+
+      queue.append(E('div', { class: `qitem${schemaFailed ? ' qitem-warn' : ''}` }, head, desc, reason, tech, acts));
     });
   }
   async function decide(itemId, action) {
@@ -590,6 +660,222 @@ async function renderCuration(host) {
     catch (err) { clear(notice); notice.append(E('div', { class: 'notice err' }, err.message)); }
   }
   loadQueue();
+}
+
+/* ============================================================
+   EXPERT REVIEW / 審閱 — governance demo (AI 提案 → 工程師 gate → 反向翻譯 → 專家 gate)
+   資料源:GET /admin/expert-demo/cases(唯讀;system_understanding / engineer_gate 當場算)
+   ============================================================ */
+// 白話 schema-gap 選項 ⇄ 內部 code(專家只看白話,見 docs/schema-gap-policy.md)
+const GAP_OPTIONS = [
+  ['permissive_effect', 'A 不是直接影響 C,而是改變 B 對 C 的作用強度'],
+  ['antagonistic_or_synergistic_interaction', 'A 和 B 之間不是因果,而是拮抗/協同'],
+  ['pathway_or_cascade', '這是一個多步驟調控路徑,不是單一效果'],
+  ['conditional_effect', '這是一個條件式效果,需要特定前提才成立'],
+  ['threshold_effect', '這是一個閾值效果'],
+  ['unknown', '其他'],
+];
+const EXPERT_STORE = (cid) => `expertReview:${cid}`;
+
+async function renderExpertDemo(host) {
+  clear(host);
+  host.append(E('div', { class: 'page-head', style: 'padding-bottom:0' },
+    E('div', { class: 'eyebrow' }, 'EXPERT REVIEW · 專家審閱'),
+    E('div', { class: 'page-title', style: 'margin-top:8px;font-size:30px' }, '審閱'),
+    E('div', { class: 'page-sub' },
+      'AI 擬出提案 → 工程師 gate 檢查形式 → 系統反向翻譯成白話 → 專家只審生物語意,不看 JSON。')));
+
+  let cases;
+  try { cases = await api.get('/admin/expert-demo/cases'); }
+  catch (err) { host.append(E('div', { class: 'notice err', style: 'margin:24px 48px' }, err.message)); return; }
+  if (!cases.length) { host.append(E('div', { class: 'muted', style: 'margin:24px 48px' }, '沒有 demo 案例。')); return; }
+
+  // 跨 case 的 id -> {label,type},供概念圖解析 references_existing 節點(不顯示 id)
+  const globalNodes = {};
+  cases.forEach((c) => (c.proposal.proposed_nodes || []).forEach((n) => {
+    globalNodes[n.id] = { id: n.id, label: n.label, type: n.type };
+  }));
+
+  const wrap = E('div', { class: 'ex-wrap' });
+  const list = E('div', { class: 'ex-list' });
+  const panel = E('div', { class: 'ex-panel' });
+  wrap.append(list, panel); host.append(wrap);
+
+  let activeId = cases[0].id;
+  let activeTab = 'expert';
+  const current = () => cases.find((c) => c.id === activeId);
+
+  function gateBadge(result) {
+    const ok = result === 'pass';
+    const gap = result === 'needs_schema_extension';
+    const cls = ok ? 'ex-badge ok' : gap ? 'ex-badge gap' : 'ex-badge warn';
+    const txt = ok ? '通過' : gap ? '需補 schema' : '未過';
+    return E('span', { class: cls }, txt);
+  }
+
+  function paintList() {
+    clear(list);
+    list.append(E('div', { class: 'eyebrow', style: 'padding:18px 20px 10px' }, '案例 · CASES'));
+    cases.forEach((c, i) => {
+      list.append(E('div', {
+        class: 'ex-case' + (c.id === activeId ? ' on' : ''),
+        onclick: () => { activeId = c.id; paintList(); paintPanel(); },
+      }, E('span', { class: 'ex-case-idx' }, String(i + 1).padStart(2, '0')),
+         E('div', { class: 'ex-case-body' },
+           E('div', { class: 'ex-case-src' }, c.source_text),
+           E('div', { class: 'ex-case-meta' }, gateBadge(c.engineer_gate.result)))));
+    });
+  }
+
+  const TABS = [['proposal', 'AI 提案'], ['gate', '工程師 gate'], ['expert', '專家審閱']];
+  function paintPanel() {
+    clear(panel);
+    const tabs = E('div', { class: 'ex-tabs' });
+    TABS.forEach(([id, label]) => tabs.append(E('button', {
+      class: 'ex-tab' + (id === activeTab ? ' on' : ''),
+      onclick: () => { activeTab = id; paintPanel(); },
+    }, label)));
+    const body = E('div', { class: 'ex-body scroll' });
+    panel.append(tabs, body);
+    const c = current();
+    if (activeTab === 'proposal') paintProposal(body, c);
+    else if (activeTab === 'gate') paintGate(body, c);
+    else paintExpert(body, c);
+  }
+
+  // Tab1 — AI 提案(工程師/面試官;可顯示 id/JSON)
+  function paintProposal(body, c) {
+    const p = c.proposal;
+    body.append(E('div', { class: 'ex-src' }, '原文:' + c.source_text));
+    body.append(E('div', { class: 'ex-sub' },
+      `信心 ${Math.round((p.confidence || 0) * 100)}% · 套用規則 ${(p.applied_rule_ids || []).join('、') || '—'}`));
+    body.append(E('div', { class: 'ex-h' }, '候選節點'));
+    (p.proposed_nodes || []).forEach((n) => body.append(E('div', { class: 'ex-row' },
+      E('span', { class: 'q-kind', style: `--k:${typeColor(n.type)}` }, nodeTypeLabel(n.type)),
+      E('span', { class: 'ex-row-label' }, n.label),
+      E('span', { class: 'mono ex-id' }, n.id))));
+    body.append(E('div', { class: 'ex-h' }, '候選關係'));
+    (p.proposed_edges || []).forEach((e) => body.append(E('div', { class: 'ex-row mono ex-id' },
+      `${e.source} —${e.type}→ ${e.target}`)));
+    if ((p.references_existing || []).length) body.append(E('div', { class: 'ex-note' },
+      '引用既有:' + p.references_existing.join('、')));
+    if ((p.uncertain_points || []).length) body.append(E('div', { class: 'ex-note' },
+      '不確定:' + p.uncertain_points.join(';')));
+    if ((p.possible_over_inference || []).length) body.append(E('div', { class: 'ex-note' },
+      '可能過度推論:' + p.possible_over_inference.join(';')));
+  }
+
+  // Tab2 — 工程師 gate(逐項燈號,當場計算)
+  function paintGate(body, c) {
+    body.append(E('div', { class: 'ex-gate-head' }, '整體結果:', gateBadge(c.engineer_gate.result)));
+    c.engineer_gate.checks.forEach((ck) => body.append(E('div', { class: 'ex-check' },
+      E('span', { class: 'ex-dot ' + (ck.passed ? 'ok' : 'bad') }, ck.passed ? '✓' : '✕'),
+      E('div', {},
+        E('div', { class: 'ex-check-name' }, ck.name),
+        ck.detail ? E('div', { class: 'ex-check-detail' }, ck.detail) : null))));
+  }
+
+  // Tab3 — 專家審閱(強制隔離:不出現 id / JSON / schema code / gap code)
+  function paintExpert(body, c) {
+    body.append(E('div', { class: 'ex-src' }, '原文:' + c.source_text));
+    body.append(E('div', { class: 'ex-understand' },
+      E('div', { class: 'ex-h' }, '系統理解'),
+      E('div', { class: 'ex-understand-txt' }, c.system_understanding.text)));
+    body.append(E('div', { class: 'ex-h' }, '概念圖'));
+    body.append(conceptMap(c.proposal));
+    if ((c.did_not_understand_as || []).length) {
+      body.append(E('div', { class: 'ex-h' }, '系統沒有理解成'));
+      const ul = E('div', { class: 'ex-notlist' });
+      c.did_not_understand_as.forEach((s) => ul.append(E('div', { class: 'ex-not' }, '✕ ' + s)));
+      body.append(ul);
+    }
+    body.append(buildReviewForm(c));
+  }
+
+  function conceptMap(proposal) {
+    const used = {};
+    (proposal.proposed_nodes || []).forEach((n) => { used[n.id] = { id: n.id, label: n.label, type: n.type }; });
+    (proposal.proposed_edges || []).forEach((e) => [e.source, e.target].forEach((id) => {
+      if (!used[id]) used[id] = globalNodes[id] || { id, label: '（相關概念）', type: 'Concept' };
+    }));
+    const nodes = Object.values(used);
+    const edges = (proposal.proposed_edges || []).map((e) => ({
+      source: e.source, target: e.target, relation: phraseRelation(e.type),
+    }));
+    const W = 560, H = 360;
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet', class: 'ex-svg' });
+    if (!nodes.length) { const t = svgEl('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', class: 'gnode-label' }); t.textContent = '(此案例未提出可繪製的關係)'; svg.append(t); return svg; }
+    const pos = forceLayout(nodes, edges, W, H);
+    edges.forEach((e) => {
+      const a = pos[e.source], b = pos[e.target]; if (!a || !b) return;
+      svg.append(svgEl('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: '#DED5C2', 'stroke-width': '1' }));
+      const lbl = svgEl('text', { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, class: 'gedge-label', 'text-anchor': 'middle' });
+      lbl.textContent = e.relation; svg.append(lbl);
+    });
+    nodes.forEach((n) => {
+      const pt = pos[n.id]; const g = svgEl('g', {});
+      g.append(svgEl('rect', { x: pt.x - 6, y: pt.y - 6, width: 12, height: 12, fill: typeColor(n.type) }));
+      const t = svgEl('text', { x: pt.x + 10, y: pt.y + 4, class: 'gnode-label' });
+      t.textContent = n.label.length > 16 ? n.label.slice(0, 15) + '…' : n.label;
+      g.append(t); svg.append(g);   // 僅 label,不掛 id、不可點開詳情(維持隔離)
+    });
+    return svg;
+  }
+
+  function buildReviewForm(c) {
+    const saved = JSON.parse(sessionStorage.getItem(EXPERT_STORE(c.id)) || '{}');
+    const form = E('div', { class: 'ex-review' });
+    form.append(E('div', { class: 'ex-h' }, '你的審查'));
+
+    const gapWrap = E('div', { class: 'ex-gapwrap' });
+    const decisions = [['agree', '同意:系統理解符合原文'], ['doubt', '有疑慮:理解有偏差或過度推論'], ['cannot', '無法表達:現行系統畫不出這個現象']];
+    let decision = saved.decision || '';
+    let gap = saved.gap || '';
+    let notes = saved.notes || '';
+    const notesInput = E('textarea', { class: 'ex-notes', placeholder: '備註(選填):給後續改進的說明…' });
+    notesInput.value = notes;
+
+    function persist() {
+      sessionStorage.setItem(EXPERT_STORE(c.id), JSON.stringify({ decision, gap, notes: notesInput.value }));
+    }
+    function paintGap() {
+      clear(gapWrap);
+      if (decision !== 'cannot') return;
+      gapWrap.append(E('div', { class: 'ex-sub' }, '這個現象比較像:'));
+      GAP_OPTIONS.forEach(([code, label]) => {
+        const on = gap === code;
+        gapWrap.append(E('label', { class: 'ex-radio sub' + (on ? ' on' : '') },
+          E('input', { type: 'radio', name: 'gap-' + c.id, checked: on ? '' : null,
+            onchange: () => { gap = code; persist(); paintGap(); } }),
+          label));
+      });
+    }
+
+    decisions.forEach(([val, label]) => {
+      const on = decision === val;
+      form.append(E('label', { class: 'ex-radio' + (on ? ' on' : '') },
+        E('input', { type: 'radio', name: 'dec-' + c.id, checked: on ? '' : null,
+          onchange: () => { decision = val; if (val !== 'cannot') gap = ''; persist(); refreshRadios(); paintGap(); } }),
+        label));
+    });
+    form.append(gapWrap);
+    form.append(E('div', { class: 'ex-h', style: 'margin-top:14px' }, '備註'));
+    notesInput.addEventListener('input', persist);
+    form.append(notesInput);
+    form.append(E('div', { class: 'muted', style: 'font-size:11px;margin-top:8px' }, '選擇即存(本次瀏覽階段);此為 demo,不寫入資料庫。'));
+
+    function refreshRadios() {
+      form.querySelectorAll('.ex-radio').forEach((el) => {
+        const input = el.querySelector('input');
+        el.classList.toggle('on', input.checked);
+      });
+    }
+    paintGap();
+    return form;
+  }
+
+  paintList();
+  paintPanel();
 }
 
 /* ============================================================

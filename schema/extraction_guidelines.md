@@ -2,6 +2,10 @@
 
 Schema(`node_types.md`、`relationship_types.md`)定義了「有哪些節點/關係類型」,但不足以讓 LLM 決定「這句話該不該產生一個節點,產生哪一種」。本文件是給 extraction agent 的獨立判斷準則,對應 `docs/graph_plan.md` 2.4 節「LLM 只負責提案」的原則。
 
+> 具體 pattern 的結構簽章、三段式完整性與反向翻譯模板寫在 **`rule_cards/`**(格式見
+> `docs/rule-card-format.md`);萃取治理的兩道 gate 與專家審閱流程見
+> `docs/expert-in-the-loop-workflow.md`。
+
 ## 總原則
 
 - LLM 的輸出永遠是 `proposed` 狀態的候選節點/關係,不直接寫入 approved graph。

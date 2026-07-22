@@ -165,7 +165,7 @@ gold{promote, gold_id}`。
 | P2 secretion_trigger | `Var ─REGULATES_SECRETION_OF→ Hormone` + `Structure ─SECRETES→ Hormone` | 「當 {variable}{trigger_zh}時,{structure} 會分泌 {hormone}。」 |
 | P3 regulatory_effect_with_mechanism | P1 + `Hormone ─CAUSES→ Process` | 「{hormone} 會促成{process},並造成調控效果:使 {variable} {direction_zh}。」 |
 | P4 antagonistic_interaction | `Interaction{antagonism} ─USES_EFFECT→ RE×2, ─ON_VARIABLE→ Var` | 「{A} 與 {B} 透過方向相反的兩個調控效果,在 {variable} 上呈現拮抗。」 |
-| P5 schema_gap | 核心宣稱無任何 pattern 命中 | 「系統目前無法用既有 schema 完整表達此現象。」 |
+| P5 schema_gap | 核心宣稱無任何 pattern 命中 | 「系統目前無法用既有的知識結構完整表達此現象。」 |
 
 `direction_zh`: increase→上升 / decrease→下降。`trigger_zh`: 由 edge `properties.trigger_direction` 映射。
 
