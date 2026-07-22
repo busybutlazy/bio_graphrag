@@ -8,6 +8,7 @@
 ``/admin/*`` 一致(``require_admin``;未設 key 時為 demo 開放)。
 對應 docs/expert-in-the-loop-plan.md 五.4。
 """
+
 import json
 
 from fastapi import APIRouter, Depends

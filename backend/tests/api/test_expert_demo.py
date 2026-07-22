@@ -17,8 +17,11 @@ def test_expert_demo_cases_read_only_contract():
         assert su["text"] and "pattern" in su and "is_gap" in su
         gate = case["engineer_gate"]
         assert gate["result"] in {
-            "pass", "fail_schema", "fail_pattern",
-            "fail_testability", "needs_schema_extension",
+            "pass",
+            "fail_schema",
+            "fail_pattern",
+            "fail_testability",
+            "needs_schema_extension",
         }
         assert isinstance(gate["checks"], list) and gate["checks"]
 

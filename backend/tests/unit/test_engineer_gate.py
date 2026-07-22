@@ -20,8 +20,12 @@ def _case(cid: str) -> dict:
 
 
 def test_cases_1_to_4_pass_engineer_gate():
-    for cid in ("blood_glucose_case_001", "blood_glucose_case_002",
-                "blood_glucose_case_003", "blood_glucose_case_004"):
+    for cid in (
+        "blood_glucose_case_001",
+        "blood_glucose_case_002",
+        "blood_glucose_case_003",
+        "blood_glucose_case_004",
+    ):
         assert evaluate(_case(cid)["proposal"])["result"] == "pass", cid
 
 
@@ -37,9 +41,15 @@ def test_case5_needs_schema_extension():
 
 def test_invalid_node_type_fails_schema():
     bad = {
-        "proposed_nodes": [{"id": "foo:bar", "type": "NotARealType",
-                            "label": "x", "description": "y",
-                            "source_chunk_id": "chunk:x"}],
+        "proposed_nodes": [
+            {
+                "id": "foo:bar",
+                "type": "NotARealType",
+                "label": "x",
+                "description": "y",
+                "source_chunk_id": "chunk:x",
+            }
+        ],
         "proposed_edges": [],
     }
     assert evaluate(bad)["result"] == "fail_schema"
@@ -47,9 +57,15 @@ def test_invalid_node_type_fails_schema():
 
 def test_bad_node_id_convention_fails_schema():
     bad = {
-        "proposed_nodes": [{"id": "BadID", "type": "Hormone",
-                            "label": "x", "description": "y",
-                            "source_chunk_id": "chunk:x"}],
+        "proposed_nodes": [
+            {
+                "id": "BadID",
+                "type": "Hormone",
+                "label": "x",
+                "description": "y",
+                "source_chunk_id": "chunk:x",
+            }
+        ],
         "proposed_edges": [],
     }
     assert evaluate(bad)["result"] == "fail_schema"
@@ -59,14 +75,29 @@ def test_incomplete_regulatory_effect_fails_pattern():
     # RE 少了 ON_VARIABLE 與方向邊 → pattern 不完整(但 schema/型別仍合法)
     proposal = {
         "proposed_nodes": [
-            {"id": "hormone:x", "type": "Hormone", "label": "X",
-             "description": "d", "source_chunk_id": "chunk:x"},
-            {"id": "regulatory_effect:x", "type": "RegulatoryEffect", "label": "RE",
-             "description": "d", "source_chunk_id": "chunk:x"},
+            {
+                "id": "hormone:x",
+                "type": "Hormone",
+                "label": "X",
+                "description": "d",
+                "source_chunk_id": "chunk:x",
+            },
+            {
+                "id": "regulatory_effect:x",
+                "type": "RegulatoryEffect",
+                "label": "RE",
+                "description": "d",
+                "source_chunk_id": "chunk:x",
+            },
         ],
         "proposed_edges": [
-            {"id": "e:x", "type": "HAS_EFFECT", "source": "hormone:x",
-             "target": "regulatory_effect:x", "source_chunk_id": "chunk:x"},
+            {
+                "id": "e:x",
+                "type": "HAS_EFFECT",
+                "source": "hormone:x",
+                "target": "regulatory_effect:x",
+                "source_chunk_id": "chunk:x",
+            },
         ],
     }
     assert evaluate(proposal)["result"] == "fail_pattern"

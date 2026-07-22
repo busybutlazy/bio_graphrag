@@ -6,19 +6,19 @@
 ``result ∈ {pass, fail_schema, fail_pattern, fail_testability, needs_schema_extension}``。
 只有硬 schema gap(如 Case 5 permissive effect)→ ``needs_schema_extension``。
 """
+
 from __future__ import annotations
 
 import re
 
 import jsonschema
 
+from app.graph.back_translation import render_understanding
 from ingestion.pipeline.normalize_concepts import (
     VALID_NODE_TYPES,
     VALID_RELATIONSHIP_TYPES,
 )
 from ingestion.pipeline.validate_extraction import validate_extraction_output
-
-from app.graph.back_translation import render_understanding
 
 # node id 會被插進 Cypher label,故沿用抽取 schema 的 id 慣例(僅檢查節點 id;
 # edge id 如 e:c1:has_effect 不插 label,不受此限)。
@@ -45,8 +45,11 @@ def _pattern_check(nodes: list[dict], edges: list[dict]) -> str | None:
                 return f"RegulatoryEffect {nid} 缺 HAS_EFFECT 入邊"
             if not out(nid, "ON_VARIABLE"):
                 return f"RegulatoryEffect {nid} 缺 ON_VARIABLE 出邊"
-            if not [e for e in edges if e.get("source") == nid
-                    and e.get("type") in ("INCREASES", "DECREASES")]:
+            if not [
+                e
+                for e in edges
+                if e.get("source") == nid and e.get("type") in ("INCREASES", "DECREASES")
+            ]:
                 return f"RegulatoryEffect {nid} 缺 INCREASES/DECREASES 方向邊"
         if t == "Interaction":
             if len(out(nid, "USES_EFFECT")) < 2:
@@ -71,8 +74,9 @@ def evaluate(proposal: dict) -> dict:
     checks: list[dict] = []
 
     def add(name: str, passed: bool, detail: str = "", code: str | None = None) -> None:
-        checks.append({"name": name, "passed": passed, "detail": detail,
-                       "code": None if passed else code})
+        checks.append(
+            {"name": name, "passed": passed, "detail": detail, "code": None if passed else code}
+        )
 
     # 1. schema_validation(複用 extraction_output_schema)
     try:
@@ -83,38 +87,60 @@ def evaluate(proposal: dict) -> dict:
 
     # 2. node_type_validation
     bad_nodes = [n.get("id") for n in nodes if n.get("type") not in VALID_NODE_TYPES]
-    add("node_type_validation", not bad_nodes,
-        "節點型別均在白名單" if not bad_nodes else f"未知節點型別:{bad_nodes}", "fail_schema")
+    add(
+        "node_type_validation",
+        not bad_nodes,
+        "節點型別均在白名單" if not bad_nodes else f"未知節點型別:{bad_nodes}",
+        "fail_schema",
+    )
 
     # 3. edge_type_validation
     bad_edges = [e.get("id") for e in edges if e.get("type") not in VALID_RELATIONSHIP_TYPES]
-    add("edge_type_validation", not bad_edges,
-        "關係型別均在白名單" if not bad_edges else f"未知關係型別:{bad_edges}", "fail_schema")
+    add(
+        "edge_type_validation",
+        not bad_edges,
+        "關係型別均在白名單" if not bad_edges else f"未知關係型別:{bad_edges}",
+        "fail_schema",
+    )
 
     # 4. id_convention_validation(僅節點 id)
     bad_ids = [n.get("id") for n in nodes if not _ID_RE.match(n.get("id", ""))]
-    add("id_convention_validation", not bad_ids,
+    add(
+        "id_convention_validation",
+        not bad_ids,
         "節點 id 符合慣例" if not bad_ids else f"節點 id 不符 ^[a-z_]+:[a-z0-9_]+$:{bad_ids}",
-        "fail_schema")
+        "fail_schema",
+    )
 
     # 5. pattern_validation(三段式 / Interaction 完整性)
     pattern_detail = _pattern_check(nodes, edges)
-    add("pattern_validation", pattern_detail is None,
-        pattern_detail or "結構完整或無局部 pattern", "fail_pattern")
+    add(
+        "pattern_validation",
+        pattern_detail is None,
+        pattern_detail or "結構完整或無局部 pattern",
+        "fail_pattern",
+    )
 
     # 6. back_translation_available(renderer 能產非 gap 句)
     rendered = render_understanding(proposal)
-    add("back_translation_available", not rendered["is_gap"],
-        rendered["text"], "needs_schema_extension")
+    add(
+        "back_translation_available",
+        not rendered["is_gap"],
+        rendered["text"],
+        "needs_schema_extension",
+    )
 
     # 7. testability(已知 pattern → 可導最小斷言)
     testable = not rendered["is_gap"]
-    add("testability", testable,
-        "可導出最小斷言" if testable else "無 pattern,不導斷言", "fail_testability")
+    add(
+        "testability",
+        testable,
+        "可導出最小斷言" if testable else "無 pattern,不導斷言",
+        "fail_testability",
+    )
 
     # 8. duplication_risk(標記不擋)
     dup = [n.get("id") for n in nodes if n.get("possible_duplicate_of")]
-    add("duplication_risk", True,
-        "無重複疑慮" if not dup else f"疑似重複(標記不擋):{dup}")
+    add("duplication_risk", True, "無重複疑慮" if not dup else f"疑似重複(標記不擋):{dup}")
 
     return {"result": _decide(checks), "checks": checks}

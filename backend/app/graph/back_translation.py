@@ -8,6 +8,7 @@
 ``references_existing`` …)。邊可能引用跨 case 的既有節點,故 label 需由
 ``build_context`` 事先掃過所有 case 建索引;查不到時退回 humanized id。
 """
+
 from __future__ import annotations
 
 _DIRECTION_ZH = {"INCREASES": "上升", "DECREASES": "下降"}
@@ -78,14 +79,16 @@ def render_understanding(proposal: dict, ctx: dict | None = None) -> dict:
         variable = lbl(rs["source"])
         hormone = lbl(rs["target"])
         structure = lbl(secretes[0]["source"])
-        trig = _TRIGGER_ZH.get((rs.get("properties") or {}).get("trigger_direction"), "改變")
-        return _ok("P2", "secretion_trigger",
-                   f"當{variable}{trig}時,{structure}會分泌{hormone}。")
+        trig = _TRIGGER_ZH.get(str((rs.get("properties") or {}).get("trigger_direction")), "改變")
+        return _ok("P2", "secretion_trigger", f"當{variable}{trig}時,{structure}會分泌{hormone}。")
 
     # --- P4 antagonistic_interaction -------------------------------------
     # Interaction{antagonism} ─USES_EFFECT→ RE×2, ─ON_VARIABLE→ Var
-    interactions = [nid for nid, t in types.items()
-                    if t == "Interaction" and props[nid].get("interaction_type") == "antagonism"]
+    interactions = [
+        nid
+        for nid, t in types.items()
+        if t == "Interaction" and props[nid].get("interaction_type") == "antagonism"
+    ]
     if interactions:
         iid = interactions[0]
         uses = [e for e in edges_of("USES_EFFECT") if e["source"] == iid]
@@ -94,8 +97,11 @@ def render_understanding(proposal: dict, ctx: dict | None = None) -> dict:
             a = effect_to_hormone.get(uses[0]["target"]) or lbl(uses[0]["target"])
             b = effect_to_hormone.get(uses[1]["target"]) or lbl(uses[1]["target"])
             variable = lbl(on_var[0]["target"])
-            return _ok("P4", "antagonistic_interaction",
-                       f"{a}與{b}透過方向相反的兩個調控效果,在{variable}上呈現拮抗。")
+            return _ok(
+                "P4",
+                "antagonistic_interaction",
+                f"{a}與{b}透過方向相反的兩個調控效果,在{variable}上呈現拮抗。",
+            )
 
     # --- P1 / P3 regulatory-effect three-part ----------------------------
     # Hormone ─HAS_EFFECT→ RE ─ON_VARIABLE→ Var, RE ─[INCREASES|DECREASES]→ Var
@@ -112,11 +118,21 @@ def render_understanding(proposal: dict, ctx: dict | None = None) -> dict:
             causes = [e for e in edges_of("CAUSES") if e["source"] == he["source"]]
             if causes:  # P3 — mechanism 節點
                 process = lbl(causes[0]["target"])
-                return _ok("P3", "regulatory_effect_with_mechanism",
-                           f"{hormone}會促成{process},並造成調控效果:使{variable}{direction}。")
-            return _ok("P1", "single_regulatory_effect",
-                       f"{hormone}會造成一個調控效果:使{variable}{direction}。")
+                return _ok(
+                    "P3",
+                    "regulatory_effect_with_mechanism",
+                    f"{hormone}會促成{process},並造成調控效果:使{variable}{direction}。",
+                )
+            return _ok(
+                "P1",
+                "single_regulatory_effect",
+                f"{hormone}會造成一個調控效果:使{variable}{direction}。",
+            )
 
     # --- P5 schema gap: no pattern matched -------------------------------
-    return {"pattern": "P5", "rule_id": "schema_gap", "is_gap": True,
-            "text": "系統目前無法用既有的知識結構完整表達此現象。"}
+    return {
+        "pattern": "P5",
+        "rule_id": "schema_gap",
+        "is_gap": True,
+        "text": "系統目前無法用既有的知識結構完整表達此現象。",
+    }
