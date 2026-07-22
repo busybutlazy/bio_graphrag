@@ -1,6 +1,6 @@
 {
   "gold_id": "blood_glucose_case_005",
-  "expected_understanding": "系統目前無法用既有 schema 完整表達此現象。",
+  "expected_understanding": "系統目前無法用既有的知識結構完整表達此現象。",
   "is_gap": true,
   "min_assertions": {
     "has_node_types": ["Hormone", "PhysiologicalVariable"],

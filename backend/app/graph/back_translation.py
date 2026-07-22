@@ -119,4 +119,4 @@ def render_understanding(proposal: dict, ctx: dict | None = None) -> dict:
 
     # --- P5 schema gap: no pattern matched -------------------------------
     return {"pattern": "P5", "rule_id": "schema_gap", "is_gap": True,
-            "text": "系統目前無法用既有 schema 完整表達此現象。"}
+            "text": "系統目前無法用既有的知識結構完整表達此現象。"}

@@ -796,7 +796,7 @@ async function renderExpertDemo(host) {
     const used = {};
     (proposal.proposed_nodes || []).forEach((n) => { used[n.id] = { id: n.id, label: n.label, type: n.type }; });
     (proposal.proposed_edges || []).forEach((e) => [e.source, e.target].forEach((id) => {
-      if (!used[id]) used[id] = globalNodes[id] || { id, label: shortId(id), type: 'Concept' };
+      if (!used[id]) used[id] = globalNodes[id] || { id, label: '（相關概念）', type: 'Concept' };
     }));
     const nodes = Object.values(used);
     const edges = (proposal.proposed_edges || []).map((e) => ({
