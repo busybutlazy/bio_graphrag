@@ -28,6 +28,8 @@ jobs:
       # so the suite is deterministic and needs no secrets.
       - name: Prepare env
         run: cp .env.example .env
+      - name: Create shared reverse-proxy network (declared external in compose)
+        run: docker network create web || true
       - name: Start the stack (postgres, neo4j, qdrant, backend, nginx)
         run: docker compose up -d --build
       - name: Wait for backend health
