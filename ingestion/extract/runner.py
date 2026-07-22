@@ -45,6 +45,7 @@ class ChunkReport:
     proposed_node_ids: list[str] = field(default_factory=list)
     proposed_edge_ids: list[str] = field(default_factory=list)
     extraction_failed: bool = False
+    extraction_error: str | None = None
     tokens: int = 0
     # populated in dry-run previews only
     user_prompt: str | None = None
@@ -111,30 +112,44 @@ async def _extract_chunk(
     system_prompt: str,
     user_prompt: str,
     retries: int,
-) -> tuple[dict | None, int]:
+) -> tuple[dict | None, int, str | None]:
     """Run extraction with schema validation and a bounded retry.
 
-    Returns ``(candidate, tokens)`` where ``candidate`` is a schema-valid dict,
-    or ``(None, tokens)`` when every attempt failed to parse/validate.
+    Returns ``(candidate, tokens, error)`` where ``candidate`` is a schema-valid
+    dict, or ``(None, tokens, error)`` when every attempt failed. The final
+    error is surfaced in the per-chunk report so paid extraction failures are
+    diagnosable instead of being silently reduced to a counter.
     """
     tokens = 0
-    for _ in range(retries + 1):
+    last_error: str | None = None
+    attempt_prompt = user_prompt
+    for attempt in range(retries + 1):
         try:
             # extract_fn is a sync/blocking call (OpenAI client) — run it off the
             # event loop so a multi-chunk ingest doesn't stall other requests.
-            candidate, call_tokens = await asyncio.to_thread(extract_fn, system_prompt, user_prompt)
+            candidate, call_tokens = await asyncio.to_thread(
+                extract_fn, system_prompt, attempt_prompt
+            )
             tokens += call_tokens
             validate_extraction.validate_extraction_output(candidate)
-            return candidate, tokens
+            return candidate, tokens, None
         except llm_client.LLMNotConfigured:
             # A config error, not a per-chunk data problem: fail the whole job
             # fast rather than silently flagging every chunk as failed.
             raise
-        except Exception:
+        except Exception as exc:
             # JSON decode error, schema violation, or transient API error: retry
             # until the budget is exhausted, then flag the chunk (job continues).
+            last_error = f"{type(exc).__name__}: {exc}"
+            if attempt < retries:
+                attempt_prompt = (
+                    user_prompt
+                    + "\n\n上一次輸出未通過驗證。請修正以下錯誤後重新輸出完整 JSON；"
+                    "仍然只能輸出 schema 允許的 nodes 與 edges：\n"
+                    + last_error
+                )
             continue
-    return None, tokens
+    return None, tokens, last_error
 
 
 async def ingest_document(
@@ -226,7 +241,7 @@ async def ingest_document(
                 existing_concepts=existing_concepts,
                 chunk_text=content,
             )
-            candidate, tokens = await _extract_chunk(
+            candidate, tokens, extraction_error = await _extract_chunk(
                 extract_fn=extract_fn,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
@@ -238,6 +253,7 @@ async def ingest_document(
             concept_ids: list[str] = []
             if candidate is None:
                 chunk_report.extraction_failed = True
+                chunk_report.extraction_error = extraction_error
                 failed_chunks += 1
             else:
                 (
@@ -249,6 +265,7 @@ async def ingest_document(
                 if not ok:
                     # Should not happen (already validated), but stay defensive.
                     chunk_report.extraction_failed = True
+                    chunk_report.extraction_error = stage_error
                     failed_chunks += 1
                 else:
                     node_ids = [n["id"] for n in candidate["nodes"]]
@@ -274,7 +291,10 @@ async def ingest_document(
         await load_postgres.upsert_documents(pg_conn, [doc.document_row()])
         # re-ingest may change chunk count/ids → clear the doc's old chunks first
         await load_postgres.delete_chunks_for_doc(pg_conn, doc.doc_id)
-        await asyncio.to_thread(load_qdrant.delete_chunks_for_doc, qdrant, doc.doc_id)
+        embedding_dim = len(next(iter(embeddings.values()))) if embeddings else None
+        await asyncio.to_thread(
+            load_qdrant.delete_chunks_for_doc, qdrant, doc.doc_id, embedding_dim
+        )
         await load_postgres.upsert_chunks(pg_conn, chunk_rows)
         await asyncio.to_thread(load_qdrant.load_chunks, qdrant, chunk_rows, embeddings)
     except Exception as exc:
@@ -287,6 +307,11 @@ async def ingest_document(
             "proposed_nodes": proposed_nodes,
             "proposed_edges": proposed_edges,
             "failed_chunks": failed_chunks,
+            "extraction_errors": [
+                {"chunk_id": chunk.chunk_id, "error": chunk.extraction_error}
+                for chunk in report.chunks
+                if chunk.extraction_error
+            ],
             "tokens": total_tokens,
             "strategy": strategy,
             "chunk_params": chunker.params(),

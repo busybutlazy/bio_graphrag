@@ -60,7 +60,7 @@ def test_preview_strategy_switch_changes_chunk_count(client):
         json={
             "source": DEMO_SOURCE,
             "strategy": "fixed",
-            "chunk_params": {"chunk_size": 80, "chunk_overlap": 0},
+            "chunk_params": {"chunk_size": 100, "chunk_overlap": 0},
         },
     ).json()
     assert len(fine["chunks"]) > len(coarse["chunks"])
@@ -73,6 +73,32 @@ def test_preview_rejects_unknown_strategy(client):
     )
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "unknown_strategy"
+
+
+def test_preview_rejects_chunk_size_below_meaningful_minimum(client):
+    resp = client.post(
+        "/admin/ingest/preview",
+        json={
+            "source": "data/sample/chapters/demo.md",
+            "strategy": "recursive",
+            "chunk_params": {"chunk_size": 50, "chunk_overlap": 2},
+        },
+    )
+    assert resp.status_code == 422
+    assert "greater than or equal to 100" in str(resp.json()["detail"])
+
+
+def test_preview_rejects_overlap_not_smaller_than_size(client):
+    resp = client.post(
+        "/admin/ingest/preview",
+        json={
+            "source": "data/sample/chapters/demo.md",
+            "strategy": "recursive",
+            "chunk_params": {"chunk_size": 100, "chunk_overlap": 100},
+        },
+    )
+    assert resp.status_code == 422
+    assert "chunk_overlap must be smaller than chunk_size" in str(resp.json()["detail"])
 
 
 def test_preview_rejects_path_traversal(client):

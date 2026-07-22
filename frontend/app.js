@@ -39,7 +39,25 @@ function authHeaders() {
 /* Errors use the standardized body {error:{code,message}}; surface code + message. */
 async function apiError(r) {
   const body = await r.json().catch(() => ({}));
-  const detail = (body.error && body.error.message) || body.detail || ('HTTP ' + r.status);
+  const formatDetail = (value) => {
+    if (Array.isArray(value)) return value.map(formatDetail).filter(Boolean).join('\n');
+    if (value && typeof value === 'object') {
+      const item = value;
+      const field = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : '';
+      if (field === 'chunk_size' && item.type === 'greater_than_equal') {
+        return '切塊大小至少需要 100 個字元。';
+      }
+      if (String(item.msg || '').includes('chunk_overlap must be smaller than chunk_size')) {
+        return '重疊大小必須小於切塊大小。';
+      }
+      const location = field ? `${field}：` : '';
+      if (item.msg) return location + item.msg;
+      try { return JSON.stringify(item); } catch { return '輸入資料格式不正確'; }
+    }
+    return value == null ? '' : String(value);
+  };
+  const rawDetail = (body.error && body.error.message) || body.detail;
+  const detail = formatDetail(rawDetail) || ('HTTP ' + r.status);
   const err = new Error(detail);
   err.code = (body.error && body.error.code) || null;
   err.status = r.status;
@@ -639,17 +657,49 @@ async function renderIngest(host) {
     opts.strategies.forEach((s) => stratRow.append(E('button', {
       class: 'pill' + (s.name === state.strategy ? ' on cha' : ''),
       title: s.description,
-      onclick: () => { state.strategy = s.name; paintStrategy(); paintParams(); },
+      onclick: () => { state.strategy = s.name; paintStrategy(); paintParams(); updateParamValidity(); },
     }, STRAT_LABELS[s.name] || s.name)));
   }
   function numParam(key, label) {
+    const limits = key === 'chunk_size'
+      ? { min: '100', max: '5000' }
+      : key === 'chunk_overlap'
+        ? { min: '0', max: '2000' }
+        : { min: '100', max: '8000' };
     return E('div', { class: 'ing-param' },
       E('label', {}, label),
       E('input', {
-        type: 'number', value: String(state.params[key]),
-        oninput: (e) => { state.params[key] = Number(e.target.value); },
+        type: 'number', value: String(state.params[key]), ...limits,
+        oninput: (e) => { state.params[key] = Number(e.target.value); updateParamValidity(); },
       }));
   }
+  const paramError = E('div', { class: 'notice err', style: 'display:none;margin-top:10px' });
+
+  function paramValidationMessage() {
+    if (state.strategy === 'markdown_header') {
+      return state.params.max_section_size < 100 ? '每個標題區塊大小至少需要 100 個字元。' : '';
+    }
+    if (!Number.isFinite(state.params.chunk_size) || state.params.chunk_size < 100) {
+      return '切塊大小至少需要 100 個字元。';
+    }
+    if (!Number.isFinite(state.params.chunk_overlap) || state.params.chunk_overlap < 0) {
+      return '重疊大小不可小於 0。';
+    }
+    if (state.params.chunk_overlap >= state.params.chunk_size) {
+      return '重疊大小必須小於切塊大小。';
+    }
+    return '';
+  }
+
+  function updateParamValidity() {
+    const message = paramValidationMessage();
+    paramError.textContent = message;
+    paramError.style.display = message ? '' : 'none';
+    previewBtn.disabled = Boolean(message);
+    runBtn.disabled = Boolean(message);
+    return !message;
+  }
+
   function paintParams() {
     clear(paramsHost);
     const box = E('div', { class: 'ing-params' });
@@ -658,7 +708,7 @@ async function renderIngest(host) {
     } else {
       box.append(numParam('chunk_size', 'CHUNK_SIZE'), numParam('chunk_overlap', 'CHUNK_OVERLAP'));
     }
-    paramsHost.append(box);
+    paramsHost.append(box, paramError);
   }
   paintStrategy();
   paintParams();
@@ -705,6 +755,7 @@ async function renderIngest(host) {
       '需正確的擁有者權杖(X-Ingest-Owner-Token)——預設對所有人上鎖。'),
     E('div', { class: 'ing-actions' }, previewBtn, ownerInput, runBtn)));
   wrap.append(notice, results);
+  updateParamValidity();
 
   function buildBody() {
     const cp = state.strategy === 'markdown_header'
@@ -719,15 +770,15 @@ async function renderIngest(host) {
   }
 
   async function doPreview() {
-    if (!state.source) return;
+    if (!state.source || !updateParamValidity()) return;
     setBusy(true, 'preview');
     try { renderPreview(results, await api.post('/admin/ingest/preview', buildBody())); }
     catch (err) { clear(results); notice.replaceChildren(E('div', { class: 'notice err' }, err.message)); }
-    finally { previewBtn.disabled = false; runBtn.disabled = false; }
+    finally { updateParamValidity(); }
   }
 
   async function doRun() {
-    if (!state.source) return;
+    if (!state.source || !updateParamValidity()) return;
     const token = ownerInput.value.trim();
     setOwner(token);
     setBusy(true, 'run');
@@ -739,7 +790,7 @@ async function renderIngest(host) {
         : err.code === 'llm_not_configured' ? err.message : ('注入失敗：' + err.message);
       notice.replaceChildren(E('div', { class: 'notice err' }, msg));
     }
-    finally { previewBtn.disabled = false; runBtn.disabled = false; }
+    finally { updateParamValidity(); }
   }
 }
 

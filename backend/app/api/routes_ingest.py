@@ -22,7 +22,7 @@ from pathlib import Path
 
 import asyncpg
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from qdrant_client import QdrantClient
 
 from app.api.auth import require_admin, require_ingest_owner
@@ -54,7 +54,7 @@ _PROFILES_DIR = build_extraction_prompt.PROFILES_DIR
 class ChunkParams(BaseModel):
     """Params for the chosen strategy; only the relevant ones are used."""
 
-    chunk_size: int | None = Field(default=None, ge=50, le=5000)
+    chunk_size: int | None = Field(default=None, ge=100, le=5000)
     chunk_overlap: int | None = Field(default=None, ge=0, le=2000)
     max_section_size: int | None = Field(default=None, ge=100, le=8000)
 
@@ -65,6 +65,18 @@ class IngestRequest(BaseModel):
     )
     strategy: str = Field(default=ingest_runner.DEFAULT_STRATEGY)
     chunk_params: ChunkParams = Field(default_factory=ChunkParams)
+
+    @model_validator(mode="after")
+    def validate_size_overlap(self) -> "IngestRequest":
+        if self.strategy not in {"fixed", "recursive"}:
+            return self
+        size = self.chunk_params.chunk_size or chunkers.DEFAULT_CHUNK_SIZE
+        overlap = self.chunk_params.chunk_overlap
+        if overlap is None:
+            overlap = chunkers.DEFAULT_CHUNK_OVERLAP
+        if overlap >= size:
+            raise ValueError("chunk_overlap must be smaller than chunk_size")
+        return self
 
 
 # --- source resolution --------------------------------------------------------
