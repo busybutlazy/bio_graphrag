@@ -60,6 +60,7 @@ A static single-page UI (vanilla HTML/CSS/JS, no build step) is served at `http:
 | **圖譜 Graph** | `GET /neighbors`, `POST /concept-map` | Force-directed subgraph of a node or topic; click a node for detail. Deep-link: `/?node=hormone:insulin#graph` |
 | **典藏 Library** | `GET /library` | Approved nodes grouped by topic; click through to the graph |
 | **審訂 Curation** | `GET/POST /admin/curation/*` | Human-in-the-loop: propose a node/edge → review queue → approve/reject into the graph |
+| **審閱 Expert Review** | `GET /admin/expert-demo/cases` | Governance demo: AI proposal → engineer gate (form) → deterministic back-translation → expert gate (meaning, no JSON) → schema-gap backlog → gold regression. See `docs/expert-in-the-loop-workflow.md` |
 | **評估 Evaluation** | `GET /admin/evaluation/latest` | Live recall@k / grounded / P95-latency dashboard over the golden questions |
 
 With no `OPENAI_API_KEY` the demo runs fully offline (lexical retrieval + an extractive, clearly-labelled answer), so a fresh clone works with no secrets.

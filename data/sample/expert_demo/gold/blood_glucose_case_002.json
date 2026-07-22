@@ -1,0 +1,10 @@
+{
+  "gold_id": "blood_glucose_case_002",
+  "expected_understanding": "升糖素會促成肝醣分解,並造成調控效果:使血糖上升。",
+  "is_gap": false,
+  "min_assertions": {
+    "has_node_types": ["Hormone", "Process", "RegulatoryEffect"],
+    "has_edge_types": ["HAS_EFFECT", "ON_VARIABLE", "INCREASES", "CAUSES"],
+    "direction": "increase"
+  }
+}

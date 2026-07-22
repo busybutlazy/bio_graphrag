@@ -1,0 +1,52 @@
+[
+  {
+    "gap_id": "gap:permissive_effect",
+    "raised_by_case": "blood_glucose_case_005",
+    "schema_gap_type": "permissive_effect",
+    "expert_facing_reason": "A 不是直接影響 C,而是改變 B 對 C 的作用強度(甲狀腺素增強腎上腺素對代謝的效果)。",
+    "example_text": "甲狀腺素會增強腎上腺素對代謝作用的效果。",
+    "status": "backlog",
+    "proposed_schema_change": "可能需要一個 modulates/permissive 型別的 Interaction,引用被調節的既有效果並標註強度方向。",
+    "raised_at": "2026-07-09"
+  },
+  {
+    "gap_id": "gap:cell_type",
+    "raised_by_case": "blood_glucose_case_003",
+    "schema_gap_type": "unknown",
+    "expert_facing_reason": "細胞層級(如胰島β細胞)目前只能借用 Structure 表達,細胞語意僅保留在 label。",
+    "example_text": "胰島 β 細胞會分泌胰島素。",
+    "status": "backlog",
+    "proposed_schema_change": "評估新增 CellType 節點型別(D6 明確排除於 MVP schema 之外,僅記 backlog)。",
+    "raised_at": "2026-07-09"
+  },
+  {
+    "gap_id": "gap:stimulus_stimulates",
+    "raised_by_case": null,
+    "schema_gap_type": "unknown",
+    "expert_facing_reason": "外部刺激觸發分泌/反應的語意,目前以 REGULATES_SECRETION_OF + trigger_direction 近似,缺專用 Stimulus/STIMULATES。",
+    "example_text": "(通則)特定刺激會促發某內分泌反應。",
+    "status": "backlog",
+    "proposed_schema_change": "評估新增 Stimulus 節點與 STIMULATES 關係(D6 排除於 MVP,僅記 backlog)。",
+    "raised_at": "2026-07-09"
+  },
+  {
+    "gap_id": "gap:antagonistic_interaction_type",
+    "raised_by_case": "blood_glucose_case_004",
+    "schema_gap_type": "antagonistic_or_synergistic_interaction",
+    "expert_facing_reason": "拮抗/協同目前以 Interaction + interaction_type 屬性表達;是否需獨立 AntagonisticInteraction 型別待評估。",
+    "example_text": "胰島素與升糖素在血糖調控上具有拮抗作用。",
+    "status": "backlog",
+    "proposed_schema_change": "維持 Interaction + interaction_type;AntagonisticInteraction 專用型別 D6 排除,僅記 backlog。",
+    "raised_at": "2026-07-09"
+  },
+  {
+    "gap_id": "gap:on_process_acts_via",
+    "raised_by_case": "blood_glucose_case_002",
+    "schema_gap_type": "pathway_or_cascade",
+    "expert_facing_reason": "效果透過某 process 實現(mechanism)目前以 CAUSES 近似,缺『效果經由 process 作用』的精準邊。",
+    "example_text": "升糖素會促進肝醣分解,使血糖上升。",
+    "status": "backlog",
+    "proposed_schema_change": "評估 ON_PROCESS / ACTS_VIA 精準邊(D6 與軟性 backlog;非 MVP)。",
+    "raised_at": "2026-07-09"
+  }
+]

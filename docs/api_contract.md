@@ -200,6 +200,15 @@ class DeleteEdgeRequest(BaseModel):
 
 副作用同上,`target_type = edge`。
 
+### `GET /admin/expert-demo/cases`
+
+Expert-in-the-loop governance demo 的**唯讀**資料出口(admin key 保護,同其他 `/admin/*`)。回傳 `data/sample/expert_demo/cases.json` 的固定 demo 案例;每筆額外附上**當場計算、不落地**的兩個欄位:
+
+- `system_understanding`:`{pattern, rule_id, is_gap, text}` — 由 deterministic 反向翻譯器(`app/graph/back_translation.py`,無 LLM)算出的白話「系統理解」。
+- `engineer_gate`:`{result, checks[]}` — 由 `app/graph/engineer_gate.py` 複用既有 schema/型別驗證算出的形式判定,`result ∈ {pass, fail_schema, fail_pattern, fail_testability, needs_schema_extension}`。
+
+**唯讀**:不寫任何 store、不碰 approved 圖、不繞過 curation;無副作用。設計說明見 `docs/expert-in-the-loop-plan.md` 五.4。
+
 ## 4. 不提供的 API
 
 `POST /cypher`、`GET /all-nodes`、`GET /all-edges`、`GET /export-all`、`GET /raw-source/{id}` 一律不實作,理由見 `docs/graph_plan.md` 5.3 節。
