@@ -1,5 +1,35 @@
 # Review Report: fix-dangling-edges-bfs
 
+## Re-review Addendum (after remediation commit `d706400`)
+
+The implementer committed `d706400` to address this review. Re-checked
+independently:
+
+- **M1 (report/state contradiction) → RESOLVED.** CHANGE_REPORT.md and
+  VERIFICATION_REPORT.md now state the change is **committed** on branch
+  `fix/dangling-edges-bfs` (not "uncommitted on main"), enumerate `87a91e1` and
+  the follow-up commit, and record the commit-before-review ordering as an
+  explicit human decision (the supervised-auto flow stopped before committing).
+  The artifacts now match the repository. Confirmed accurate against
+  `git log`/`git status`.
+- **L1 (fetch_neighbors cap boundary untested) → RESOLVED.** Added
+  `test_fetch_neighbors_no_dangling_edges_when_limit_reached` (5-neighbor centre,
+  `limit=3`): asserts no edge escapes `nodes ∪ {centre}` and that every retained
+  neighbor keeps its centre-incident edge — exercising the `neighbor_id in
+  visited` clause. The test is correct for the fetch_neighbors endpoint contract
+  (uses `nodes ∪ {centre}`, not the plain node set). Independently re-ran the file:
+  **5 passed in 8.33s.** Fail-before is confirmed by static analysis (pre-fix code
+  recorded edges to all 5 neighbors while only 3 nodes survive → n4/n5 dangle);
+  not reproduced by editing implementation code, per reviewer bounds.
+- **S1 → accepted** as pre-existing residual behavior, as noted below.
+
+**Re-review verdict:** all findings from this review are resolved or accepted; no
+new findings. Core correctness remains CONFIRMED. No Blocking/High items. The
+change is, in this reviewer's assessment, ready for human approval / PR. The
+reviewer still does not itself approve, merge, or release.
+
+---
+
 ## Review Context
 
 - Diff base and scope: commit `87a91e1` ("fix(graph): prevent dangling edges in
