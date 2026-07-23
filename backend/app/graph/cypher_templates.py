@@ -82,19 +82,32 @@ def _bfs_expand(
             break
         next_frontier: set[str] = set()
         for record in session.run(_EXPAND_QUERY, frontier=list(frontier)):
-            edges[(record["source"], record["relation"], record["target"])] = {
-                "source": record["source"],
-                "relation": record["relation"],
-                "target": record["target"],
-            }
             neighbor_id = record["neighbor_id"]
-            if neighbor_id not in visited and len(nodes) < limit:
+            # Record the edge only if its neighbor endpoint is retained in the
+            # result. The frontier node is always already in the result set, so
+            # gating on the neighbor keeps both endpoints present and avoids
+            # dangling edges when the node cap is hit. ``in nodes`` covers seeds,
+            # already-added neighbors, and same-iteration re-encounters; ``in
+            # visited`` covers the centre node of fetch_neighbors, which is
+            # returned separately and never lives in ``nodes``.
+            if neighbor_id in nodes or neighbor_id in visited:
+                keep_edge = True
+            elif len(nodes) < limit:
                 nodes[neighbor_id] = {
                     "id": neighbor_id,
                     "label": record["neighbor_label"],
                     "type": record["neighbor_type"],
                 }
                 next_frontier.add(neighbor_id)
+                keep_edge = True
+            else:
+                keep_edge = False
+            if keep_edge:
+                edges[(record["source"], record["relation"], record["target"])] = {
+                    "source": record["source"],
+                    "relation": record["relation"],
+                    "target": record["target"],
+                }
         visited |= next_frontier
         frontier = next_frontier
 
