@@ -351,5 +351,139 @@
       "promote": true,
       "gold_id": "blood_glucose_case_005"
     }
+  },
+  {
+    "id": "blood_glucose_case_006",
+    "domain": "blood_glucose_regulation",
+    "source_text": "腎上腺素會影響血糖。",
+    "proposal": {
+      "proposed_nodes": [
+        {
+          "id": "hormone:adrenaline",
+          "type": "Hormone",
+          "label": "腎上腺素",
+          "description": "腎上腺髓質分泌、參與血糖與代謝調節的激素。",
+          "source_chunk_id": "chunk:blood_glucose_case_006"
+        },
+        {
+          "id": "physiological_variable:blood_glucose",
+          "type": "PhysiologicalVariable",
+          "label": "血糖",
+          "description": "血液中的葡萄糖濃度。",
+          "source_chunk_id": "chunk:blood_glucose_case_006"
+        },
+        {
+          "id": "regulatory_effect:adrenaline_affects_blood_glucose",
+          "type": "RegulatoryEffect",
+          "label": "腎上腺素影響血糖(方向未定)",
+          "description": "原文僅說『影響』,未給明確方向,調控效果三段式無法完成。",
+          "source_chunk_id": "chunk:blood_glucose_case_006"
+        }
+      ],
+      "proposed_edges": [
+        {
+          "id": "e:c6:has_effect",
+          "type": "HAS_EFFECT",
+          "source": "hormone:adrenaline",
+          "target": "regulatory_effect:adrenaline_affects_blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_006"
+        }
+      ],
+      "references_existing": [],
+      "confidence": 0.4,
+      "applied_rule_ids": [
+        "single_regulatory_effect"
+      ],
+      "uncertain_points": [
+        "原文未指明血糖上升或下降,方向邊與 ON_VARIABLE 無法建立"
+      ],
+      "possible_over_inference": [],
+      "possible_schema_gap": false
+    },
+    "did_not_understand_as": [],
+    "expert_review": {
+      "status": "not_reviewed",
+      "notes": "工程師 gate 已因三段式不完整(缺 ON_VARIABLE 與方向邊)退回,屬形式問題,未進入專家審查。",
+      "schema_gap_type": null,
+      "reviewed_by": null,
+      "reviewed_at": null
+    },
+    "gold": {
+      "promote": false,
+      "gold_id": null
+    }
+  },
+  {
+    "id": "blood_glucose_case_007",
+    "domain": "blood_glucose_regulation",
+    "source_text": "胰島素會降低血糖濃度。",
+    "proposal": {
+      "proposed_nodes": [
+        {
+          "id": "hormone:insulin",
+          "type": "Hormone",
+          "label": "胰島素",
+          "description": "由胰島β細胞分泌、降低血糖的激素。",
+          "source_chunk_id": "chunk:blood_glucose_case_007"
+        },
+        {
+          "id": "physiological_variable:blood_glucose",
+          "type": "PhysiologicalVariable",
+          "label": "血糖",
+          "description": "血液中的葡萄糖濃度。",
+          "source_chunk_id": "chunk:blood_glucose_case_007"
+        },
+        {
+          "id": "regulatory_effect:insulin_increases_blood_glucose",
+          "type": "RegulatoryEffect",
+          "label": "胰島素升高血糖",
+          "description": "AI 將胰島素的效果抽成『升高血糖』,方向與原文相反(抽取錯誤)。",
+          "source_chunk_id": "chunk:blood_glucose_case_007"
+        }
+      ],
+      "proposed_edges": [
+        {
+          "id": "e:c7:has_effect",
+          "type": "HAS_EFFECT",
+          "source": "hormone:insulin",
+          "target": "regulatory_effect:insulin_increases_blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_007"
+        },
+        {
+          "id": "e:c7:on_variable",
+          "type": "ON_VARIABLE",
+          "source": "regulatory_effect:insulin_increases_blood_glucose",
+          "target": "physiological_variable:blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_007"
+        },
+        {
+          "id": "e:c7:increases",
+          "type": "INCREASES",
+          "source": "regulatory_effect:insulin_increases_blood_glucose",
+          "target": "physiological_variable:blood_glucose",
+          "source_chunk_id": "chunk:blood_glucose_case_007"
+        }
+      ],
+      "references_existing": [],
+      "confidence": 0.88,
+      "applied_rule_ids": [
+        "single_regulatory_effect"
+      ],
+      "uncertain_points": [],
+      "possible_over_inference": [],
+      "possible_schema_gap": false
+    },
+    "did_not_understand_as": [],
+    "expert_review": {
+      "status": "rejected",
+      "notes": "形式完全合法(三段式完整、通過工程師 gate),但生物學錯誤:胰島素應『降低』血糖,此提案方向相反。這正是意義 gate 才能攔下、形式檢查無法發現的錯誤。",
+      "schema_gap_type": null,
+      "reviewed_by": "domain_expert",
+      "reviewed_at": "2026-07-23"
+    },
+    "gold": {
+      "promote": false,
+      "gold_id": null
+    }
   }
 ]

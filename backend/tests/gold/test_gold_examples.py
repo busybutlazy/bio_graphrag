@@ -32,8 +32,10 @@ def _case(cid: str) -> dict:
     return next(c for c in CASES if c["id"] == cid)
 
 
-def test_every_case_has_a_gold_file():
-    assert {g["gold_id"] for g in GOLD} == {c["id"] for c in CASES}
+def test_every_promoted_case_has_a_gold_file():
+    # 只有通過專家審查、promote 的案例才固化成 gold;被退回的案例(如 form/意義 rejection)不進 gold 網
+    promoted = {c["id"] for c in CASES if c.get("gold", {}).get("promote")}
+    assert {g["gold_id"] for g in GOLD} == promoted
 
 
 @pytest.mark.parametrize("gold", GOLD, ids=[g["gold_id"] for g in GOLD])

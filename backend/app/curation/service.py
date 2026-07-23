@@ -52,7 +52,7 @@ async def _log_change(
     curation_item_id: str | None = None,
     before_state: dict | None = None,
     after_state: dict | None = None,
-) -> None:
+) -> str:
     change_id = f"change:{uuid.uuid4()}"
     await conn.execute(
         """
@@ -70,6 +70,33 @@ async def _log_change(
         json.dumps(before_state) if before_state is not None else None,
         json.dumps(after_state) if after_state is not None else None,
     )
+    return change_id
+
+
+async def record_expert_review(
+    case_id: str,
+    decision: str,
+    schema_gap_type: str | None,
+    notes: str | None,
+    actor: str,
+) -> str:
+    """Persist an expert-in-the-loop review as an append-only audit row.
+
+    Reuses the same ``graph_change_logs`` trail as curation / engineer actions, so
+    expert-gate decisions are as traceable as any other governance action. Writes
+    only an audit row — a demo-case review never touches Neo4j or the approved graph.
+    Returns the generated ``change_id``.
+    """
+    async with connection() as conn:
+        return await _log_change(
+            conn,
+            action="expert_review",
+            target_type="expert_demo_case",
+            target_id=case_id,
+            actor=actor,
+            reason=notes,
+            after_state={"decision": decision, "schema_gap_type": schema_gap_type},
+        )
 
 
 async def list_items(status: str | None, item_type: str | None) -> list[dict]:

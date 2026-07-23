@@ -775,9 +775,37 @@ async function renderExpertDemo(host) {
         ck.detail ? E('div', { class: 'ex-check-detail' }, ck.detail) : null))));
   }
 
+  // 領域專家權威判定(seeded);白話呈現,不露 schema/gap code,維持隔離
+  const EXPERT_STATUS = {
+    approved: ['領域專家已確認:系統理解符合原文', 'ok'],
+    rejected: ['領域專家已退回:系統理解與原文的生物語意不符', 'err'],
+    schema_gap: ['領域專家:此現象現行系統無法完整表達', ''],
+  };
+  function expertVerdict(review) {
+    if (!review) return null;
+    const meta = EXPERT_STATUS[review.status];
+    if (!meta) return null; // not_reviewed / 未知 → 不顯示權威判定
+    const el = E('div', { class: 'notice ' + meta[1], style: 'margin:12px 0' },
+      E('div', {}, meta[0] + (review.reviewed_by ? '(' + review.reviewed_by + ')' : '')));
+    if (review.notes) el.append(E('div', { style: 'margin-top:6px;opacity:.85' }, review.notes));
+    return el;
+  }
+
   // Tab3 — 專家審閱(強制隔離:不出現 id / JSON / schema code / gap code)
   function paintExpert(body, c) {
     body.append(E('div', { class: 'ex-src' }, '原文:' + c.source_text));
+
+    const r = c.engineer_gate.result;
+    if (r === 'fail_schema' || r === 'fail_pattern' || r === 'fail_testability') {
+      // M1:形式被退回的提案不進入專家審查,也不顯示會誤導的「系統理解」(P5 gap 句)
+      body.append(E('div', { class: 'notice err', style: 'margin:14px 0' },
+        '此提案在工程師 gate 因形式問題被退回,依流程不進入專家審查——請先於「工程師 gate」分頁修正形式。'));
+      return;
+    }
+
+    const verdict = expertVerdict(c.expert_review);
+    if (verdict) body.append(verdict);
+
     body.append(E('div', { class: 'ex-understand' },
       E('div', { class: 'ex-h' }, '系統理解'),
       E('div', { class: 'ex-understand-txt' }, c.system_understanding.text)));
@@ -862,7 +890,28 @@ async function renderExpertDemo(host) {
     form.append(E('div', { class: 'ex-h', style: 'margin-top:14px' }, '備註'));
     notesInput.addEventListener('input', persist);
     form.append(notesInput);
-    form.append(E('div', { class: 'muted', style: 'font-size:11px;margin-top:8px' }, '選擇即存(本次瀏覽階段);此為 demo,不寫入資料庫。'));
+    const submitMsg = E('div', { class: 'muted', style: 'font-size:11px;margin-top:8px' },
+      '選擇即存本次瀏覽;按「送出審查」記錄為一筆 append-only 稽核(可追蹤)。');
+    const submitBtn = E('button', { class: 'btn', style: 'margin-top:10px' }, '送出審查');
+    submitBtn.addEventListener('click', async () => {
+      if (!decision) { submitMsg.textContent = '請先選擇一個審查結果。'; return; }
+      submitBtn.disabled = true; submitMsg.textContent = '記錄中…';
+      try {
+        const res = await api.post('/admin/expert-demo/reviews', {
+          case_id: c.id,
+          decision,
+          schema_gap_type: decision === 'cannot' ? (gap || null) : null,
+          notes: notesInput.value || null,
+        });
+        submitMsg.textContent = '已記錄稽核 ' + res.change_id;
+      } catch (err) {
+        submitMsg.textContent = '記錄失敗:' + err.message;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+    form.append(submitBtn);
+    form.append(submitMsg);
 
     function refreshRadios() {
       form.querySelectorAll('.ex-radio').forEach((el) => {
