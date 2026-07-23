@@ -113,9 +113,7 @@ def _assert_no_dangling_edges(result):
     node_ids = {n["id"] for n in result["nodes"]}
     assert node_ids  # expansion returned something
     dangling = [
-        e
-        for e in result["edges"]
-        if e["source"] not in node_ids or e["target"] not in node_ids
+        e for e in result["edges"] if e["source"] not in node_ids or e["target"] not in node_ids
     ]
     assert dangling == [], f"dangling edges: {dangling}; nodes: {node_ids}"
 
@@ -145,13 +143,11 @@ def test_fetch_neighbors_no_dangling_edges_when_limit_reached(wide_star_forward)
 
     assert len(node_ids) <= 3  # cap honored on the neighbor set
     dangling = [
-        e
-        for e in result["edges"]
-        if e["source"] not in valid_ids or e["target"] not in valid_ids
+        e for e in result["edges"] if e["source"] not in valid_ids or e["target"] not in valid_ids
     ]
     assert dangling == [], f"dangling edges: {dangling}; valid: {valid_ids}"
     # centre-incident edge retained for every returned neighbor
     for nid in node_ids:
-        assert any(
-            {e["source"], e["target"]} == {center_id, nid} for e in result["edges"]
-        ), f"missing centre edge to {nid}"
+        assert any({e["source"], e["target"]} == {center_id, nid} for e in result["edges"]), (
+            f"missing centre edge to {nid}"
+        )
