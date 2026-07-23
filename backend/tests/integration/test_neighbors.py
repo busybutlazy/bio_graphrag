@@ -1,6 +1,6 @@
 import pytest
 from app.core.config import settings
-from app.graph.cypher_templates import expand_from_seeds
+from app.graph.cypher_templates import expand_from_seeds, fetch_neighbors
 from app.main import app
 from fastapi.testclient import TestClient
 from neo4j import GraphDatabase
@@ -130,3 +130,28 @@ def test_bfs_no_dangling_edges_with_reversed_edge_direction(wide_star_reversed):
     result = expand_from_seeds(wide_star_reversed, ["test:star_a"], depth=2, node_limit=3)
     assert len(result["nodes"]) <= 3
     _assert_no_dangling_edges(result)
+
+
+def test_fetch_neighbors_no_dangling_edges_when_limit_reached(wide_star_forward):
+    """fetch_neighbors shares _bfs_expand but returns the centre separately, so
+    its valid-endpoint set is nodes ∪ {centre}. With 5 neighbors and limit=3 the
+    cap is hit; assert no edge escapes that set and every retained neighbor keeps
+    its centre-incident edge (exercises the `neighbor_id in visited` clause)."""
+    result = fetch_neighbors(wide_star_forward, "test:star_a", depth=1, limit=3)
+    assert result is not None
+    center_id = result["center_node"]["id"]
+    node_ids = {n["id"] for n in result["nodes"]}
+    valid_ids = node_ids | {center_id}
+
+    assert len(node_ids) <= 3  # cap honored on the neighbor set
+    dangling = [
+        e
+        for e in result["edges"]
+        if e["source"] not in valid_ids or e["target"] not in valid_ids
+    ]
+    assert dangling == [], f"dangling edges: {dangling}; valid: {valid_ids}"
+    # centre-incident edge retained for every returned neighbor
+    for nid in node_ids:
+        assert any(
+            {e["source"], e["target"]} == {center_id, nid} for e in result["edges"]
+        ), f"missing centre edge to {nid}"

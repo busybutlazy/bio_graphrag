@@ -13,7 +13,7 @@
 | # | Acceptance criterion | Implementation | Test / evidence | Result |
 |---|----------------------|----------------|-----------------|--------|
 | AC1 | No dangling edge from `expand_from_seeds` when node cap is hit | `_bfs_expand` gates edge insertion on neighbor retention (`cypher_templates.py:84-110`) | `test_bfs_never_returns_dangling_edges_when_node_limit_reached` — 5 neighbors, `node_limit=3` | Pass |
-| AC2 | `fetch_neighbors` behavior preserved (centre-incident edges kept) | `neighbor_id in visited` clause keeps centre (in `visited`, not `nodes`) | `test_neighbors_returns_local_subgraph`, `test_neighbors_returns_404_for_unknown_node` still pass | Pass |
+| AC2 | `fetch_neighbors` behavior preserved (centre-incident edges kept), incl. cap boundary | `neighbor_id in visited` clause keeps centre (in `visited`, not `nodes`) | `test_neighbors_returns_local_subgraph` (non-cap) + `test_fetch_neighbors_no_dangling_edges_when_limit_reached` (cap boundary, review L1) | Pass |
 | AC3 | No dangling edge regardless of stored direction | Gate keys on neighbor `b`, independent of `source`/`target` orientation | `test_bfs_no_dangling_edges_with_reversed_edge_direction` (edges stored `Ni -> A`) | Pass |
 | AC4 | New test fails before fix, passes after | — | Reverted-source run: 2 failed w/ concrete dangling edges; restored: 4 passed | Pass |
 | AC5 | `make test` passes modulo known flake | — | `1 failed, 126 passed`; sole failure is documented flake | Pass (as planned) |
@@ -48,6 +48,16 @@
 - Nothing skipped intentionally.
 - Nondeterminism: Neo4j record ordering is unspecified, but the invariant
   assertion is order-independent, so the tests are stable across runs.
+
+## Post-review addendum (L1)
+
+After independent review, one test was added for review finding L1:
+`test_fetch_neighbors_no_dangling_edges_when_limit_reached` — 5-neighbor centre,
+`limit=3`, asserts no edge escapes `nodes ∪ {centre}` and every retained neighbor
+keeps its centre-incident edge. Confirmed it **fails on pre-fix code** (dangling
+edges e.g. `test:star_a -DECREASES-> test:star_n4` beyond the cap) and **passes**
+with the fix. Full file now: `5 passed`. This closes the AC2 cap-boundary
+coverage gap the review flagged for `fetch_neighbors`.
 
 ## Conclusion
 

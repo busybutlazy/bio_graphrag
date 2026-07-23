@@ -1,7 +1,19 @@
 # Change Report: fix-dangling-edges-bfs
 
 - Plan revision executed: r1 (Approved, low risk, supervised-auto)
-- Status: implemented + verified; **uncommitted on `main`**, handed to review.
+- Status: implemented + verified + reviewed. **Committed** on branch
+  `fix/dangling-edges-bfs`:
+  - `87a91e1` — the fix, its two `expand_from_seeds` regression tests, and the
+    initial report artifacts (committed by human `jett` after the supervised-auto
+    run finished; the automation itself did not commit).
+  - Follow-up commit — the `fetch_neighbors` cap-boundary test (review finding
+    L1) plus this report reconciliation (review finding M1).
+- Governance-ordering note (M1): the plan set "Commit/push permission: No unless
+  separately approved after review," implying review-before-commit. In practice
+  the human committed `87a91e1` before independent review and then requested the
+  review; the review ran against that commit. This ordering was the human's
+  explicit decision, not an automation overstep — the supervised-auto flow
+  stopped before committing, as designed.
 
 ## What was completed
 
@@ -35,9 +47,11 @@ is correct whether the neighbor appears as the edge `source` or `target`.
 ## Files changed
 
 - `backend/app/graph/cypher_templates.py` (+25/−6): `_bfs_expand` edge gating.
-- `backend/tests/integration/test_neighbors.py` (+86): two regression tests
-  (`node_limit`-reached and reversed-edge-direction), supporting fixtures, and
-  the `expand_from_seeds` import.
+- `backend/tests/integration/test_neighbors.py`: three regression tests —
+  `node_limit`-reached and reversed-edge-direction for `expand_from_seeds`, plus
+  `test_fetch_neighbors_no_dangling_edges_when_limit_reached` (L1) covering the
+  `fetch_neighbors` cap boundary (valid endpoint set `nodes ∪ {centre}`,
+  centre-incident edges retained) — supporting fixtures and imports.
 
 ## Contract / dependency / migration impact
 
@@ -49,12 +63,22 @@ is correct whether the neighbor appears as the edge `source` or `target`.
 
 ## Verification summary
 
-- New tests fail on pre-fix code (2 failed, concrete dangling edges shown) and
-  pass after (4 passed in the file).
-- `make test` → 1 failed, 126 passed. The single failure is the documented
-  pre-existing flake `test_pipeline_run_is_idempotent` (non-pristine Postgres
-  volume), unrelated to this change.
+- All three regression tests fail on pre-fix code (concrete dangling edges shown,
+  including the `fetch_neighbors` case `test:star_a -> test:star_n4`) and pass
+  after (5 passed in the file).
+- `make test` → 1 failed, 126 passed (initial run, before the L1 test). The single
+  failure is the documented pre-existing flake `test_pipeline_run_is_idempotent`
+  (non-pristine Postgres volume), unrelated to this change.
 - Full detail in `VERIFICATION_REPORT.md` and `TASK_LOG.md`.
+
+## Independent review outcome
+
+- `REVIEW_REPORT.md`: core correctness claim **CONFIRMED**; no Blocking/High
+  findings. Two dispositions actioned by human decision:
+  - **M1** (reports misstated committed state) → reconciled in this report.
+  - **L1** (`fetch_neighbors` cap boundary untested) → regression test added.
+  - **S1** (nondeterministic survivor selection above the cap) → accepted as
+    pre-existing residual behavior; out of scope.
 
 ## Deviations / limitations
 
@@ -62,6 +86,8 @@ is correct whether the neighbor appears as the edge `source` or `target`.
   `backend/tests` is not volume-mounted (only `backend/app` is). Within the
   approved container entrypoint; no extra source paths touched.
 - The pre-existing idempotency flake remains and is out of scope.
+- S1 (nondeterministic survivor selection above `MAX_RETURNED_NODES`) is accepted
+  residual behavior, unchanged by this fix.
 
 ## Not completed / not verified
 
@@ -70,8 +96,8 @@ is correct whether the neighbor appears as the edge `source` or `target`.
 
 ## Remaining work
 
-- Independent review (`review-change`), then human decision on commit. This flow
-  did not commit, push, merge, or deploy.
+- None required by this change. Optional next step: push the branch and open a PR
+  if the change is to be merged (not yet done).
 
 ## Rollback
 
