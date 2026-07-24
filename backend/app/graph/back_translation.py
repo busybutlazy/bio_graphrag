@@ -129,10 +129,22 @@ def render_understanding(proposal: dict, ctx: dict | None = None) -> dict:
                 f"{hormone}會造成一個調控效果:使{variable}{direction}。",
             )
 
-    # --- P5 schema gap: no pattern matched -------------------------------
-    return {
-        "pattern": "P5",
-        "rule_id": "schema_gap",
-        "is_gap": True,
-        "text": "系統目前無法用既有的知識結構完整表達此現象。",
-    }
+    # --- no positive pattern matched (D5) --------------------------------
+    # A genuine schema gap is flagged explicitly; only then do we say "cannot express".
+    if proposal.get("possible_schema_gap"):
+        return {
+            "pattern": "P5",
+            "rule_id": "schema_gap",
+            "is_gap": True,
+            "text": "系統目前無法用既有的知識結構完整表達此現象。",
+        }
+    # Otherwise the proposal is schema-valid but not a known regulatory pattern — a plain,
+    # NON-gap summary. Labels only (no types/ids/codes) so Tab3 isolation holds; the concept
+    # map carries the structure.
+    names = "、".join(lbl(n["id"]) for n in nodes)
+    text = (
+        f"本提案描述了{names}等概念及其關係,但不屬於任何已知的調控模式;請就內容本身審查。"
+        if nodes
+        else "本提案沒有可呈現的內容。"
+    )
+    return {"pattern": "P0", "rule_id": "plain_summary", "is_gap": False, "text": text}

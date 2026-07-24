@@ -14,11 +14,15 @@ from app.core.config import settings
 from app.curation import service
 from neo4j import GraphDatabase
 
+from ingestion.pipeline.load_postgres import stage_demo_review_group
+
 GROUP_OK = "group:test_t2_ok"
 GROUP_REJ = "group:test_t2_rej"
 GROUP_BAD = "group:test_t2_gatefail"
 GROUP_ACT = "group:test_t2_badaction"
-_ALL_GROUPS = [GROUP_OK, GROUP_REJ, GROUP_BAD, GROUP_ACT]
+GROUP_GAP = "group:test_t2_gap"
+GROUP_PLAIN = "group:test_t2_plain"
+_ALL_GROUPS = [GROUP_OK, GROUP_REJ, GROUP_BAD, GROUP_ACT, GROUP_GAP, GROUP_PLAIN]
 
 _NODES = [
     {
@@ -311,6 +315,77 @@ def test_approve_group_rolls_back_postgres_on_neo4j_failure(monkeypatch):
     statuses = asyncio.run(_item_statuses(GROUP_OK))
     assert statuses and all(s == "proposed" for s in statuses)
     assert asyncio.run(_latest_action(GROUP_OK)) is None
+
+
+async def _stage_demo(group_id, candidate, gap=False):
+    conn = await _conn()
+    try:
+        await stage_demo_review_group(conn, group_id, candidate, possible_schema_gap=gap)
+    finally:
+        await conn.close()
+
+
+def test_seeded_gap_flag_flows_to_gate_and_lens():
+    """D5 threading: a flagged group renders a gap and the gate says needs_schema_extension."""
+    candidate = {
+        "nodes": [
+            {
+                "id": "hormone:test_gap_a",
+                "type": "Hormone",
+                "label": "A",
+                "description": "d",
+                "source_chunk_id": "c",
+            },
+            {
+                "id": "hormone:test_gap_b",
+                "type": "Hormone",
+                "label": "B",
+                "description": "d",
+                "source_chunk_id": "c",
+            },
+        ],
+        "edges": [],
+    }
+    asyncio.run(_stage_demo(GROUP_GAP, candidate, gap=True))
+    g = next(x for x in asyncio.run(service.list_groups()) if x["group_id"] == GROUP_GAP)
+    assert g["understanding"]["is_gap"] is True
+    assert g["schema_gate"]["result"] == "needs_schema_extension"
+
+
+def test_seeded_unflagged_no_pattern_is_plain_summary_and_passes_gate():
+    """D5 threading: an unflagged schema-valid non-pattern group is a plain summary, gate pass."""
+    candidate = {
+        "nodes": [
+            {
+                "id": "disease:test_plain",
+                "type": "Disease",
+                "label": "測試疾病",
+                "description": "d",
+                "source_chunk_id": "c",
+            },
+            {
+                "id": "structure:test_plain_organ",
+                "type": "Structure",
+                "label": "測試器官",
+                "description": "d",
+                "source_chunk_id": "c",
+            },
+        ],
+        "edges": [
+            {
+                "id": "e:test_plain",
+                "type": "PART_OF",
+                "source": "structure:test_plain_organ",
+                "target": "disease:test_plain",
+                "source_chunk_id": "c",
+            },
+        ],
+    }
+    asyncio.run(_stage_demo(GROUP_PLAIN, candidate, gap=False))
+    g = next(x for x in asyncio.run(service.list_groups()) if x["group_id"] == GROUP_PLAIN)
+    assert g["understanding"]["is_gap"] is False
+    assert "無法" not in g["understanding"]["text"]
+    assert g["schema_gate"]["result"] == "pass"
 
 
 def test_approve_audit_records_full_payloads():

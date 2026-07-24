@@ -130,12 +130,16 @@ def evaluate(proposal: dict) -> dict:
         "needs_schema_extension",
     )
 
-    # 7. testability(已知 pattern → 可導最小斷言)
-    testable = not rendered["is_gap"]
+    # 7. testability(可導最小斷言)。只有「非 gap」**且**三段式/Interaction 完整
+    #    (pattern_detail is None)才可導斷言。一個不完整的 pattern(pattern_detail 有值)
+    #    即使 renderer 產出白話摘要,也導不出斷言 —— 否則會與 pattern_validation 自相矛盾。
+    testable = not rendered["is_gap"] and pattern_detail is None
     add(
         "testability",
         testable,
-        "可導出最小斷言" if testable else "無 pattern,不導斷言",
+        "可導出最小斷言"
+        if testable
+        else ("pattern 不完整,不導斷言" if pattern_detail else "無 pattern,不導斷言"),
         "fail_testability",
     )
 

@@ -281,6 +281,13 @@ async def list_groups() -> list[dict]:
         grouped.setdefault(row["group_id"], []).append(row)
 
     proposals = {gid: _proposal_from_items(items) for gid, items in grouped.items()}
+    # D5: a group is a genuine schema gap only if explicitly flagged (stashed in schema_check
+    # by the seeder / proposer). Surface it on the proposal so the renderer + gate can branch.
+    for gid, items in grouped.items():
+        if any(
+            (_load_json(it["schema_check"]) or {}).get("group_possible_schema_gap") for it in items
+        ):
+            proposals[gid]["possible_schema_gap"] = True
     # cross-group ctx so references_existing labels resolve in the expert lens
     ctx = build_context([{"proposal": p} for p in proposals.values()])
 

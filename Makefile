@@ -22,6 +22,9 @@ health:
 seed:
 	docker compose run --rm backend python -m ingestion.pipeline.run
 
+demo-reset:  ## undo demo review-group approvals; return them to the review queue
+	docker compose run --rm backend python -m scripts.reset_demo_review
+
 seed-sample: seed  ## alias kept for backward compat
 
 # Export current DB state (approved nodes/edges + all chunks) to data/seed/.

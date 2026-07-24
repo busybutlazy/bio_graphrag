@@ -1055,7 +1055,17 @@ async function renderReview(host) {
   }
 
   // 專家審閱 tab (meaning; no id / JSON / schema code — isolation)
+  // Deliberate divergence from the (P4-retired) expert-demo screen: instead of hiding the
+  // understanding for a gate-failed proposal, we show the honest (non-gap, post-D5) summary
+  // with a banner + disabled 核准, so the reviewer sees what was proposed and why it's blocked.
   function paintExpert(body, g) {
+    const res = g.schema_gate.result;
+    if (res !== 'pass') {
+      body.append(E('div', { class: 'notice', style: 'margin:0 0 12px' },
+        res === 'needs_schema_extension'
+          ? '此提案為 schema gap(現行知識結構無法完整表達);以下為系統摘要,只能退回或記為 gap。'
+          : '此提案未通過 Schema gate(形式問題);以下為系統摘要,只能退回修正,無法核准。'));
+    }
     body.append(E('div', { class: 'ex-understand' },
       E('div', { class: 'ex-h' }, '系統理解'),
       E('div', { class: 'ex-understand-txt' }, g.understanding.text)));
