@@ -200,6 +200,24 @@ class DeleteEdgeRequest(BaseModel):
 
 副作用同上,`target_type = edge`。
 
+### `GET /admin/review/groups`
+
+統一兩道 gate 的 review 出口(admin key 保護)。回傳每個**提案群組**(共用 `group_id` 的 `curation_items` = 一個生物陳述的 nodes+edges)一筆,附上**當場計算**的:
+
+- `proposal`:`{proposed_nodes, proposed_edges}`(由群組成員組裝,已去除 curation 內部 `status` 欄位)。
+- `schema_gate`:`engineer_gate.evaluate` 的形式判定(`{result, checks[]}`)。
+- `understanding`:`back_translation` 的白話「系統理解」(`{pattern, is_gap, text}`)。
+
+只列 `status='proposed'` 的群組;唯讀。
+
+### `POST /admin/review/groups/{group_id}/approve`
+
+以一次交易核准整個群組:把所有成員 node/edge 寫入 Neo4j 為 `approved`、翻各 item 狀態、`graph_change_logs` 追加一列(`action='approve'`、`target_type='proposal_group'`、`target_id=group_id`)。Request `{reviewer, reason?}`。回傳 `{group_id, status:'approved', nodes, edges}`。未知群組 → 404;無 proposed 成員 → 409。
+
+### `POST /admin/review/groups/{group_id}/reject`
+
+翻整個群組為 `rejected`,**不寫 Neo4j**,`graph_change_logs` 追加 `action='reject'` 一列。Request/錯誤碼同上,回傳 `{group_id, status:'rejected'}`。
+
 ### `GET /admin/expert-demo/cases`
 
 Expert-in-the-loop governance demo 的**唯讀**資料出口(admin key 保護,同其他 `/admin/*`)。回傳 `data/sample/expert_demo/cases.json` 的固定 demo 案例;每筆額外附上**當場計算、不落地**的兩個欄位:

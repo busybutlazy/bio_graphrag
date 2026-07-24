@@ -14,6 +14,7 @@ from app.api.routes_ingest import router as ingest_router
 from app.api.routes_library import router as library_router
 from app.api.routes_nodes import router as nodes_router
 from app.api.routes_query import router as query_router
+from app.api.routes_review import router as review_router
 from app.db.pool import connection as db_connection
 from ingestion.pipeline.load_postgres import ensure_schema
 
@@ -60,6 +61,7 @@ app.include_router(nodes_router)
 app.include_router(query_router)
 app.include_router(library_router)
 app.include_router(curation_router)
+app.include_router(review_router)
 app.include_router(eval_router)
 app.include_router(ingest_router)
 app.include_router(expert_demo_router)

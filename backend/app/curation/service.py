@@ -6,6 +6,8 @@ import asyncpg
 
 from app.db.neo4j_driver import get_driver
 from app.db.pool import connection
+from app.graph.back_translation import build_context, render_understanding
+from app.graph.engineer_gate import evaluate as evaluate_schema_gate
 from ingestion.pipeline import load_neo4j
 from ingestion.pipeline.normalize_concepts import (
     VALID_NODE_TYPES,
@@ -205,6 +207,139 @@ async def reject_item(item_id: str, reviewer: str, reason: str | None) -> dict:
             curation_item_id=row["id"],
         )
         return {"item_id": item_id, "status": "rejected"}
+
+
+# --- Group-level review (unified two-gate: schema gate + expert gate) -----------------
+# A "proposal group" is the set of curation_items sharing a group_id — the nodes+edges of
+# one biological statement, reviewed as one unit. Its shape matches what engineer_gate and
+# back_translation already expect. See changes/unified-two-gate-review/.
+
+
+def _proposal_from_items(items: list) -> dict:
+    """Assemble grouped curation_items into an extraction-shaped proposal.
+
+    Strips the curation-internal ``status`` key so payloads validate against
+    ``extraction_output_schema`` (additionalProperties: false).
+    """
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    for it in items:
+        payload = {k: v for k, v in _load_json(it["payload"]).items() if k != "status"}
+        (nodes if it["item_type"] == "node" else edges).append(payload)
+    return {"proposed_nodes": nodes, "proposed_edges": edges}
+
+
+async def list_groups() -> list[dict]:
+    """List proposed proposal-groups with a live schema gate + expert-lens understanding."""
+    async with connection() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM curation_items "
+            "WHERE group_id IS NOT NULL AND status = 'proposed' "
+            "ORDER BY group_id, created_at"
+        )
+    grouped: dict[str, list] = {}
+    for row in rows:
+        grouped.setdefault(row["group_id"], []).append(row)
+
+    proposals = {gid: _proposal_from_items(items) for gid, items in grouped.items()}
+    # cross-group ctx so references_existing labels resolve in the expert lens
+    ctx = build_context([{"proposal": p} for p in proposals.values()])
+
+    return [
+        {
+            "group_id": gid,
+            "proposed_by": items[0]["proposed_by"],
+            "item_ids": [it["item_id"] for it in items],
+            "proposal": proposals[gid],
+            "schema_gate": evaluate_schema_gate(proposals[gid]),
+            "understanding": render_understanding(proposals[gid], ctx),
+        }
+        for gid, items in grouped.items()
+    ]
+
+
+async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dict:
+    """Approve every proposed item in a group.
+
+    Writes all member nodes/edges to Neo4j as ``approved``, flips the items, and appends
+    ONE audit row. The Postgres side (item flips + audit) is transactional; the Neo4j
+    writes are idempotent MERGEs and happen inside the same block so a failure aborts the
+    Postgres commit.
+    """
+    async with connection() as conn:
+        rows = await conn.fetch("SELECT * FROM curation_items WHERE group_id = $1", group_id)
+        if not rows:
+            raise CurationError(404, f"review group {group_id} not found")
+        proposed = [r for r in rows if r["status"] == "proposed"]
+        if not proposed:
+            raise CurationError(409, f"review group {group_id} has no proposed items")
+
+        node_payloads: list[dict] = []
+        edge_payloads: list[dict] = []
+        for r in proposed:
+            payload = _load_json(r["payload"])
+            payload["status"] = "approved"
+            (node_payloads if r["item_type"] == "node" else edge_payloads).append(payload)
+
+        driver = get_driver()
+        async with conn.transaction():
+            if node_payloads:
+                await anyio.to_thread.run_sync(load_neo4j.write_nodes, driver, node_payloads)
+            if edge_payloads:
+                await anyio.to_thread.run_sync(load_neo4j.write_edges, driver, edge_payloads)
+            await conn.execute(
+                "UPDATE curation_items SET status = 'approved', reviewed_by = $2, "
+                "reason = $3, reviewed_at = now() WHERE group_id = $1 AND status = 'proposed'",
+                group_id,
+                reviewer,
+                reason,
+            )
+            await _log_change(
+                conn,
+                action="approve",
+                target_type="proposal_group",
+                target_id=group_id,
+                actor=reviewer,
+                reason=reason,
+                after_state={
+                    "nodes": [n["id"] for n in node_payloads],
+                    "edges": [e["id"] for e in edge_payloads],
+                },
+            )
+        return {
+            "group_id": group_id,
+            "status": "approved",
+            "nodes": len(node_payloads),
+            "edges": len(edge_payloads),
+        }
+
+
+async def reject_group(group_id: str, reviewer: str, reason: str | None) -> dict:
+    """Reject every proposed item in a group; writes nothing to Neo4j, appends one audit row."""
+    async with connection() as conn:
+        rows = await conn.fetch("SELECT * FROM curation_items WHERE group_id = $1", group_id)
+        if not rows:
+            raise CurationError(404, f"review group {group_id} not found")
+        proposed = [r for r in rows if r["status"] == "proposed"]
+        if not proposed:
+            raise CurationError(409, f"review group {group_id} has no proposed items")
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE curation_items SET status = 'rejected', reviewed_by = $2, "
+                "reason = $3, reviewed_at = now() WHERE group_id = $1 AND status = 'proposed'",
+                group_id,
+                reviewer,
+                reason,
+            )
+            await _log_change(
+                conn,
+                action="reject",
+                target_type="proposal_group",
+                target_id=group_id,
+                actor=reviewer,
+                reason=reason,
+            )
+        return {"group_id": group_id, "status": "rejected"}
 
 
 def _merge_nodes_in_neo4j(source_id: str, target_id: str) -> None:

@@ -4,7 +4,7 @@ from pathlib import Path
 import asyncpg
 import jsonschema
 
-from ingestion.pipeline import schema_checker, validate_extraction
+from ingestion.pipeline import parse_source, schema_checker, validate_extraction
 
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
 
@@ -12,10 +12,17 @@ _MIGRATION_ADD_SCHEMA_CHECK = """
 ALTER TABLE curation_items ADD COLUMN IF NOT EXISTS schema_check JSONB;
 """
 
+# Groups per-element curation_items into one reviewable proposal (statement).
+# NULL = legacy ungrouped item; backward-compatible.
+_MIGRATION_ADD_GROUP_ID = """
+ALTER TABLE curation_items ADD COLUMN IF NOT EXISTS group_id TEXT;
+"""
+
 
 async def ensure_schema(conn: asyncpg.Connection) -> None:
     await conn.execute(SCHEMA_SQL)
     await conn.execute(_MIGRATION_ADD_SCHEMA_CHECK)
+    await conn.execute(_MIGRATION_ADD_GROUP_ID)
 
 
 async def upsert_documents(conn: asyncpg.Connection, documents: list[dict]) -> None:
@@ -144,3 +151,68 @@ async def stage_extraction_output(
         )
         staged_edges += row is not None
     return True, None, staged_nodes, staged_edges
+
+
+_EXPERT_DEMO_CASES = parse_source.DATA_DIR / "expert_demo" / "cases.json"
+
+
+async def stage_demo_review_group(
+    conn: asyncpg.Connection, group_id: str, candidate: dict
+) -> tuple[int, int]:
+    """Stage one demo proposal group (nodes+edges of a statement) as proposed curation_items.
+
+    All items share ``group_id`` (so the Review page assembles them into one reviewable
+    statement), each carries its own ``schema_check``, and item_ids are group-scoped so the
+    demo seed never collides with the extraction path. Idempotent (``ON CONFLICT DO NOTHING``).
+    """
+    staged_nodes = 0
+    for node in candidate.get("nodes", []):
+        row = await conn.fetchrow(
+            """
+            INSERT INTO curation_items
+                (item_id, item_type, action, payload, status, proposed_by, schema_check, group_id)
+            VALUES ($1, 'node', 'create', $2, 'proposed', 'demo', $3, $4)
+            ON CONFLICT (item_id) DO NOTHING
+            RETURNING item_id
+            """,
+            f"curation:{group_id}:{node['id']}",
+            json.dumps(node),
+            json.dumps(schema_checker.check_node(node)),
+            group_id,
+        )
+        staged_nodes += row is not None
+    staged_edges = 0
+    for edge in candidate.get("edges", []):
+        row = await conn.fetchrow(
+            """
+            INSERT INTO curation_items
+                (item_id, item_type, action, payload, status, proposed_by, schema_check, group_id)
+            VALUES ($1, 'edge', 'create', $2, 'proposed', 'demo', $3, $4)
+            ON CONFLICT (item_id) DO NOTHING
+            RETURNING item_id
+            """,
+            f"curation:{group_id}:{edge['id']}",
+            json.dumps(edge),
+            json.dumps(schema_checker.check_edge(edge)),
+            group_id,
+        )
+        staged_edges += row is not None
+    return staged_nodes, staged_edges
+
+
+async def stage_demo_review_groups(conn: asyncpg.Connection, case_ids: list[str]) -> dict:
+    """Seed selected expert-demo cases as proposed review groups (one group per case)."""
+    cases = {c["id"]: c for c in json.loads(_EXPERT_DEMO_CASES.read_text(encoding="utf-8"))}
+    staged: dict = {}
+    for cid in case_ids:
+        case = cases.get(cid)
+        if case is None:
+            continue
+        proposal = case.get("proposal", {})
+        candidate = {
+            "nodes": proposal.get("proposed_nodes", []),
+            "edges": proposal.get("proposed_edges", []),
+        }
+        n, e = await stage_demo_review_group(conn, f"group:{cid}", candidate)
+        staged[cid] = {"nodes": n, "edges": e}
+    return staged
