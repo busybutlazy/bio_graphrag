@@ -16,6 +16,9 @@ from neo4j import GraphDatabase
 
 GROUP_OK = "group:test_t2_ok"
 GROUP_REJ = "group:test_t2_rej"
+GROUP_BAD = "group:test_t2_gatefail"
+GROUP_ACT = "group:test_t2_badaction"
+_ALL_GROUPS = [GROUP_OK, GROUP_REJ, GROUP_BAD, GROUP_ACT]
 
 _NODES = [
     {
@@ -102,12 +105,8 @@ async def _seed_group(group_id: str) -> None:
 async def _cleanup() -> None:
     conn = await _conn()
     try:
-        await conn.execute(
-            "DELETE FROM curation_items WHERE group_id = ANY($1)", [GROUP_OK, GROUP_REJ]
-        )
-        await conn.execute(
-            "DELETE FROM graph_change_logs WHERE target_id = ANY($1)", [GROUP_OK, GROUP_REJ]
-        )
+        await conn.execute("DELETE FROM curation_items WHERE group_id = ANY($1)", _ALL_GROUPS)
+        await conn.execute("DELETE FROM graph_change_logs WHERE target_id = ANY($1)", _ALL_GROUPS)
     finally:
         await conn.close()
     driver = GraphDatabase.driver(
@@ -135,6 +134,19 @@ def _neo4j_node_status(node_id: str):
         rec = s.run("MATCH (n {id:$id}) RETURN n.status AS status", id=node_id).single()
     driver.close()
     return rec["status"] if rec else None
+
+
+async def _latest_after_state(target_id: str):
+    conn = await _conn()
+    try:
+        row = await conn.fetchrow(
+            "SELECT after_state FROM graph_change_logs WHERE target_id=$1 "
+            "ORDER BY created_at DESC LIMIT 1",
+            target_id,
+        )
+        return row["after_state"] if row else None
+    finally:
+        await conn.close()
 
 
 async def _latest_action(target_id: str):
@@ -185,8 +197,92 @@ def test_reject_group_writes_nothing_and_audits():
 
 
 def test_missing_group_404():
-    import pytest as _pytest
-
-    with _pytest.raises(service.CurationError) as exc:
+    with pytest.raises(service.CurationError) as exc:
         asyncio.run(service.approve_group("group:nonexistent", "r", None))
     assert exc.value.status_code == 404
+
+
+# --- guards added after review (B1 collision, H2 enforcing gate, L2 action, M3 409) -----
+
+
+async def _insert_item(group_id, item, kind, action="create"):
+    conn = await _conn()
+    try:
+        await conn.execute(
+            "INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by, group_id) "
+            "VALUES ($1,$2,$3,$4,'proposed','test',$5) ON CONFLICT (item_id) DO NOTHING",
+            f"curation:{group_id}:{item['id']}",
+            kind,
+            action,
+            json.dumps({**item, "status": "proposed"}),
+            group_id,
+        )
+    finally:
+        await conn.close()
+
+
+def _write_approved_node(node_id: str) -> None:
+    d = GraphDatabase.driver(
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+    )
+    with d.session() as s:
+        s.run(
+            "MERGE (n:Hormone {id:$id}) SET n.label='pre-existing', n.status='approved'",
+            id=node_id,
+        )
+    d.close()
+
+
+def test_approve_refuses_when_a_member_already_exists_approved():
+    """B1: approving must never MERGE-overwrite curated knowledge."""
+    _write_approved_node("hormone:t2_insulin")
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+    assert exc.value.status_code == 409
+    assert "already exist" in exc.value.message
+    # and the pre-existing node was left untouched
+    assert _neo4j_node_status("hormone:t2_insulin") == "approved"
+
+
+def test_approve_refuses_when_schema_gate_fails():
+    """H2: the Schema gate is enforcing — a malformed group cannot reach the graph."""
+    # RegulatoryEffect with HAS_EFFECT but no ON_VARIABLE / direction edge -> fail_pattern
+    asyncio.run(_insert_item(GROUP_BAD, _NODES[0], "node"))
+    asyncio.run(_insert_item(GROUP_BAD, _NODES[2], "node"))
+    asyncio.run(_insert_item(GROUP_BAD, _EDGES[0], "edge"))
+
+    groups = {g["group_id"]: g for g in asyncio.run(service.list_groups())}
+    assert groups[GROUP_BAD]["schema_gate"]["result"] == "fail_pattern"
+
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.approve_group(GROUP_BAD, "test_reviewer", None))
+    assert exc.value.status_code == 409
+    assert "schema gate" in exc.value.message
+    # nothing written
+    assert _neo4j_node_status("hormone:t2_insulin") is None
+
+
+def test_approve_refuses_non_create_action():
+    """L2: the group path only implements 'create'."""
+    asyncio.run(_insert_item(GROUP_ACT, _NODES[0], "node", action="delete"))
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.approve_group(GROUP_ACT, "test_reviewer", None))
+    assert exc.value.status_code == 422
+
+
+def test_double_approve_is_409():
+    """M3: no proposed items left -> 409."""
+    asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+    assert exc.value.status_code == 409
+
+
+def test_approve_audit_records_full_payloads():
+    """M1: the audit row must reconstruct what entered the graph, not just ids."""
+    asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", "ok"))
+    after = asyncio.run(_latest_after_state(GROUP_OK))
+    after = json.loads(after) if isinstance(after, str) else after
+    assert len(after["nodes"]) == 3 and len(after["edges"]) == 3
+    assert after["nodes"][0]["label"]  # full payloads, not bare ids
+    assert after["item_ids"]

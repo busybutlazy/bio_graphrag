@@ -151,9 +151,29 @@ def test_reject_endpoint():
         asyncio.run(_cleanup())
 
 
-def test_unknown_group_404():
+def test_unknown_group_404_uses_error_contract():
     resp = client.post(
         "/admin/review/groups/group:does_not_exist/approve",
         json={"reviewer": "tester"},
     )
     assert resp.status_code == 404
+    # documented contract: {"error": {"code", "message"}}
+    body = resp.json()
+    assert body["error"]["code"] == "not_found"
+    assert "not found" in body["error"]["message"]
+
+
+def test_double_approve_409_uses_error_contract():
+    _reseed()
+    try:
+        assert (
+            client.post(
+                f"/admin/review/groups/{G_OK}/approve", json={"reviewer": "tester"}
+            ).status_code
+            == 200
+        )
+        resp = client.post(f"/admin/review/groups/{G_OK}/approve", json={"reviewer": "tester"})
+        assert resp.status_code == 409
+        assert resp.json()["error"]["code"] == "conflict"
+    finally:
+        asyncio.run(_cleanup())

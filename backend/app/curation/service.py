@@ -229,6 +229,45 @@ def _proposal_from_items(items: list) -> dict:
     return {"proposed_nodes": nodes, "proposed_edges": edges}
 
 
+def _existing_approved_ids(driver, node_ids: list[str], edge_ids: list[str]) -> dict:
+    """Which of these ids already exist in the **approved** graph? (sync — run in a thread)"""
+    found: dict[str, list[str]] = {"nodes": [], "edges": []}
+    with driver.session() as session:
+        if node_ids:
+            found["nodes"] = [
+                r["id"]
+                for r in session.run(
+                    "MATCH (n) WHERE n.id IN $ids AND n.status = 'approved' RETURN n.id AS id",
+                    ids=node_ids,
+                )
+            ]
+        if edge_ids:
+            found["edges"] = [
+                r["id"]
+                for r in session.run(
+                    "MATCH ()-[r]->() WHERE r.id IN $ids AND r.status = 'approved' RETURN r.id AS id",
+                    ids=edge_ids,
+                )
+            ]
+    return found
+
+
+def _approved_labels(driver, node_ids: list[str]) -> dict:
+    """Labels of approved nodes, so the expert lens names referenced concepts properly."""
+    if not node_ids:
+        return {}
+    with driver.session() as session:
+        return {
+            r["id"]: r["label"]
+            for r in session.run(
+                "MATCH (n) WHERE n.id IN $ids AND n.status = 'approved' "
+                "RETURN n.id AS id, n.label AS label",
+                ids=node_ids,
+            )
+            if r["label"]
+        }
+
+
 async def list_groups() -> list[dict]:
     """List proposed proposal-groups with a live schema gate + expert-lens understanding."""
     async with connection() as conn:
@@ -244,6 +283,21 @@ async def list_groups() -> list[dict]:
     proposals = {gid: _proposal_from_items(items) for gid, items in grouped.items()}
     # cross-group ctx so references_existing labels resolve in the expert lens
     ctx = build_context([{"proposal": p} for p in proposals.values()])
+
+    # An edge may attach to a node that already lives in the approved graph (referenced,
+    # not proposed). Resolve those labels too, else the lens shows a humanized id.
+    proposed_ids = {n["id"] for p in proposals.values() for n in p["proposed_nodes"]}
+    referenced = {
+        endpoint
+        for p in proposals.values()
+        for e in p["proposed_edges"]
+        for endpoint in (e.get("source"), e.get("target"))
+        if endpoint and endpoint not in proposed_ids
+    }
+    if referenced:
+        extra = await anyio.to_thread.run_sync(_approved_labels, get_driver(), sorted(referenced))
+        for nid, label in extra.items():
+            ctx["labels"].setdefault(nid, label)
 
     return [
         {
@@ -261,28 +315,69 @@ async def list_groups() -> list[dict]:
 async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dict:
     """Approve every proposed item in a group.
 
-    Writes all member nodes/edges to Neo4j as ``approved``, flips the items, and appends
-    ONE audit row. The Postgres side (item flips + audit) is transactional; the Neo4j
-    writes are idempotent MERGEs and happen inside the same block so a failure aborts the
-    Postgres commit.
+    Guards, in order — a group only reaches the graph if all pass:
+
+    1. group exists (404) and still has proposed items (409);
+    2. every member is an ``action='create'`` (the only verb this path implements);
+    3. the **Schema gate is enforcing** — ``result != 'pass'`` is refused (409). An audited
+       engineer override may be added later; today a failing form never reaches the graph;
+    4. no member id already exists in the **approved** graph (409) — approving would
+       MERGE-overwrite curated knowledge, which must be an explicit update decision instead.
+
+    Row selection is ``FOR UPDATE`` inside the transaction so two concurrent approvals
+    cannot both observe ``proposed``. Neo4j writes happen inside the same block, so a
+    failure aborts the Postgres commit; the writes themselves are idempotent MERGEs.
     """
     async with connection() as conn:
-        rows = await conn.fetch("SELECT * FROM curation_items WHERE group_id = $1", group_id)
-        if not rows:
-            raise CurationError(404, f"review group {group_id} not found")
-        proposed = [r for r in rows if r["status"] == "proposed"]
-        if not proposed:
-            raise CurationError(409, f"review group {group_id} has no proposed items")
-
-        node_payloads: list[dict] = []
-        edge_payloads: list[dict] = []
-        for r in proposed:
-            payload = _load_json(r["payload"])
-            payload["status"] = "approved"
-            (node_payloads if r["item_type"] == "node" else edge_payloads).append(payload)
-
-        driver = get_driver()
         async with conn.transaction():
+            rows = await conn.fetch(
+                "SELECT * FROM curation_items WHERE group_id = $1 FOR UPDATE", group_id
+            )
+            if not rows:
+                raise CurationError(404, f"review group {group_id} not found")
+            proposed = [r for r in rows if r["status"] == "proposed"]
+            if not proposed:
+                raise CurationError(409, f"review group {group_id} has no proposed items")
+
+            bad_actions = sorted({r["action"] for r in proposed if r["action"] != "create"})
+            if bad_actions:
+                raise CurationError(
+                    422,
+                    f"group approval supports action 'create' only; got {bad_actions}",
+                )
+
+            proposal = _proposal_from_items(proposed)
+            gate = evaluate_schema_gate(proposal)
+            if gate["result"] != "pass":
+                raise CurationError(
+                    409,
+                    f"schema gate did not pass ({gate['result']}); "
+                    f"group {group_id} cannot be approved",
+                )
+
+            node_payloads: list[dict] = []
+            edge_payloads: list[dict] = []
+            for r in proposed:
+                payload = _load_json(r["payload"])
+                payload["status"] = "approved"
+                (node_payloads if r["item_type"] == "node" else edge_payloads).append(payload)
+
+            driver = get_driver()
+            existing = await anyio.to_thread.run_sync(
+                _existing_approved_ids,
+                driver,
+                [n["id"] for n in node_payloads],
+                [e["id"] for e in edge_payloads],
+            )
+            clashes = existing["nodes"] + existing["edges"]
+            if clashes:
+                raise CurationError(
+                    409,
+                    f"group {group_id} has members that already exist in the approved graph "
+                    f"({', '.join(clashes)}); approving would overwrite curated knowledge — "
+                    "resolve as an explicit update instead",
+                )
+
             if node_payloads:
                 await anyio.to_thread.run_sync(load_neo4j.write_nodes, driver, node_payloads)
             if edge_payloads:
@@ -301,9 +396,13 @@ async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dic
                 target_id=group_id,
                 actor=reviewer,
                 reason=reason,
+                # Audit the full delta, not just ids: the log must be able to reconstruct
+                # exactly what entered the graph.
+                before_state={"members_existed_in_graph": [], "schema_gate": gate["result"]},
                 after_state={
-                    "nodes": [n["id"] for n in node_payloads],
-                    "edges": [e["id"] for e in edge_payloads],
+                    "item_ids": [r["item_id"] for r in proposed],
+                    "nodes": node_payloads,
+                    "edges": edge_payloads,
                 },
             )
         return {
@@ -315,15 +414,21 @@ async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dic
 
 
 async def reject_group(group_id: str, reviewer: str, reason: str | None) -> dict:
-    """Reject every proposed item in a group; writes nothing to Neo4j, appends one audit row."""
+    """Reject every proposed item in a group; writes nothing to Neo4j, appends one audit row.
+
+    Rejection is always allowed regardless of the Schema gate — a failing proposal is
+    exactly the thing a reviewer should be able to turn away.
+    """
     async with connection() as conn:
-        rows = await conn.fetch("SELECT * FROM curation_items WHERE group_id = $1", group_id)
-        if not rows:
-            raise CurationError(404, f"review group {group_id} not found")
-        proposed = [r for r in rows if r["status"] == "proposed"]
-        if not proposed:
-            raise CurationError(409, f"review group {group_id} has no proposed items")
         async with conn.transaction():
+            rows = await conn.fetch(
+                "SELECT * FROM curation_items WHERE group_id = $1 FOR UPDATE", group_id
+            )
+            if not rows:
+                raise CurationError(404, f"review group {group_id} not found")
+            proposed = [r for r in rows if r["status"] == "proposed"]
+            if not proposed:
+                raise CurationError(409, f"review group {group_id} has no proposed items")
             await conn.execute(
                 "UPDATE curation_items SET status = 'rejected', reviewed_by = $2, "
                 "reason = $3, reviewed_at = now() WHERE group_id = $1 AND status = 'proposed'",
@@ -338,6 +443,7 @@ async def reject_group(group_id: str, reviewer: str, reason: str | None) -> dict
                 target_id=group_id,
                 actor=reviewer,
                 reason=reason,
+                after_state={"item_ids": [r["item_id"] for r in proposed]},
             )
         return {"group_id": group_id, "status": "rejected"}
 

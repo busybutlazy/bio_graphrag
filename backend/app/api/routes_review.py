@@ -7,13 +7,23 @@ approved graph + an audit row; reject writes nothing. Admin-gated like other /ad
 See changes/unified-two-gate-review/.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from app.api.auth import require_admin
+from app.api.errors import APIError
 from app.curation import service
 from app.schemas.curation import ApproveRejectRequest
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
+
+# CurationError -> the documented error contract {"error": {code, message}}.
+# (The older /admin/curation routes raise HTTPException and emit {"detail": ...}; new
+# surface follows CLAUDE.md instead of extending that deviation.)
+_ERROR_CODES = {404: "not_found", 409: "conflict", 422: "invalid_request"}
+
+
+def _as_api_error(exc: service.CurationError) -> APIError:
+    return APIError(exc.status_code, _ERROR_CODES.get(exc.status_code, "error"), exc.message)
 
 
 @router.get("/review/groups")
@@ -26,7 +36,7 @@ async def approve_review_group(group_id: str, body: ApproveRejectRequest) -> dic
     try:
         return await service.approve_group(group_id, body.reviewer, body.reason)
     except service.CurationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+        raise _as_api_error(exc) from exc
 
 
 @router.post("/review/groups/{group_id}/reject")
@@ -34,4 +44,4 @@ async def reject_review_group(group_id: str, body: ApproveRejectRequest) -> dict
     try:
         return await service.reject_group(group_id, body.reviewer, body.reason)
     except service.CurationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+        raise _as_api_error(exc) from exc

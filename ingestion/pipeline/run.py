@@ -59,11 +59,9 @@ async def run() -> dict:
         await load_postgres.upsert_documents(pg_conn, documents)
         await load_postgres.upsert_chunks(pg_conn, chunks)
 
-        # Seed demo proposal groups into the curation review queue (walking skeleton:
-        # Case 1 only; the rest follow in later phases). Idempotent.
-        demo_groups = await load_postgres.stage_demo_review_groups(
-            pg_conn, ["blood_glucose_case_001"]
-        )
+        # Seed demo proposal groups (genuinely new knowledge) into the review queue.
+        # Idempotent.
+        demo_groups = await load_postgres.stage_demo_review_groups(pg_conn)
 
         stats = {
             "nodes": node_count,

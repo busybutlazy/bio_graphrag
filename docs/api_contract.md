@@ -212,7 +212,19 @@ class DeleteEdgeRequest(BaseModel):
 
 ### `POST /admin/review/groups/{group_id}/approve`
 
-以一次交易核准整個群組:把所有成員 node/edge 寫入 Neo4j 為 `approved`、翻各 item 狀態、`graph_change_logs` 追加一列(`action='approve'`、`target_type='proposal_group'`、`target_id=group_id`)。Request `{reviewer, reason?}`。回傳 `{group_id, status:'approved', nodes, edges}`。未知群組 → 404;無 proposed 成員 → 409。
+以一次交易核准整個群組:把所有成員 node/edge 寫入 Neo4j 為 `approved`、翻各 item 狀態、`graph_change_logs` 追加一列(`action='approve'`、`target_type='proposal_group'`、`target_id=group_id`,`after_state` 含**完整 payload** 與 `item_ids`,足以重建進圖內容)。Request `{reviewer, reason?}`。成功回傳 `{group_id, status:'approved', nodes, edges}`。
+
+**核准前的四道防線**(任一不過即拒絕,不寫入任何東西):
+
+| 情況 | 狀態碼 |
+|---|---|
+| 群組不存在 | `404 not_found` |
+| 沒有 `proposed` 成員(含重複核准) | `409 conflict` |
+| 成員 `action` 不是 `create`(此路徑只實作 create) | `422 invalid_request` |
+| **Schema gate 未通過**(`result != 'pass'`,含 `needs_schema_extension`)— gate 為**強制**,形式不合格的提案不得進入圖譜 | `409 conflict` |
+| **成員 id 已存在於 approved 圖**(核准會 MERGE 覆蓋既有策展知識)— 必須改走明確的 update 決策 | `409 conflict` |
+
+錯誤 body 遵循 `{"error": {"code", "message"}}`(新端點依 CLAUDE.md 契約;較舊的 `/admin/curation/*` 仍回 `{"detail"}`)。列出時 `FOR UPDATE` 鎖列,兩個併發核准不會同時看到 `proposed`。
 
 ### `POST /admin/review/groups/{group_id}/reject`
 

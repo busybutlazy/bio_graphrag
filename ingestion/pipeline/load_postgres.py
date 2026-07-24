@@ -153,7 +153,7 @@ async def stage_extraction_output(
     return True, None, staged_nodes, staged_edges
 
 
-_EXPERT_DEMO_CASES = parse_source.DATA_DIR / "expert_demo" / "cases.json"
+_REVIEW_GROUPS = parse_source.DATA_DIR / "expert_demo" / "review_groups.json"
 
 
 async def stage_demo_review_group(
@@ -200,19 +200,28 @@ async def stage_demo_review_group(
     return staged_nodes, staged_edges
 
 
-async def stage_demo_review_groups(conn: asyncpg.Connection, case_ids: list[str]) -> dict:
-    """Seed selected expert-demo cases as proposed review groups (one group per case)."""
-    cases = {c["id"]: c for c in json.loads(_EXPERT_DEMO_CASES.read_text(encoding="utf-8"))}
+async def stage_demo_review_groups(conn: asyncpg.Connection) -> dict:
+    """Seed the demo proposal groups (`review_groups.json`) into the review queue.
+
+    These deliberately propose knowledge that is **not** already in the approved seed
+    graph, so approving one genuinely adds knowledge and the invariant (invisible before
+    approval, retrievable after) is real. Edges may reference existing approved nodes —
+    those are referenced, never re-proposed, so approval cannot overwrite curated nodes.
+    """
+    groups = json.loads(_REVIEW_GROUPS.read_text(encoding="utf-8"))
+    # Converge: drop demo groups that are no longer defined (still-proposed ones only, so a
+    # reviewer's decisions are never touched). Keeps existing volumes from retaining a stale
+    # demo group after the seed set changes.
+    await conn.execute(
+        "DELETE FROM curation_items "
+        "WHERE proposed_by = 'demo' AND status = 'proposed' AND group_id IS NOT NULL "
+        "AND NOT (group_id = ANY($1))",
+        [g["group_id"] for g in groups],
+    )
     staged: dict = {}
-    for cid in case_ids:
-        case = cases.get(cid)
-        if case is None:
-            continue
-        proposal = case.get("proposal", {})
-        candidate = {
-            "nodes": proposal.get("proposed_nodes", []),
-            "edges": proposal.get("proposed_edges", []),
-        }
-        n, e = await stage_demo_review_group(conn, f"group:{cid}", candidate)
-        staged[cid] = {"nodes": n, "edges": e}
+    for g in groups:
+        n, e = await stage_demo_review_group(
+            conn, g["group_id"], {"nodes": g.get("nodes", []), "edges": g.get("edges", [])}
+        )
+        staged[g["group_id"]] = {"nodes": n, "edges": e}
     return staged

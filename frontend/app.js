@@ -978,6 +978,15 @@ async function renderReview(host) {
     globalNodes[n.id] = { id: n.id, label: n.label, type: n.type };
   }));
 
+  // Result banner lives OUTSIDE the repainted list/panel, so a decision's outcome
+  // survives the repaint that follows it.
+  const flash = E('div', { style: 'margin:0 48px' });
+  host.append(flash);
+  function setFlash(text, kind) {
+    clear(flash);
+    if (text) flash.append(E('div', { class: 'notice ' + (kind || ''), style: 'margin:12px 0' }, text));
+  }
+
   const wrap = E('div', { class: 'ex-wrap' });
   const list = E('div', { class: 'ex-list' });
   const panel = E('div', { class: 'ex-panel' });
@@ -1006,7 +1015,7 @@ async function renderReview(host) {
          E('div', { class: 'ex-case-meta' }, gateBadge(g.schema_gate.result))))));
   }
 
-  const TABS = [['proposal', 'AI 提案'], ['gate', 'Schema gate'], ['expert', '專家審閱']];
+  const TABS = [['proposal', '提案內容'], ['gate', 'Schema gate'], ['expert', '專家審閱']];
   function paintPanel() {
     clear(panel);
     const tabs = E('div', { class: 'ex-tabs' });
@@ -1084,26 +1093,36 @@ async function renderReview(host) {
   }
 
   function reviewActions(g) {
+    const gateOk = g.schema_gate.result === 'pass';
     const box = E('div', { class: 'ex-review' });
     box.append(E('div', { class: 'ex-h' }, '你的裁決'));
     const notes = E('textarea', { class: 'ex-notes', placeholder: '理由(選填)…' });
     const msg = E('div', { class: 'muted', style: 'font-size:11px;margin-top:8px' },
-      '核准 → 寫入知識圖譜並記錄稽核;退回 → 記錄稽核,不寫入。');
+      gateOk ? '核准 → 寫入知識圖譜並記錄稽核;退回 → 記錄稽核,不寫入。'
+             : 'Schema gate 未通過:形式有問題的提案不能進入知識圖譜,只能退回修正。');
     const approve = E('button', { class: 'btn' }, '核准並寫入');
     const reject = E('button', { class: 'btn-ghost' }, '退回');
+    // Schema gate is enforcing — the backend refuses (409) too; the UI must not imply otherwise.
+    if (!gateOk) { approve.disabled = true; approve.title = 'Schema gate 未通過,無法核准'; }
     async function act(kind) {
-      approve.disabled = reject.disabled = true; msg.textContent = '處理中…';
+      approve.disabled = reject.disabled = true; setFlash('處理中…');
       try {
         const res = await api.post(
           `/admin/review/groups/${encodeURIComponent(g.group_id)}/${kind}`,
           { reviewer: 'demo', reason: notes.value || null });
-        msg.textContent = kind === 'approve'
-          ? `已核准並寫入知識圖譜(nodes ${res.nodes} / edges ${res.edges})` : '已退回。';
+        setFlash(kind === 'approve'
+          ? `已核准並寫入知識圖譜(nodes ${res.nodes} / edges ${res.edges})`
+          : '已退回,未寫入知識圖譜。', 'ok');
         groups = groups.filter((x) => x.group_id !== g.group_id);
-        if (!groups.length) { return renderReview(host); }
+        if (!groups.length) {
+          clear(list); clear(panel);
+          panel.append(E('div', { class: 'muted', style: 'padding:24px' }, '目前沒有待審的提案群組。'));
+          return;
+        }
         activeId = groups[0].group_id; paintList(); paintPanel();
       } catch (err) {
-        msg.textContent = '失敗:' + err.message; approve.disabled = reject.disabled = false;
+        setFlash('失敗:' + err.message, 'err');
+        approve.disabled = !gateOk; reject.disabled = false;
       }
     }
     approve.addEventListener('click', () => act('approve'));

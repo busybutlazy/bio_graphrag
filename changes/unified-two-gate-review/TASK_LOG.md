@@ -131,7 +131,29 @@
 - Deviations: None. `expert` view intentionally retained this phase (retired in P4).
 - Result: Pass — **Phase 1 tasks (T1–T5) complete → hand to change-wide verify-change.**
 
-## Manual UI checklist — **CONFIRMED OK by human owner (jett), 2026-07-24**
+## Post-review remediation (2026-07-24) — findings from `REVIEW_REPORT.md`
+
+Owner decisions: **B1 → both** (new demo data + guard); **H2 → enforcing now, override later**.
+
+- **B1 (blocking, confirmed):** seeded group reused already-`approved` ids → approve would MERGE-overwrite
+  curated labels/descriptions and add duplicate edges; invariant was a no-op. Fixed by (a) new seed source
+  `data/sample/expert_demo/review_groups.json` (cortisol → blood glucose; no colliding ids; the existing
+  `physiological_variable:blood_glucose` is *referenced*, never re-proposed) + convergent retirement of
+  stale demo groups on re-seed, and (b) `approve_group` refuses 409 on any already-approved member.
+- **H2:** Schema gate enforcing — `approve_group` 409 unless `pass`; UI disables 核准 with explanation.
+- **M1:** audit carries full payloads + `item_ids` + gate result. **M2:** new routes use `APIError` →
+  `{"error":{code,message}}`. **M3:** 409 tested at both layers; select moved inside the transaction with
+  `FOR UPDATE`. **L1:** result banner moved outside the repainted region. **L2:** non-`create` → 422.
+  **S1:** tab relabelled 提案內容. **S3:** approved-node labels resolved in the lens.
+- **S2 (deviation, now logged):** plan T4 named `backend/app/schemas/review.py`; implementation reuses
+  `app.schemas.curation.ApproveRejectRequest` (identical shape). Deliberate — no new DTO.
+- **L3:** `CHANGE_REPORT.md` created (was missing).
+- Evidence: `make test` **146 passed, 1 failed** (known unrelated flake); review suites **14 passed**;
+  ruff/format/mypy clean; `node --check` OK; live `GET /nodes/hormone:cortisol` → **404 pre-approval**.
+- **Not fixed:** A4 fault-injection; the English-vs-Chinese label mismatch in seed data (cosmetic, owner's
+  call); UI changes made *after* the owner's manual pass have not been re-checked in a browser.
+
+## Manual UI checklist — **CONFIRMED OK by human owner (jett), 2026-07-24** (pre-remediation)
 
 Human ran the click-through and reported the Review view working. Recorded as a human sign-off (no
 automated FE coverage protects it). Original checklist:
