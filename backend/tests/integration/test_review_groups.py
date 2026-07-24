@@ -136,6 +136,15 @@ def _neo4j_node_status(node_id: str):
     return rec["status"] if rec else None
 
 
+async def _item_statuses(group_id: str) -> list[str]:
+    conn = await _conn()
+    try:
+        rows = await conn.fetch("SELECT status FROM curation_items WHERE group_id = $1", group_id)
+        return [r["status"] for r in rows]
+    finally:
+        await conn.close()
+
+
 async def _latest_after_state(target_id: str):
     conn = await _conn()
     try:
@@ -276,6 +285,32 @@ def test_double_approve_is_409():
     with pytest.raises(service.CurationError) as exc:
         asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
     assert exc.value.status_code == 409
+
+
+def test_approve_group_rolls_back_postgres_on_neo4j_failure(monkeypatch):
+    """A4: a mid-write Neo4j failure aborts the Postgres commit.
+
+    approve_group writes nodes then edges to Neo4j *inside* the pg transaction, then flips
+    items + writes the audit row. Injecting a failure at the edge write must leave the
+    Postgres side untouched — every item still ``proposed``, no ``approve`` audit row.
+
+    Scope note (documented cross-DB limit): the nodes MERGE'd before the failure are NOT
+    rolled back (Neo4j is not in the pg transaction). They are idempotent MERGEs, so a
+    later retry re-writes them and completes; the fixture teardown DETACH-DELETEs them.
+    """
+
+    def boom(*_a, **_k):
+        raise RuntimeError("injected: neo4j edge write failed")
+
+    monkeypatch.setattr(service.load_neo4j, "write_edges", boom)
+
+    with pytest.raises(RuntimeError, match="injected"):
+        asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", "will fail"))
+
+    # Postgres rolled back: nothing flipped, nothing logged.
+    statuses = asyncio.run(_item_statuses(GROUP_OK))
+    assert statuses and all(s == "proposed" for s in statuses)
+    assert asyncio.run(_latest_action(GROUP_OK)) is None
 
 
 def test_approve_audit_records_full_payloads():
