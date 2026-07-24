@@ -296,3 +296,58 @@ reviewer calls. B1 in particular should be settled before Phase 2 seeds the reje
 P2 lands directly on top of both.
 
 The reviewer does not approve, fix, merge, or release this change.
+
+---
+
+## Re-review — remediation pass (2026-07-24, commit `a23d9ac`)
+
+Re-ran against `fix(review): close review findings` (`a23d9ac`), which the owner committed on top of
+the reviewed `01a08a1`. Independence unchanged (still a separate session from both the implementation
+and the fix). I read the full remediation diff and re-probed the live stack read-only. The
+`REVIEW_REPORT.md` I authored is byte-identical to what shipped — not edited to soften findings.
+
+### Disposition of each finding
+
+| # | Finding | Status | Evidence |
+|---|---|---|---|
+| **B1** | Approve overwrites curated knowledge / duplicate edges | **Fixed (both ways)** | New seed `data/sample/expert_demo/review_groups.json` proposes `hormone:cortisol` + `regulatory_effect:cortisol_increases_blood_glucose` — neither id is in `data/sample` or `data/seed` concepts; `physiological_variable:blood_glucose` is *referenced by edges, never re-proposed*. **And** `approve_group` now runs `_existing_approved_ids` → 409 if any member id already exists approved. Live: `GET /nodes/hormone:cortisol` → **404**; `blood_glucose` neighbors do **not** contain the cortisol RE pre-approval. Test `test_approve_refuses_when_a_member_already_exists_approved` asserts the pre-existing node is left untouched. |
+| **H1** | Report claimed invariant proven on shipped data | **Fixed** | A2 row in `VERIFICATION_REPORT.md` rewritten to disclose the original synthetic-only evidence and cite the real 404 probe. Honest now. |
+| **H2** | Schema gate did not gate | **Fixed (enforcing)** | `approve_group` computes `evaluate_schema_gate` inside the txn and raises 409 unless `result == 'pass'`; UI disables 核准 with an explanation. `test_approve_refuses_when_schema_gate_fails` (a `fail_pattern` group is refused, nothing written). The raw-SQL whitelist-bypass sub-point is now moot for the write path — the gate runs the same validation before any MERGE. Audited engineer override explicitly deferred (owner: "enforcing now, override later"). |
+| **M1** | Thin audit row | **Fixed** | `after_state` now carries full node/edge payloads + `item_ids` + gate result; `test_approve_audit_records_full_payloads` asserts payloads, not bare ids. |
+| **M2** | Error contract deviation | **Fixed** | New routes raise `APIError` via `_as_api_error`; live 404 returns `{"error":{"code":"not_found","message":…}}`. Deviation from `/admin/curation/*` documented in `api_contract.md`. |
+| **M3** | Transactionality / 409 untested; guard outside txn | **Partially fixed** | 409 now covered at both layers (`test_double_approve_is_409`, `test_double_approve_409_uses_error_contract`); row `SELECT … FOR UPDATE` moved inside the transaction, closing the concurrent-approve race. **A4 fault-injected rollback still not tested** — openly recorded as not-fixed. Acceptable for a walking skeleton; will matter more as the path grows. |
+| **L1** | Success message destroyed by repaint | **Fixed (code)** | Result banner (`flash`) now lives outside the repainted list/panel. Not browser-verified — see residual risk. |
+| **L2** | `action` ignored | **Fixed** | Non-`create` actions → 422 (`test_approve_refuses_non_create_action`). |
+| **L3 / S2** | Missing CHANGE_REPORT / unlogged DTO reuse | **Fixed** | `CHANGE_REPORT.md` added; `ApproveRejectRequest` reuse logged as a deviation. |
+| **S1** | False "AI 提案" label | **Fixed** | Tab relabelled 提案內容; `proposed_by` shown. |
+| **S3** | Referenced approved nodes render as humanized ids | **Fixed** | `list_groups` resolves approved-node labels; live understanding reads "使**Blood glucose**上升" (real graph label). |
+
+### Verified independently this pass
+- `make test` → **146 passed, 1 failed**; the sole failure is the documented `test_pipeline_run_is_idempotent`
+  flake (chunk_count 12≠9), which the diff cannot cause (`stage_demo_review_groups` writes only
+  `curation_items`). Review suites **14 passed** after a backend rebuild.
+- Live: single seeded group `group:demo_cortisol_blood_glucose`, gate `pass`; both proposed nodes 404
+  pre-approval; error contract confirmed on the wire.
+
+### Residual risk (unchanged disposition)
+- **A4 rollback is still not fault-injected** — the one review finding carried forward unaddressed, by
+  the owner's explicit choice. Low risk at this scale; note it before the group path takes on
+  update/delete verbs.
+- **The L1/H2/S1 UI changes were made *after* the owner's manual browser pass and have not been
+  re-checked in a browser.** All FE evidence remains `node --check` + code reading + live API. A
+  human should click through 群組審閱 once (esp. the disabled-approve-on-gate-fail state and the flash
+  banner) before this is called done.
+- The B1 collision guard keys on `status = 'approved'`; a member id colliding with a `proposed`/`deprecated`
+  graph node would still MERGE. Not reachable in the current flow (Neo4j nodes are only ever written as
+  `approved`), so latent, not a defect.
+
+### Re-review verdict
+
+**All blocking and high findings are resolved; the completion claim now holds for the data that
+ships.** The remediation is well-targeted, tested at the service and API layers, and the reports were
+corrected rather than papered over. Two items remain open and are *honestly disclosed, not hidden*:
+A4 fault-injection (owner-deferred) and a browser re-check of the post-remediation UI. Neither is
+blocking for a Phase-1 walking skeleton.
+
+Remaining disposition is the human's: accept with the two disclosed follow-ups, or require the browser
+pass first. The reviewer still does not approve, merge, or release.
