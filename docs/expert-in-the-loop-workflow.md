@@ -41,9 +41,12 @@
 ## Demo 怎麼看
 
 - 前端「審閱」分頁(`renderExpertDemo`),資料源 `GET /admin/expert-demo/cases`(唯讀)。
-- 左側 5 個定案案例;右側三 tab 對應上面的 gate:AI 提案 / 工程師 gate / 專家審閱。
-- 五個案例:單一效果、多步驟 mechanism、分泌觸發、拮抗(fact-node 重用)、permissive 硬 gap。
-  規格見 `docs/expert-in-the-loop-plan.md` 四。
+- 左側 7 個定案案例;右側三 tab 對應上面的 gate:AI 提案 / 工程師 gate / 專家審閱。
+- 案例:1 單一效果、2 多步驟 mechanism、3 分泌觸發、4 拮抗(fact-node 重用)、5 permissive 硬 gap、
+  **6 形式退回(fail_pattern,工程師 gate 攔)**、**7 意義退回(form-valid 但方向抽反,專家 rejected)**。
+  規格見 `docs/demo-cases-blood-glucose.md` 與 `docs/expert-in-the-loop-plan.md` 四。
+- 專家決定經 `POST /admin/expert-demo/reviews` 寫成 `graph_change_logs` append-only 稽核列
+  (`changes/expert-gate-integrity` 起;與 curation 同一條稽核軌)。
 
 ## MVP 邊界
 

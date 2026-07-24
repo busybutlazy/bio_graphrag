@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS curation_items (
     reviewed_by TEXT,
     reason TEXT,
     schema_check JSONB,
+    group_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     reviewed_at TIMESTAMPTZ
 );

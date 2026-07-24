@@ -139,6 +139,7 @@ const VIEWS = [
   { id: 'library', label: '典藏', render: renderLibrary },
   { id: 'ingest', label: '解析', render: renderIngest },
   { id: 'curation', label: '審訂', render: renderCuration },
+  { id: 'review', label: '群組審閱', render: renderReview },
   { id: 'expert', label: '審閱', render: renderExpertDemo },
   { id: 'eval', label: '評估', render: renderEval },
 ];
@@ -775,9 +776,37 @@ async function renderExpertDemo(host) {
         ck.detail ? E('div', { class: 'ex-check-detail' }, ck.detail) : null))));
   }
 
+  // 領域專家權威判定(seeded);白話呈現,不露 schema/gap code,維持隔離
+  const EXPERT_STATUS = {
+    approved: ['領域專家已確認:系統理解符合原文', 'ok'],
+    rejected: ['領域專家已退回:系統理解與原文的生物語意不符', 'err'],
+    schema_gap: ['領域專家:此現象現行系統無法完整表達', ''],
+  };
+  function expertVerdict(review) {
+    if (!review) return null;
+    const meta = EXPERT_STATUS[review.status];
+    if (!meta) return null; // not_reviewed / 未知 → 不顯示權威判定
+    const el = E('div', { class: 'notice ' + meta[1], style: 'margin:12px 0' },
+      E('div', {}, meta[0] + (review.reviewed_by ? '(' + review.reviewed_by + ')' : '')));
+    if (review.notes) el.append(E('div', { style: 'margin-top:6px;opacity:.85' }, review.notes));
+    return el;
+  }
+
   // Tab3 — 專家審閱(強制隔離:不出現 id / JSON / schema code / gap code)
   function paintExpert(body, c) {
     body.append(E('div', { class: 'ex-src' }, '原文:' + c.source_text));
+
+    const r = c.engineer_gate.result;
+    if (r === 'fail_schema' || r === 'fail_pattern' || r === 'fail_testability') {
+      // M1:形式被退回的提案不進入專家審查,也不顯示會誤導的「系統理解」(P5 gap 句)
+      body.append(E('div', { class: 'notice err', style: 'margin:14px 0' },
+        '此提案在工程師 gate 因形式問題被退回,依流程不進入專家審查——請先於「工程師 gate」分頁修正形式。'));
+      return;
+    }
+
+    const verdict = expertVerdict(c.expert_review);
+    if (verdict) body.append(verdict);
+
     body.append(E('div', { class: 'ex-understand' },
       E('div', { class: 'ex-h' }, '系統理解'),
       E('div', { class: 'ex-understand-txt' }, c.system_understanding.text)));
@@ -862,7 +891,28 @@ async function renderExpertDemo(host) {
     form.append(E('div', { class: 'ex-h', style: 'margin-top:14px' }, '備註'));
     notesInput.addEventListener('input', persist);
     form.append(notesInput);
-    form.append(E('div', { class: 'muted', style: 'font-size:11px;margin-top:8px' }, '選擇即存(本次瀏覽階段);此為 demo,不寫入資料庫。'));
+    const submitMsg = E('div', { class: 'muted', style: 'font-size:11px;margin-top:8px' },
+      '選擇即存本次瀏覽;按「送出審查」記錄為一筆 append-only 稽核(可追蹤)。');
+    const submitBtn = E('button', { class: 'btn', style: 'margin-top:10px' }, '送出審查');
+    submitBtn.addEventListener('click', async () => {
+      if (!decision) { submitMsg.textContent = '請先選擇一個審查結果。'; return; }
+      submitBtn.disabled = true; submitMsg.textContent = '記錄中…';
+      try {
+        const res = await api.post('/admin/expert-demo/reviews', {
+          case_id: c.id,
+          decision,
+          schema_gap_type: decision === 'cannot' ? (gap || null) : null,
+          notes: notesInput.value || null,
+        });
+        submitMsg.textContent = '已記錄稽核 ' + res.change_id;
+      } catch (err) {
+        submitMsg.textContent = '記錄失敗:' + err.message;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+    form.append(submitBtn);
+    form.append(submitMsg);
 
     function refreshRadios() {
       form.querySelectorAll('.ex-radio').forEach((el) => {
@@ -904,6 +954,184 @@ async function ingestRun(body, ownerToken) {
   });
   if (!r.ok) throw await apiError(r);
   return r.json();
+}
+
+// ── 群組審閱 REVIEW — unified two-gate governance on real proposal groups ──────────
+// Data source: GET /admin/review/groups. Each group is one biological statement
+// (nodes+edges sharing a group_id) with its Schema gate (engineer_gate) + expert lens
+// (back_translation) computed live. Approve writes the whole group into the graph.
+async function renderReview(host) {
+  clear(host);
+  host.append(E('div', { class: 'page-head', style: 'padding-bottom:0' },
+    E('div', { class: 'eyebrow' }, 'REVIEW · 群組審閱'),
+    E('div', { class: 'page-title', style: 'margin-top:8px;font-size:30px' }, '群組審閱'),
+    E('div', { class: 'page-sub' },
+      '一個提案(陳述的 nodes+edges)過兩道 gate:Schema gate 檢查形式 → 專家審生物語意 → 核准寫入知識圖譜。')));
+
+  let groups;
+  try { groups = await api.get('/admin/review/groups'); }
+  catch (err) { host.append(E('div', { class: 'notice err', style: 'margin:24px 48px' }, err.message)); return; }
+  if (!groups.length) { host.append(E('div', { class: 'muted', style: 'margin:24px 48px' }, '目前沒有待審的提案群組。')); return; }
+
+  const globalNodes = {};
+  groups.forEach((g) => (g.proposal.proposed_nodes || []).forEach((n) => {
+    globalNodes[n.id] = { id: n.id, label: n.label, type: n.type };
+  }));
+
+  // Result banner lives OUTSIDE the repainted list/panel, so a decision's outcome
+  // survives the repaint that follows it.
+  const flash = E('div', { style: 'margin:0 48px' });
+  host.append(flash);
+  function setFlash(text, kind) {
+    clear(flash);
+    if (text) flash.append(E('div', { class: 'notice ' + (kind || ''), style: 'margin:12px 0' }, text));
+  }
+
+  const wrap = E('div', { class: 'ex-wrap' });
+  const list = E('div', { class: 'ex-list' });
+  const panel = E('div', { class: 'ex-panel' });
+  wrap.append(list, panel); host.append(wrap);
+
+  let activeId = groups[0].group_id;
+  let activeTab = 'expert';
+  const current = () => groups.find((g) => g.group_id === activeId);
+
+  function gateBadge(result) {
+    const ok = result === 'pass';
+    const gap = result === 'needs_schema_extension';
+    const cls = ok ? 'ex-badge ok' : gap ? 'ex-badge gap' : 'ex-badge warn';
+    return E('span', { class: cls }, ok ? '通過' : gap ? '需補 schema' : '未過');
+  }
+
+  function paintList() {
+    clear(list);
+    list.append(E('div', { class: 'eyebrow', style: 'padding:18px 20px 10px' }, '提案群組 · GROUPS'));
+    groups.forEach((g, i) => list.append(E('div', {
+      class: 'ex-case' + (g.group_id === activeId ? ' on' : ''),
+      onclick: () => { activeId = g.group_id; paintList(); paintPanel(); },
+    }, E('span', { class: 'ex-case-idx' }, String(i + 1).padStart(2, '0')),
+       E('div', { class: 'ex-case-body' },
+         E('div', { class: 'ex-case-src' }, g.understanding.text),
+         E('div', { class: 'ex-case-meta' }, gateBadge(g.schema_gate.result))))));
+  }
+
+  const TABS = [['proposal', '提案內容'], ['gate', 'Schema gate'], ['expert', '專家審閱']];
+  function paintPanel() {
+    clear(panel);
+    const tabs = E('div', { class: 'ex-tabs' });
+    TABS.forEach(([id, label]) => tabs.append(E('button', {
+      class: 'ex-tab' + (id === activeTab ? ' on' : ''),
+      onclick: () => { activeTab = id; paintPanel(); },
+    }, label)));
+    const body = E('div', { class: 'ex-body scroll' });
+    panel.append(tabs, body);
+    const g = current();
+    if (activeTab === 'proposal') paintProposal(body, g);
+    else if (activeTab === 'gate') paintGate(body, g);
+    else paintExpert(body, g);
+  }
+
+  // 提案 tab (engineer/interviewer — may show id/JSON)
+  function paintProposal(body, g) {
+    const p = g.proposal;
+    body.append(E('div', { class: 'ex-sub' }, '提案者:' + g.proposed_by));
+    body.append(E('div', { class: 'ex-h' }, '候選節點'));
+    (p.proposed_nodes || []).forEach((n) => body.append(E('div', { class: 'ex-row' },
+      E('span', { class: 'q-kind', style: `--k:${typeColor(n.type)}` }, nodeTypeLabel(n.type)),
+      E('span', { class: 'ex-row-label' }, n.label),
+      E('span', { class: 'mono ex-id' }, n.id))));
+    body.append(E('div', { class: 'ex-h' }, '候選關係'));
+    (p.proposed_edges || []).forEach((e) => body.append(E('div', { class: 'ex-row mono ex-id' },
+      `${e.source} —${e.type}→ ${e.target}`)));
+  }
+
+  // Schema gate tab (form checks)
+  function paintGate(body, g) {
+    body.append(E('div', { class: 'ex-gate-head' }, '整體結果:', gateBadge(g.schema_gate.result)));
+    g.schema_gate.checks.forEach((ck) => body.append(E('div', { class: 'ex-check' },
+      E('span', { class: 'ex-dot ' + (ck.passed ? 'ok' : 'bad') }, ck.passed ? '✓' : '✕'),
+      E('div', {}, E('div', { class: 'ex-check-name' }, ck.name),
+        ck.detail ? E('div', { class: 'ex-check-detail' }, ck.detail) : null))));
+  }
+
+  // 專家審閱 tab (meaning; no id / JSON / schema code — isolation)
+  function paintExpert(body, g) {
+    body.append(E('div', { class: 'ex-understand' },
+      E('div', { class: 'ex-h' }, '系統理解'),
+      E('div', { class: 'ex-understand-txt' }, g.understanding.text)));
+    body.append(E('div', { class: 'ex-h' }, '概念圖'));
+    body.append(conceptMap(g.proposal));
+    body.append(reviewActions(g));
+  }
+
+  function conceptMap(proposal) {
+    const used = {};
+    (proposal.proposed_nodes || []).forEach((n) => { used[n.id] = { id: n.id, label: n.label, type: n.type }; });
+    (proposal.proposed_edges || []).forEach((e) => [e.source, e.target].forEach((id) => {
+      if (!used[id]) used[id] = globalNodes[id] || { id, label: '（相關概念）', type: 'Concept' };
+    }));
+    const nodes = Object.values(used);
+    const edges = (proposal.proposed_edges || []).map((e) => ({ source: e.source, target: e.target, relation: phraseRelation(e.type) }));
+    const W = 560, H = 360;
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet', class: 'ex-svg' });
+    if (!nodes.length) { const t = svgEl('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', class: 'gnode-label' }); t.textContent = '(無可繪製關係)'; svg.append(t); return svg; }
+    const pos = forceLayout(nodes, edges, W, H);
+    edges.forEach((e) => {
+      const a = pos[e.source], b = pos[e.target]; if (!a || !b) return;
+      svg.append(svgEl('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: '#DED5C2', 'stroke-width': '1' }));
+      const lbl = svgEl('text', { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, class: 'gedge-label', 'text-anchor': 'middle' });
+      lbl.textContent = e.relation; svg.append(lbl);
+    });
+    nodes.forEach((n) => {
+      const pt = pos[n.id]; const grp = svgEl('g', {});
+      grp.append(svgEl('rect', { x: pt.x - 6, y: pt.y - 6, width: 12, height: 12, fill: typeColor(n.type) }));
+      const t = svgEl('text', { x: pt.x + 10, y: pt.y + 4, class: 'gnode-label' });
+      t.textContent = n.label.length > 16 ? n.label.slice(0, 15) + '…' : n.label;
+      grp.append(t); svg.append(grp);
+    });
+    return svg;
+  }
+
+  function reviewActions(g) {
+    const gateOk = g.schema_gate.result === 'pass';
+    const box = E('div', { class: 'ex-review' });
+    box.append(E('div', { class: 'ex-h' }, '你的裁決'));
+    const notes = E('textarea', { class: 'ex-notes', placeholder: '理由(選填)…' });
+    const msg = E('div', { class: 'muted', style: 'font-size:11px;margin-top:8px' },
+      gateOk ? '核准 → 寫入知識圖譜並記錄稽核;退回 → 記錄稽核,不寫入。'
+             : 'Schema gate 未通過:形式有問題的提案不能進入知識圖譜,只能退回修正。');
+    const approve = E('button', { class: 'btn' }, '核准並寫入');
+    const reject = E('button', { class: 'btn-ghost' }, '退回');
+    // Schema gate is enforcing — the backend refuses (409) too; the UI must not imply otherwise.
+    if (!gateOk) { approve.disabled = true; approve.title = 'Schema gate 未通過,無法核准'; }
+    async function act(kind) {
+      approve.disabled = reject.disabled = true; setFlash('處理中…');
+      try {
+        const res = await api.post(
+          `/admin/review/groups/${encodeURIComponent(g.group_id)}/${kind}`,
+          { reviewer: 'demo', reason: notes.value || null });
+        setFlash(kind === 'approve'
+          ? `已核准並寫入知識圖譜(nodes ${res.nodes} / edges ${res.edges})`
+          : '已退回,未寫入知識圖譜。', 'ok');
+        groups = groups.filter((x) => x.group_id !== g.group_id);
+        if (!groups.length) {
+          clear(list); clear(panel);
+          panel.append(E('div', { class: 'muted', style: 'padding:24px' }, '目前沒有待審的提案群組。'));
+          return;
+        }
+        activeId = groups[0].group_id; paintList(); paintPanel();
+      } catch (err) {
+        setFlash('失敗:' + err.message, 'err');
+        approve.disabled = !gateOk; reject.disabled = false;
+      }
+    }
+    approve.addEventListener('click', () => act('approve'));
+    reject.addEventListener('click', () => act('reject'));
+    box.append(notes, E('div', { style: 'display:flex;gap:10px;margin-top:10px' }, approve, reject), msg);
+    return box;
+  }
+
+  paintList(); paintPanel();
 }
 
 async function renderIngest(host) {

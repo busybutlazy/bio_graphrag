@@ -39,6 +39,16 @@ def test_case5_needs_schema_extension():
     assert {"schema_validation", "node_type_validation", "id_convention_validation"} <= passed
 
 
+def test_case6_incomplete_pattern_fails():
+    # 原文只說「影響」,方向未定 → RE 缺 ON_VARIABLE 與方向邊 → 形式 gate 退回
+    assert evaluate(_case("blood_glucose_case_006")["proposal"])["result"] == "fail_pattern"
+
+
+def test_case7_wrong_biology_still_passes_form_gate():
+    # 三段式完整、schema 合法 → 工程師 gate 過;生物學方向錯誤由專家 gate 攔,不在形式檢查範圍
+    assert evaluate(_case("blood_glucose_case_007")["proposal"])["result"] == "pass"
+
+
 def test_invalid_node_type_fails_schema():
     bad = {
         "proposed_nodes": [

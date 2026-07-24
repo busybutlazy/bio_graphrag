@@ -1,11 +1,13 @@
-# Demo Cases — 血糖調控(Phase A 定稿)
+# Demo Cases — 血糖調控
 
-> 對應 `data/sample/expert_demo/cases.json`;計畫見 `docs/expert-in-the-loop-plan.md`
-> 全部對齊現行 schema(決策 D1=A);只有 Case 5 是真的 schema gap。
+> 對應 `data/sample/expert_demo/cases.json`(7 案例);計畫見 `docs/expert-in-the-loop-plan.md`。
+> 全部對齊現行 schema(決策 D1=A);只有 Case 5 是真的 schema gap。Case 6/7 是**退回**案例
+> (`changes/expert-gate-integrity`),展示兩道 gate 都會擋。
 > 每個節點/邊已通過 `extraction_output_schema` 驗證(型別、id 慣例、必填、無多餘欄位、端點可解析)。
 
-「系統理解」為 deterministic renderer 的**預期輸出**(Phase B 實作後由程式當場產生,此處為回歸基準)。
-「工程師 gate」為 `engineer_gate` 對 proposal 的**預期結果**。
+「系統理解」由 deterministic renderer(`back_translation.py`)當場產生;「工程師 gate」由
+`engineer_gate.py` 當場計算(已實作)。以下每案標註的是其**基準結果**,`tests/gold` 與
+`tests/unit/test_engineer_gate.py` 逐條回歸。
 
 ---
 
@@ -113,7 +115,44 @@ possible_schema_gap: true
 
 ---
 
-## 五案例一覽
+## Case 6 — 形式退回(engineer gate 攔下,不進專家審查)
+
+> `changes/expert-gate-integrity` 新增;展示**工程師 gate 真的會擋**。
+
+**原文**:腎上腺素會影響血糖。
+
+**Graph**(方向未定,三段式無法完成)
+```
+hormone:adrenaline ─HAS_EFFECT→ regulatory_effect:adrenaline_affects_blood_glucose
+(缺 ON_VARIABLE 與 INCREASES/DECREASES 方向邊 — 原文只說「影響」,方向不明)
+```
+
+**工程師 gate**:`fail_pattern`(schema/型別/id 皆合法,但 RegulatoryEffect 三段式不完整)
+**專家**:`not_reviewed` — 形式問題依流程**退回修 proposal,不勞煩專家**;前端專家分頁顯示「已於工程師 gate 退回」,**不**顯示會誤導的 gap 白話。
+
+---
+
+## Case 7 — 意義退回(form-valid 但生物學錯誤;marquee)
+
+> `changes/expert-gate-integrity` 新增;展示**形式 ✓ ≠ 意義 ✓**,兩道 gate 互相獨立。
+
+**原文**:胰島素會降低血糖濃度。
+
+**Graph**(三段式完整、schema 合法,但方向被抽反)
+```
+hormone:insulin ─HAS_EFFECT→ regulatory_effect:insulin_increases_blood_glucose
+regulatory_effect:insulin_increases_blood_glucose ─ON_VARIABLE→ physiological_variable:blood_glucose
+regulatory_effect:insulin_increases_blood_glucose ─INCREASES→ physiological_variable:blood_glucose  ← 錯:胰島素應降血糖
+```
+
+**系統理解(P1)**:胰島素 會造成一個調控效果:使 血糖 上升。(← 與原文相反)
+
+**工程師 gate**:`pass`(形式完全合法)
+**專家**:`rejected` — 領域專家讀「原文 vs 系統理解」即見方向相反,退回。這是**只有意義 gate 才攔得下**、形式檢查看不出的錯誤。
+
+---
+
+## 案例一覽
 
 | Case | 主題 | 規則 | 工程師 gate | 專家 | schema gap |
 |---|---|---|---|---|---|
@@ -122,3 +161,8 @@ possible_schema_gap: true
 | 3 | 分泌觸發 | secretion_trigger | pass | approved | — |
 | 4 | 拮抗 | antagonistic_interaction | pass | approved | — |
 | 5 | permissive effect | (none) | needs_schema_extension | schema_gap | permissive_effect |
+| 6 | 形式退回 | (incomplete) | **fail_pattern** | not_reviewed | — |
+| 7 | 意義退回(方向抽反) | single_regulatory_effect | pass | **rejected** | — |
+
+> 專家決定經 `POST /admin/expert-demo/reviews` 寫成 `graph_change_logs` 的 append-only 稽核列
+> (`action='expert_review'`),與 curation 用同一條稽核軌。

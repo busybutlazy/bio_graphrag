@@ -4,6 +4,21 @@
 
 Domain-specific GraphRAG system for high-school biology. See `docs/graph_plan.md` for the full project plan and phase breakdown, `schema/` for the graph/DB schema, and `docs/api_contract.md` for the API contract.
 
+## The one idea
+
+A GraphRAG biology tutor built around a single invariant: **an LLM only ever *proposes* knowledge — nothing reaches a student until a human approves it, and the unapproved is provably invisible.** All student-facing retrieval reads only `status='approved'` nodes/edges (enforced in `app/graph/cypher_templates.py`), so a proposed-but-unapproved fact cannot surface in any answer. Review is split into two independent gates — an **engineer gate** for *form* (schema, pattern, testability) and an **expert gate** for *meaning* (is the biology actually right?) — because "valid JSON" is not "correct biology".
+
+The domain expert behind that second gate is real: I taught high-school biology before moving into software engineering, and I reviewed the biology in this graph myself. The project is the bridge — using the old expertise to prove the new one.
+
+### Governance walkthrough (all of it runs)
+
+1. **Ask** — a student question returns a grounded answer from the approved graph (`POST /query`, 問答 screen).
+2. **Propose** — ingest a chapter; the LLM proposes nodes/edges that land as `proposed` in the curation queue (`POST /admin/ingest/run`, or 審訂 create) — never written to the live graph.
+3. **Prove invisible** — re-ask the same question; the just-proposed graph fact does **not** appear, because retrieval filters on `status='approved'`.
+4. **Two gates** — the 審閱 (Expert Review) screen runs each proposal through the engineer gate (form) then the expert gate (meaning). It includes a case that *passes* form but is **rejected for wrong biology** (reversed direction), and a case *rejected at the form gate* — proving the gates are independent (`GET /admin/expert-demo/cases`).
+5. **Approve** — a human approves; the node is written to Neo4j as `approved` (`POST /admin/curation/items/{id}/approve`).
+6. **Re-ask + audit** — the answer now includes it, and every decision (curation *and* expert review) is an append-only row in `graph_change_logs` with actor, action, and reason (`POST /admin/expert-demo/reviews` records expert-gate decisions).
+
 ## Architecture
 
 Four datastores, each with one job; all student-facing retrieval reads **only `status='approved'`** knowledge, and an LLM only ever *proposes* graph changes — a human approves them before they reach retrieval.

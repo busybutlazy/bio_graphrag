@@ -1,8 +1,10 @@
 # Expert-in-the-loop Graph Extraction Governance — 計畫與 Roadmap
 
-> 狀態:計畫已定案,尚未實作
-> 建立日期:2026-07-09
-> 範圍:MVP 為固定資料的展示型 workflow demo,不接真 pipeline、不改 schema
+> 狀態:**已實作**(Phase A–C 完成並合併;見 commit `828ebf4` 等)。後續整合工作
+>   (G2 專家審查稽核持久化、G5 兩個 rejection 案例、文件校正)見
+>   `changes/expert-gate-integrity/`。
+> 建立日期:2026-07-09　|　最後更新:2026-07-23
+> 範圍:MVP 為固定資料的展示型 workflow demo,不接真 pipeline、不改 schema 型別
 
 本文件記錄「萃取規則 governance」這一階段的**設計決策、討論脈絡與實作 roadmap**。
 實作階段才會產出的操作文件(workflow / rule-card-format / schema-gap-policy /
@@ -246,21 +248,21 @@ schema migration UI、production-grade audit、LLM 潤飾層、任何 `schema/` 
 分三階段,每步可獨立驗證。標註 `[ ]` 供追蹤。
 
 ### Phase A — 地基:案例定稿(先跑一遍「專家 gate」)
-- [ ] A1 `docs/demo-cases-blood-glucose.md`:5 案例 graph 定稿
-- [ ] A2 `data/sample/expert_demo/cases.json`:對應資料
-- [ ] A3 **戴專家帽驗收**:5 案例生物學無誤(尤其 Case 3 觸發方向、Case 4 拮抗語意、Case 5 gap 判定)
+- [x] A1 `docs/demo-cases-blood-glucose.md`:5 案例 graph 定稿
+- [x] A2 `data/sample/expert_demo/cases.json`:對應資料
+- [x] A3 **戴專家帽驗收**:5 案例生物學無誤(尤其 Case 3 觸發方向、Case 4 拮抗語意、Case 5 gap 判定)
 
 ### Phase B — 引擎:renderer + gate + gold(可純後端驗證)
-- [ ] B1 `backend/app/graph/back_translation.py` + `tests/unit/test_back_translation.py`(P1–P5)
-- [ ] B2 `backend/app/graph/engineer_gate.py` + `tests/unit/test_engineer_gate.py`(複用既有驗證;Case 5 → needs_schema_extension)
-- [ ] B3 `data/sample/expert_demo/gold/*.json` + `tests/gold/test_gold_examples.py`(min assertions)
-- [ ] B4 `data/sample/expert_demo/schema_gap_backlog.json` + `docs/schema-gap-policy.md`
+- [x] B1 `backend/app/graph/back_translation.py` + `tests/unit/test_back_translation.py`(P1–P5)
+- [x] B2 `backend/app/graph/engineer_gate.py` + `tests/unit/test_engineer_gate.py`(複用既有驗證;Case 5 → needs_schema_extension)
+- [x] B3 `data/sample/expert_demo/gold/*.json` + `tests/gold/test_gold_examples.py`(min assertions)
+- [x] B4 `data/sample/expert_demo/schema_gap_backlog.json` + `docs/schema-gap-policy.md`
 
 ### Phase C — 呈現:端點 + UI + 文件收尾
-- [ ] C1 `backend/app/api/routes_expert_demo.py`(`GET /admin/expert-demo/cases`)+ 掛進 `main.py`
-- [ ] C2 前端 `renderExpertDemo` 三 tab(複用 renderGraph;Expert tab 強制隔離)+ styles
-- [ ] C3 `docs/expert-in-the-loop-workflow.md`、`docs/rule-card-format.md`、`schema/rule_cards/*.md`(3 張)
-- [ ] C4 `extraction_guidelines.md` 頂部指向 rule_cards;`README.md`/docs 索引補一段
+- [x] C1 `backend/app/api/routes_expert_demo.py`(`GET /admin/expert-demo/cases`)+ 掛進 `main.py`
+- [x] C2 前端 `renderExpertDemo` 三 tab(複用 renderGraph;Expert tab 強制隔離)+ styles
+- [x] C3 `docs/expert-in-the-loop-workflow.md`、`docs/rule-card-format.md`、`schema/rule_cards/*.md`(3 張)
+- [x] C4 `extraction_guidelines.md` 頂部指向 rule_cards;`README.md`/docs 索引補一段
 
 ### 驗收敘事(完成後應能展示)
 1. AI 提出 graph proposal → 2. 工程師 gate 檢查形式 → 3. 反向翻譯成白話 →
@@ -274,3 +276,14 @@ schema migration UI、production-grade audit、LLM 潤飾層、任何 `schema/` 
 - Phase A3 專家驗收後,若任一案例的 graph 需調整,回頭改 A1/A2 再往下。
 - 未來若要把 demo 接真 pipeline:gold test 從「打固定 proposal」切成「打真實抽取輸出」。
 - `ACTS_VIA`(Case 2 mechanism 的精準邊)列為軟性 backlog,非 MVP。
+
+### 更新(2026-07-23,`changes/expert-gate-integrity`)
+
+- **G5**:新增 Case 6(形式退回 `fail_pattern`)與 Case 7(form-valid 但方向抽反 → 專家
+  `rejected`),讓 demo 明確展示兩道 gate 都會擋。前端專家分頁對 `fail_*` 案例不再顯示會誤導的
+  P5 gap 白話(review finding M1)。
+- **G2**:§五.4 原設計為「唯讀、不寫任何 store」;現**刻意調整**為唯讀讀取 +
+  `POST /admin/expert-demo/reviews` 附加式稽核寫入(`graph_change_logs`,`action='expert_review'`,
+  `actor='demo-viewer'`),讓專家決定成為可追蹤資產。作者權威審查另行 seed;不碰 approved 圖。
+- 仍延後:G1(於 `relationship_types.md` 補 `trigger_direction`,待接真 pipeline)、G3/G4/G6
+  (實作面小清理)。

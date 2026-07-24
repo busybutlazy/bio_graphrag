@@ -1,0 +1,46 @@
+[
+  {
+    "group_id": "group:demo_cortisol_blood_glucose",
+    "source_text": "皮質醇會提高血糖濃度。",
+    "note": "Genuinely NEW knowledge — none of these ids exist in the approved seed graph, so the approve invariant (absent before / present after) is real. Edges attach to the existing approved physiological_variable:blood_glucose, which is referenced but NOT proposed (so it is never overwritten).",
+    "nodes": [
+      {
+        "id": "hormone:cortisol",
+        "type": "Hormone",
+        "label": "皮質醇",
+        "description": "腎上腺皮質分泌的糖皮質素,促進糖質新生,使血糖上升。",
+        "source_chunk_id": "chunk:demo_cortisol"
+      },
+      {
+        "id": "regulatory_effect:cortisol_increases_blood_glucose",
+        "type": "RegulatoryEffect",
+        "label": "皮質醇提高血糖",
+        "description": "皮質醇造成血糖上升的單一調控效果(fact node)。",
+        "source_chunk_id": "chunk:demo_cortisol"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e:demo_cortisol:has_effect",
+        "type": "HAS_EFFECT",
+        "source": "hormone:cortisol",
+        "target": "regulatory_effect:cortisol_increases_blood_glucose",
+        "source_chunk_id": "chunk:demo_cortisol"
+      },
+      {
+        "id": "e:demo_cortisol:on_variable",
+        "type": "ON_VARIABLE",
+        "source": "regulatory_effect:cortisol_increases_blood_glucose",
+        "target": "physiological_variable:blood_glucose",
+        "source_chunk_id": "chunk:demo_cortisol"
+      },
+      {
+        "id": "e:demo_cortisol:increases",
+        "type": "INCREASES",
+        "source": "regulatory_effect:cortisol_increases_blood_glucose",
+        "target": "physiological_variable:blood_glucose",
+        "source_chunk_id": "chunk:demo_cortisol"
+      }
+    ]
+  }
+]
