@@ -157,14 +157,27 @@ _REVIEW_GROUPS = parse_source.DATA_DIR / "expert_demo" / "review_groups.json"
 
 
 async def stage_demo_review_group(
-    conn: asyncpg.Connection, group_id: str, candidate: dict
+    conn: asyncpg.Connection,
+    group_id: str,
+    candidate: dict,
+    possible_schema_gap: bool = False,
 ) -> tuple[int, int]:
     """Stage one demo proposal group (nodes+edges of a statement) as proposed curation_items.
 
     All items share ``group_id`` (so the Review page assembles them into one reviewable
     statement), each carries its own ``schema_check``, and item_ids are group-scoped so the
     demo seed never collides with the extraction path. Idempotent (``ON CONFLICT DO NOTHING``).
+
+    ``possible_schema_gap`` is a group-level hint (a genuine schema gap, per D5). We stash it
+    in each member's ``schema_check`` JSONB (``group_possible_schema_gap``) so ``list_groups``
+    can surface it on the proposal without a new column.
     """
+
+    def _check(item_check: dict) -> str:
+        if possible_schema_gap:
+            item_check = {**item_check, "group_possible_schema_gap": True}
+        return json.dumps(item_check)
+
     staged_nodes = 0
     for node in candidate.get("nodes", []):
         row = await conn.fetchrow(
@@ -177,7 +190,7 @@ async def stage_demo_review_group(
             """,
             f"curation:{group_id}:{node['id']}",
             json.dumps(node),
-            json.dumps(schema_checker.check_node(node)),
+            _check(schema_checker.check_node(node)),
             group_id,
         )
         staged_nodes += row is not None
@@ -193,7 +206,7 @@ async def stage_demo_review_group(
             """,
             f"curation:{group_id}:{edge['id']}",
             json.dumps(edge),
-            json.dumps(schema_checker.check_edge(edge)),
+            _check(schema_checker.check_edge(edge)),
             group_id,
         )
         staged_edges += row is not None
@@ -209,19 +222,21 @@ async def stage_demo_review_groups(conn: asyncpg.Connection) -> dict:
     those are referenced, never re-proposed, so approval cannot overwrite curated nodes.
     """
     groups = json.loads(_REVIEW_GROUPS.read_text(encoding="utf-8"))
-    # Converge: drop demo groups that are no longer defined (still-proposed ones only, so a
-    # reviewer's decisions are never touched). Keeps existing volumes from retaining a stale
-    # demo group after the seed set changes.
+    # Converge proposed demo state on the JSON: drop ALL still-proposed demo items, then
+    # re-stage below. This makes *content* changes to a group take effect (not just group
+    # add/remove) — otherwise ON CONFLICT DO NOTHING would keep stale items from a prior seed.
+    # Approved demo items (a reviewer's decision) are status != 'proposed', so they are left
+    # untouched; `make demo-reset` is the way to undo those.
     await conn.execute(
-        "DELETE FROM curation_items "
-        "WHERE proposed_by = 'demo' AND status = 'proposed' AND group_id IS NOT NULL "
-        "AND NOT (group_id = ANY($1))",
-        [g["group_id"] for g in groups],
+        "DELETE FROM curation_items WHERE proposed_by = 'demo' AND status = 'proposed'"
     )
     staged: dict = {}
     for g in groups:
         n, e = await stage_demo_review_group(
-            conn, g["group_id"], {"nodes": g.get("nodes", []), "edges": g.get("edges", [])}
+            conn,
+            g["group_id"],
+            {"nodes": g.get("nodes", []), "edges": g.get("edges", [])},
+            possible_schema_gap=bool(g.get("possible_schema_gap")),
         )
         staged[g["group_id"]] = {"nodes": n, "edges": e}
     return staged

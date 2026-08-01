@@ -2,7 +2,7 @@
   {
     "group_id": "group:demo_cortisol_blood_glucose",
     "source_text": "皮質醇會提高血糖濃度。",
-    "note": "Genuinely NEW knowledge — none of these ids exist in the approved seed graph, so the approve invariant (absent before / present after) is real. Edges attach to the existing approved physiological_variable:blood_glucose, which is referenced but NOT proposed (so it is never overwritten).",
+    "note": "APPROVE case — genuinely NEW knowledge (no id collides). Passes both gates; approving adds it to the graph. blood_glucose is referenced by edges, never re-proposed.",
     "nodes": [
       {
         "id": "hormone:cortisol",
@@ -42,5 +42,139 @@
         "source_chunk_id": "chunk:demo_cortisol"
       }
     ]
+  },
+  {
+    "group_id": "group:demo_reject_form",
+    "source_text": "體抑素會影響血糖。",
+    "note": "FORM-REJECT case — the RegulatoryEffect has HAS_EFFECT but no ON_VARIABLE / direction edge (原文方向不明), so the three-part pattern is incomplete -> Schema gate fail_pattern -> approve disabled. All ids new.",
+    "nodes": [
+      {
+        "id": "hormone:somatostatin",
+        "type": "Hormone",
+        "label": "體抑素",
+        "description": "胰島 δ 細胞分泌,抑制胰島素與升糖素分泌的激素。",
+        "source_chunk_id": "chunk:demo_reject_form"
+      },
+      {
+        "id": "regulatory_effect:somatostatin_affects_blood_glucose",
+        "type": "RegulatoryEffect",
+        "label": "體抑素影響血糖(方向未定)",
+        "description": "原文只說『影響』,未給明確方向,三段式無法完成。",
+        "source_chunk_id": "chunk:demo_reject_form"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e:demo_reject_form:has_effect",
+        "type": "HAS_EFFECT",
+        "source": "hormone:somatostatin",
+        "target": "regulatory_effect:somatostatin_affects_blood_glucose",
+        "source_chunk_id": "chunk:demo_reject_form"
+      }
+    ]
+  },
+  {
+    "group_id": "group:demo_reject_meaning",
+    "source_text": "胰島素會降低血糖濃度。",
+    "note": "MEANING-REJECT case — form-valid but biologically WRONG (direction reversed) -> Schema gate PASS -> approve enabled; a human must reject it. H1 isolation: all ids are demo-namespaced (hormone:demo_insulin / physiological_variable:demo_blood_glucose / a new RE), so even an accidental approve writes only a self-contained demo island and CANNOT overwrite or wire wrong biology onto the flagship insulin / blood_glucose retrieval path. Labels still read 胰島素 / 血糖 so the teaching point is unchanged (ids are hidden in the 專家審閱 tab). `make demo-reset` cleans any demo approval.",
+    "nodes": [
+      {
+        "id": "hormone:demo_insulin",
+        "type": "Hormone",
+        "label": "胰島素",
+        "description": "示範用胰島素節點(與正式圖譜的 hormone:insulin 分離,避免誤核准污染正式檢索)。",
+        "source_chunk_id": "chunk:demo_reject_meaning"
+      },
+      {
+        "id": "physiological_variable:demo_blood_glucose",
+        "type": "PhysiologicalVariable",
+        "label": "血糖",
+        "description": "示範用血糖節點(與正式圖譜的 blood_glucose 分離)。",
+        "source_chunk_id": "chunk:demo_reject_meaning"
+      },
+      {
+        "id": "regulatory_effect:demo_insulin_increases_blood_glucose",
+        "type": "RegulatoryEffect",
+        "label": "胰島素提高血糖(錯誤)",
+        "description": "AI 將胰島素的效果抽成『提高血糖』,方向與原文相反(抽取錯誤)。",
+        "source_chunk_id": "chunk:demo_reject_meaning"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e:demo_reject_meaning:has_effect",
+        "type": "HAS_EFFECT",
+        "source": "hormone:demo_insulin",
+        "target": "regulatory_effect:demo_insulin_increases_blood_glucose",
+        "source_chunk_id": "chunk:demo_reject_meaning"
+      },
+      {
+        "id": "e:demo_reject_meaning:on_variable",
+        "type": "ON_VARIABLE",
+        "source": "regulatory_effect:demo_insulin_increases_blood_glucose",
+        "target": "physiological_variable:demo_blood_glucose",
+        "source_chunk_id": "chunk:demo_reject_meaning"
+      },
+      {
+        "id": "e:demo_reject_meaning:increases",
+        "type": "INCREASES",
+        "source": "regulatory_effect:demo_insulin_increases_blood_glucose",
+        "target": "physiological_variable:demo_blood_glucose",
+        "source_chunk_id": "chunk:demo_reject_meaning"
+      }
+    ]
+  },
+  {
+    "group_id": "group:demo_plain_addition",
+    "source_text": "胰島是胰臟的一部分。",
+    "note": "PLAIN-SUMMARY (P0) case — schema-valid, no regulatory pattern, NOT a gap -> D5 renders a plain summary and the gate PASSES, so it is approvable. Exercises D5's third outcome live (review S2). New structure node referencing the existing approved structure:pancreas (never re-proposed).",
+    "nodes": [
+      {
+        "id": "structure:pancreatic_islet",
+        "type": "Structure",
+        "label": "胰島",
+        "description": "胰臟中分泌胰島素與升糖素的內分泌組織。",
+        "source_chunk_id": "chunk:demo_plain_addition"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e:demo_plain_addition:part_of",
+        "type": "PART_OF",
+        "source": "structure:pancreatic_islet",
+        "target": "structure:pancreas",
+        "source_chunk_id": "chunk:demo_plain_addition"
+      }
+    ]
+  },
+  {
+    "group_id": "group:demo_schema_gap",
+    "source_text": "甲狀腺素會增強腎上腺素對代謝的作用。",
+    "possible_schema_gap": true,
+    "note": "SCHEMA-GAP case — a permissive/modulating effect (A changes B's effect on C) has no expressible pattern in the current schema. Flagged possible_schema_gap: true -> D5 renders the gap sentence -> gate needs_schema_extension -> approve disabled. All ids new.",
+    "nodes": [
+      {
+        "id": "hormone:thyroxine",
+        "type": "Hormone",
+        "label": "甲狀腺素",
+        "description": "甲狀腺分泌,提高基礎代謝率的激素。",
+        "source_chunk_id": "chunk:demo_schema_gap"
+      },
+      {
+        "id": "hormone:adrenaline",
+        "type": "Hormone",
+        "label": "腎上腺素",
+        "description": "腎上腺髓質分泌,參與代謝與應激反應的激素。",
+        "source_chunk_id": "chunk:demo_schema_gap"
+      },
+      {
+        "id": "physiological_variable:metabolic_rate",
+        "type": "PhysiologicalVariable",
+        "label": "代謝率",
+        "description": "身體的能量代謝速率。",
+        "source_chunk_id": "chunk:demo_schema_gap"
+      }
+    ],
+    "edges": []
   }
 ]
