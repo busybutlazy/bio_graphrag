@@ -23,6 +23,20 @@ class CurationItemResponse(BaseModel):
     reviewed_at: datetime | None = None
 
 
+class CurationGroupCreate(BaseModel):
+    """A hand-made proposal group — a nodes+edges statement staged as one review unit.
+
+    Structural only; business rules (non-empty, element cap, duplicate ids, type whitelist) are
+    enforced in ``service.create_group`` so every rejection follows the ``{"error":{…}}`` contract
+    rather than FastAPI's default validation shape.
+    """
+
+    proposed_nodes: list[dict] = []
+    proposed_edges: list[dict] = []
+    reason: str | None = None
+    possible_schema_gap: bool = False
+
+
 class ApproveRejectRequest(BaseModel):
     reviewer: str
     reason: str | None = None

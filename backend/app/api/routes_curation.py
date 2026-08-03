@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import require_admin
+from app.api.errors import APIError
 from app.curation import service
 from app.schemas.curation import (
     ApproveRejectRequest,
+    CurationGroupCreate,
     CurationItemCreate,
     CurationItemResponse,
     DeleteEdgeRequest,
@@ -12,6 +14,14 @@ from app.schemas.curation import (
 )
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
+
+# The grouped-propose endpoint follows the documented {"error":{code,message}} contract (like
+# /admin/review/*), not the {"detail"} shape the older single-item routes below still emit.
+_ERROR_CODES = {404: "not_found", 409: "conflict", 422: "invalid_request"}
+
+
+def _as_api_error(exc: service.CurationError) -> APIError:
+    return APIError(exc.status_code, _ERROR_CODES.get(exc.status_code, "error"), exc.message)
 
 
 @router.get("/curation/items", response_model=list[CurationItemResponse])
@@ -30,6 +40,20 @@ async def create_curation_item(body: CurationItemCreate) -> dict:
     except service.CurationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     return {"item_id": item_id, "status": "proposed"}
+
+
+@router.post("/curation/groups", status_code=201)
+async def create_curation_group(body: CurationGroupCreate) -> dict:
+    """Stage a hand-made proposal group (nodes+edges statement) → the group Review queue."""
+    try:
+        return await service.create_group(
+            body.proposed_nodes,
+            body.proposed_edges,
+            body.reason,
+            body.possible_schema_gap,
+        )
+    except service.CurationError as exc:
+        raise _as_api_error(exc) from exc
 
 
 @router.post("/curation/items/{item_id}/approve")

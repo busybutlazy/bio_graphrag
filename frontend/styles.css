@@ -240,8 +240,33 @@ input, textarea, select { font-family: var(--sans); }
 .field input, .field textarea, .field select { width: 100%; border: 1px solid var(--keisen); background: var(--canvas); padding: 9px 11px; font-size: 13px; }
 .field textarea { resize: vertical; min-height: 60px; }
 .seg { display: inline-flex; border: 1px solid var(--keisen); }
-.seg button { padding: 8px 16px; font-size: 13px; background: var(--canvas); border: none; color: var(--text-2); }
+.seg button { padding: 8px 16px; font-size: 13px; background: var(--canvas); border: none; color: var(--text-2); cursor: pointer; }
 .seg button.on { background: var(--sumi); color: var(--canvas); }
+/* Ingestion toggle + hand-made statement builder */
+.ing-toggle { margin: 0 48px 20px; }
+.sb-wrap { padding: 4px 48px 40px; max-width: 1040px; }
+.sb-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 10px; }
+.sb-add { padding: 4px 12px; font-size: 12px; cursor: pointer; }
+.sb-list { display: flex; flex-direction: column; gap: 8px; }
+.sb-row { display: grid; grid-template-columns: minmax(110px, 0.9fr) minmax(120px, 1.3fr) minmax(120px, 1.3fr) minmax(120px, 1.3fr) auto; gap: 8px; align-items: center; }
+.sb-row select, .sb-row input { padding: 7px 9px; font-size: 13px; border: 1px solid var(--keisen); background: var(--canvas); color: var(--text); min-width: 0; }
+.sb-reason { width: 100%; padding: 8px 10px; font-size: 13px; border: 1px solid var(--keisen); background: var(--canvas); color: var(--text); }
+.sb-x { border: 1px solid var(--keisen); background: var(--canvas); color: var(--text-2); width: 30px; height: 30px; cursor: pointer; }
+.sb-x:hover { color: var(--vermilion, #b3402a); }
+.sb-empty { font-size: 12px; color: var(--text-2); padding: 4px 0; }
+.sb-gap { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text-2); margin: 18px 0; cursor: pointer; }
+
+/* Responsive (scoped to the P3 builder only — app-wide RWD is a deferred phase): the builder
+   rows stack instead of overflowing on narrow screens. */
+@media (max-width: 760px) {
+  .sb-row { grid-template-columns: 1fr 1fr; }
+  .sb-row select { grid-column: 1 / -1; }
+  .sb-x { grid-column: 2; justify-self: end; }
+}
+@media (max-width: 560px) {
+  .sb-row { grid-template-columns: 1fr; }
+  .sb-x { grid-column: 1; }
+}
 .qitem { border: 1px solid var(--keisen); background: var(--canvas); padding: 14px; margin-bottom: 12px; }
 .qitem .h { display: flex; align-items: center; gap: 8px; }
 .qitem .pay { font-family: var(--mono); font-size: 11px; color: var(--text-2); margin: 8px 0; white-space: pre-wrap; word-break: break-word; }

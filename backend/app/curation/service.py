@@ -1,5 +1,6 @@
 import json
 import uuid
+from collections import Counter
 
 import anyio
 import asyncpg
@@ -13,6 +14,10 @@ from ingestion.pipeline.normalize_concepts import (
     VALID_NODE_TYPES,
     VALID_RELATIONSHIP_TYPES,
 )
+
+# Upper bound on how many nodes+edges one hand-made proposal group may carry. A statement is a
+# small unit; the cap keeps a single request bounded (mirrors the project's request-limit posture).
+MAX_GROUP_ELEMENTS = 20
 
 
 class CurationError(Exception):
@@ -140,6 +145,115 @@ async def create_item(item_type: str, action: str, payload: dict, reason: str | 
             reason,
         )
     return item_id
+
+
+async def create_group(
+    proposed_nodes: list[dict],
+    proposed_edges: list[dict],
+    reason: str | None = None,
+    possible_schema_gap: bool = False,
+    proposed_by: str = "human",
+) -> dict:
+    """Stage a hand-made proposal group — a nodes+edges *statement* — as ``proposed``
+    curation_items sharing one ``group_id``, so it flows straight into the group Review queue and
+    its two gates (Schema gate + expert lens are computed live by ``list_groups``).
+
+    Every element is validated against the type whitelists up front (the injection guard), so a
+    bad type can never reach Cypher label interpolation on approval. All inserts run inside a
+    single transaction: a failure on any element rolls the whole group back — nothing is staged.
+
+    ``possible_schema_gap`` and the proposer's ``reason`` are stashed in each member's
+    ``schema_check`` (``group_possible_schema_gap`` / ``propose_reason``) so ``list_groups`` can
+    surface them without a new column, and so the reason survives an approve/reject overwriting
+    ``curation_items.reason`` with the *reviewer's* reason. The stored ``schema_check`` is otherwise
+    unused — the live gate does the real evaluation.
+    """
+    total = len(proposed_nodes) + len(proposed_edges)
+    if total == 0:
+        raise CurationError(422, "a proposal group needs at least one node or edge")
+    if total > MAX_GROUP_ELEMENTS:
+        raise CurationError(
+            422,
+            f"a proposal group may contain at most {MAX_GROUP_ELEMENTS} elements; got {total}",
+        )
+
+    for node in proposed_nodes:
+        _validate_curation_payload("node", node)
+    for edge in proposed_edges:
+        _validate_curation_payload("edge", edge)
+
+    # Intra-group duplicate-id guard: item_id is ``curation:{group_id}:{elem_id}``, so a repeated
+    # id would PK-collide mid-transaction. Reject up front across the combined node+edge id set.
+    ids = [n["id"] for n in proposed_nodes] + [e["id"] for e in proposed_edges]
+    dupes = sorted(i for i, c in Counter(ids).items() if c > 1)
+    if dupes:
+        raise CurationError(422, f"duplicate element id(s) within the group: {', '.join(dupes)}")
+
+    # Dangling-endpoint guard (review F2): every edge endpoint must resolve to a node proposed in
+    # this same group OR one already in the approved graph. Otherwise the Schema gate passes, but
+    # ``load_neo4j.write_edges``'s MATCH finds nothing at approval, the MERGE silently no-ops, and
+    # the audit log records an edge that was never written. Reject at propose time instead.
+    # A missing/empty endpoint is the same hole (`""` is falsy and would slip a bare filter, then
+    # `MATCH (a {id:""})` no-ops the same way), so reject those explicitly first (review R4).
+    for e in proposed_edges:
+        if not e.get("source") or not e.get("target"):
+            raise CurationError(422, f"edge {e.get('id')!r} needs a non-empty source and target")
+    proposed_ids = {n["id"] for n in proposed_nodes}
+    referenced = {ep for e in proposed_edges for ep in (e["source"], e["target"])}
+    external = referenced - proposed_ids
+    if external:
+        # Existence check (not a label lookup — a real but unlabelled approved node must still
+        # resolve; review R2), so the guard never false-rejects an edge into the approved graph.
+        found = await anyio.to_thread.run_sync(
+            _existing_approved_ids, get_driver(), sorted(external), []
+        )
+        unresolved = sorted(external - set(found["nodes"]))
+        if unresolved:
+            raise CurationError(
+                422,
+                "edge endpoint(s) not found as a proposed node in this group or an approved "
+                f"node: {', '.join(unresolved)}",
+            )
+
+    # Hand-made knowledge has no source chunk, but extraction_output_schema requires
+    # ``source_chunk_id`` on every node/edge (the schema gate validates against it). Stamp a
+    # namespaced provenance marker so a hand-authored statement can pass the gate; the author *is*
+    # the source. Namespaced (``manual:{proposed_by}``) per the project's ``prefix:id`` convention
+    # so it can never collide with a real chunk id (review F8).
+    provenance = f"manual:{proposed_by}"
+
+    def _with_provenance(elem: dict) -> dict:
+        return elem if elem.get("source_chunk_id") else {**elem, "source_chunk_id": provenance}
+
+    member_check: dict = {}
+    if possible_schema_gap:
+        member_check["group_possible_schema_gap"] = True
+    if reason:
+        member_check["propose_reason"] = reason
+
+    group_id = f"group:{proposed_by}:{uuid.uuid4()}"
+    check_json = json.dumps(member_check)
+    elements = [("node", _with_provenance(n)) for n in proposed_nodes] + [
+        ("edge", _with_provenance(e)) for e in proposed_edges
+    ]
+
+    async with connection() as conn:
+        async with conn.transaction():
+            for item_type, elem in elements:
+                await conn.execute(
+                    """
+                    INSERT INTO curation_items
+                        (item_id, item_type, action, payload, status, proposed_by, schema_check, group_id)
+                    VALUES ($1, $2, 'create', $3, 'proposed', $4, $5, $6)
+                    """,
+                    f"curation:{group_id}:{elem['id']}",
+                    item_type,
+                    json.dumps({**elem, "status": "proposed"}),
+                    proposed_by,
+                    check_json,
+                    group_id,
+                )
+    return {"group_id": group_id, "nodes": len(proposed_nodes), "edges": len(proposed_edges)}
 
 
 async def approve_item(item_id: str, reviewer: str, reason: str | None) -> dict:
@@ -306,12 +420,20 @@ async def list_groups() -> list[dict]:
         for nid, label in extra.items():
             ctx["labels"].setdefault(nid, label)
 
+    def _propose_reason(items: list) -> str | None:
+        for it in items:
+            reason = (_load_json(it["schema_check"]) or {}).get("propose_reason")
+            if reason:
+                return reason
+        return None
+
     return [
         {
             "group_id": gid,
             "proposed_by": items[0]["proposed_by"],
             "item_ids": [it["item_id"] for it in items],
             "proposal": proposals[gid],
+            "propose_reason": _propose_reason(items),
             "schema_gate": evaluate_schema_gate(proposals[gid]),
             "understanding": render_understanding(proposals[gid], ctx),
         }
