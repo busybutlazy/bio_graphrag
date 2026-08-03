@@ -98,3 +98,14 @@ def test_d5_unflagged_no_pattern_is_a_plain_summary_not_a_gap():
     assert r["pattern"] == "P0" and r["is_gap"] is False
     assert "糖尿病" in r["text"] and "胰臟" in r["text"]
     assert "無法" not in r["text"]  # must not read as a gap
+
+
+def test_case7_form_valid_but_wrong_biology_is_rendered_faithfully():
+    # Marquee "form vs meaning": case 007 passes the engineer gate but states the WRONG (reversed)
+    # direction — insulin *raises* blood glucose. The renderer must reflect that faithfully rather
+    # than silently correct it, so a domain expert can reject it at the meaning gate. Pin the
+    # direction phrase so renderer drift can't quietly erase the point. (This property was pinned by
+    # the retired expert-demo API test; kept here after P4 — see changes/two-gate-review-p4/.)
+    r = _render("blood_glucose_case_007")
+    assert r["pattern"] == "P1" and r["is_gap"] is False
+    assert "上升" in r["text"]

@@ -164,5 +164,6 @@ regulatory_effect:insulin_increases_blood_glucose ─INCREASES→ physiological_
 | 6 | 形式退回 | (incomplete) | **fail_pattern** | not_reviewed | — |
 | 7 | 意義退回(方向抽反) | single_regulatory_effect | pass | **rejected** | — |
 
-> 專家決定經 `POST /admin/expert-demo/reviews` 寫成 `graph_change_logs` 的 append-only 稽核列
-> (`action='expert_review'`),與 curation 用同一條稽核軌。
+> **退場說明(P4):** 上述 `POST /admin/expert-demo/reviews`(獨立 expert-demo)端點已移除;
+> 現在專家決定 = 群組審閱的 `approve`/`reject`,同樣寫成 `graph_change_logs` 的 append-only 稽核列,
+> 與 curation 用同一條稽核軌。本表保留作為原型案例紀錄。見 `changes/two-gate-review-p4/`。

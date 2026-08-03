@@ -1,8 +1,12 @@
 # Expert-in-the-loop Graph Extraction Governance — 計畫與 Roadmap
 
-> 狀態:**已實作**(Phase A–C 完成並合併;見 commit `828ebf4` 等)。後續整合工作
+> 狀態:**已實作,標準/端點已退場**(Phase A–C 完成並合併;見 commit `828ebf4` 等)。後續整合工作
 >   (G2 專家審查稽核持久化、G5 兩個 rejection 案例、文件校正)見
 >   `changes/expert-gate-integrity/`。
+>   **退場說明(P4, 2026-08-03):** 此文件描述的獨立 `審閱`(expert-demo)畫面與
+>   `/admin/expert-demo/*` 端點已被統一的「群組審閱」(P1–P3)取代並移除;兩道 gate 的**引擎**
+>   (`engineer_gate` / `back_translation`)與 gold 回歸網保留,`cases.json` 降為純測試 fixture。
+>   見 `changes/two-gate-review-p4/`。
 > 建立日期:2026-07-09　|　最後更新:2026-07-23
 > 範圍:MVP 為固定資料的展示型 workflow demo,不接真 pipeline、不改 schema 型別
 
@@ -194,7 +198,7 @@ gold{promote, gold_id}`。
 - **Tab3 Expert Review**(專家,強制隔離):原文、系統理解(當場 render)、概念圖(複用 `renderGraph`)、
   系統沒理解成、審查 radio、備註。**不顯示** JSON/id/schema code/gap code/prompt。
   選「無法表達」→ 展開白話 gap radio。選擇存 sessionStorage。
-資料源:`GET /admin/expert-demo/cases`(read-only,admin key,讀 `cases.json`)。
+資料源:`GET /admin/expert-demo/cases`(read-only,admin key,讀 `cases.json`)。**〔P4 退場:此端點已移除;運行中的審核見群組審閱 `GET /admin/review/groups`。〕**
 
 ### 5. Gold minimum assertions(`data/sample/expert_demo/gold/*.json`)
 每筆存結構性最小斷言(非完整 equality):`expected_understanding`(renderer 回歸基準)+
@@ -282,8 +286,10 @@ schema migration UI、production-grade audit、LLM 潤飾層、任何 `schema/` 
 - **G5**:新增 Case 6(形式退回 `fail_pattern`)與 Case 7(form-valid 但方向抽反 → 專家
   `rejected`),讓 demo 明確展示兩道 gate 都會擋。前端專家分頁對 `fail_*` 案例不再顯示會誤導的
   P5 gap 白話(review finding M1)。
-- **G2**:§五.4 原設計為「唯讀、不寫任何 store」;現**刻意調整**為唯讀讀取 +
+- **G2**:§五.4 原設計為「唯讀、不寫任何 store」;曾**刻意調整**為唯讀讀取 +
   `POST /admin/expert-demo/reviews` 附加式稽核寫入(`graph_change_logs`,`action='expert_review'`,
   `actor='demo-viewer'`),讓專家決定成為可追蹤資產。作者權威審查另行 seed;不碰 approved 圖。
+  **〔P4 退場:此端點與 `record_expert_review` 已移除;專家決定現以群組審閱的 approve/reject 記入
+  `graph_change_logs`。〕**
 - 仍延後:G1(於 `relationship_types.md` 補 `trigger_direction`,待接真 pipeline)、G3/G4/G6
   (實作面小清理)。

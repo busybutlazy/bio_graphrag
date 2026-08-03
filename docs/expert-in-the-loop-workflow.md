@@ -1,5 +1,12 @@
 # Expert-in-the-loop 萃取治理 — 操作 workflow
 
+> **退場說明(P4, 2026-08-03):** 本文件描述的獨立 `審閱`(expert-demo)前端分頁(`renderExpertDemo`)
+> 與 `GET /admin/expert-demo/cases`、`POST /admin/expert-demo/reviews` 端點**已移除**,由統一的
+> **群組審閱**(`GET /admin/review/groups` + `POST /admin/review/groups/{id}/approve|reject`)取代。
+> 兩道 gate 的**引擎**(`engineer_gate` / `back_translation`)與 gold 回歸網保留;`cases.json` 降為純
+> 測試 fixture。以下內容保留作為原型的設計/操作紀錄;運行中的審核流程請看群組審閱。見
+> `changes/two-gate-review-p4/`。
+
 > 上游計畫與決策紀錄見 `docs/expert-in-the-loop-plan.md`。本文件是**操作面**:一個案例
 > 從 AI 提案走到固化成 gold 的每一步、每一關由誰負責、卡在哪就往哪去。
 

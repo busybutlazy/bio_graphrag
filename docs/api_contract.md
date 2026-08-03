@@ -257,30 +257,6 @@ class DeleteEdgeRequest(BaseModel):
 
 翻整個群組為 `rejected`,**不寫 Neo4j**,`graph_change_logs` 追加 `action='reject'` 一列。Request/錯誤碼同上,回傳 `{group_id, status:'rejected'}`。
 
-### `GET /admin/expert-demo/cases`
-
-Expert-in-the-loop governance demo 的**唯讀**資料出口(admin key 保護,同其他 `/admin/*`)。回傳 `data/sample/expert_demo/cases.json` 的固定 demo 案例;每筆額外附上**當場計算、不落地**的兩個欄位:
-
-- `system_understanding`:`{pattern, rule_id, is_gap, text}` — 由 deterministic 反向翻譯器(`app/graph/back_translation.py`,無 LLM)算出的白話「系統理解」。
-- `engineer_gate`:`{result, checks[]}` — 由 `app/graph/engineer_gate.py` 複用既有 schema/型別驗證算出的形式判定,`result ∈ {pass, fail_schema, fail_pattern, fail_testability, needs_schema_extension}`。
-
-此 `GET` **唯讀**:不寫任何 store、不碰 approved 圖、不繞過 curation;無副作用。
-
-### `POST /admin/expert-demo/reviews`
-
-把一位 demo 觀看者的專家 gate 決定寫成 **append-only 稽核列**(admin key 保護,同其他 `/admin/*`)。Request:
-
-```
-{
-  case_id: str,                         # 必填,1–200 字
-  decision: "agree" | "doubt" | "cannot",  # 必填;非此三者 → 422
-  schema_gap_type: str | null,          # 選填,僅 decision="cannot" 有意義
-  notes: str | null                     # 選填,≤2000 字
-}
-```
-
-回傳 `201 { change_id, status: "recorded" }`。副作用**僅**在 `graph_change_logs` 追加一列(`action='expert_review'`、`target_type='expert_demo_case'`、`target_id=case_id`、`actor='demo-viewer'`、`after_state={decision, schema_gap_type}`);**不碰 approved 圖、不寫 Neo4j、不繞過 curation**。作者權威審查另行 seed。設計與唯讀→附加式寫入的變更說明見 `docs/expert-in-the-loop-plan.md` 五.4 與 `changes/expert-gate-integrity/`。
-
 ## 4. 不提供的 API
 
 `POST /cypher`、`GET /all-nodes`、`GET /all-edges`、`GET /export-all`、`GET /raw-source/{id}` 一律不實作,理由見 `docs/graph_plan.md` 5.3 節。
