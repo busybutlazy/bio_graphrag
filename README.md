@@ -13,11 +13,11 @@ The domain expert behind that second gate is real: I taught high-school biology 
 ### Governance walkthrough (all of it runs)
 
 1. **Ask** — a student question returns a grounded answer from the approved graph (`POST /query`, 問答 screen).
-2. **Propose** — ingest a chapter; the LLM proposes nodes/edges that land as `proposed` in the curation queue (`POST /admin/ingest/run`, or 審訂 create) — never written to the live graph.
+2. **Propose** — on the 收錄 (Ingestion) screen, either an LLM proposes nodes/edges from a chapter (`POST /admin/ingest/run`) or an expert hand-builds a statement (`POST /admin/curation/groups`); both land as `proposed` — never written to the live graph.
 3. **Prove invisible** — re-ask the same question; the just-proposed graph fact does **not** appear, because retrieval filters on `status='approved'`.
-4. **Two gates** — the 審閱 (Expert Review) screen runs each proposal through the engineer gate (form) then the expert gate (meaning). It includes a case that *passes* form but is **rejected for wrong biology** (reversed direction), and a case *rejected at the form gate* — proving the gates are independent (`GET /admin/expert-demo/cases`).
-5. **Approve** — a human approves; the node is written to Neo4j as `approved` (`POST /admin/curation/items/{id}/approve`).
-6. **Re-ask + audit** — the answer now includes it, and every decision (curation *and* expert review) is an append-only row in `graph_change_logs` with actor, action, and reason (`POST /admin/expert-demo/reviews` records expert-gate decisions).
+4. **Two gates** — the 群組審閱 (Review) screen runs each proposal group through the engineer gate (form) then the expert gate (meaning, back-translated with no JSON). The seeded demo groups include one that *passes* form but is **wrong biology** (reversed direction — rendered faithfully so the expert can reject it), one *rejected at the form gate*, and a *schema-gap* one — proving the gates are independent (`GET /admin/review/groups`).
+5. **Approve** — a human approves the group; its nodes/edges are written to Neo4j as `approved` (`POST /admin/review/groups/{id}/approve`).
+6. **Re-ask + audit** — the answer now includes it, and every approve/reject is an append-only row in `graph_change_logs` with actor, action, and reason.
 
 ## Architecture
 
@@ -67,15 +67,15 @@ open http://localhost:8080/        # served via nginx → FastAPI backend
 
 ## Demo UI
 
-A static single-page UI (vanilla HTML/CSS/JS, no build step) is served at `http://localhost:8080/` (nginx → FastAPI backend) — every screen is backed by a real endpoint, over the actual sample endocrine graph. The visual system reuses a supplied design handoff (本草 HONZŌ). Five screens:
+A static single-page UI (vanilla HTML/CSS/JS, no build step) is served at `http://localhost:8080/` (nginx → FastAPI backend) — every screen is backed by a real endpoint, over the actual sample endocrine graph. The visual system reuses a supplied design handoff (本草 HONZŌ). Six screens, split along **propose (收錄) vs dispose (群組審閱)**:
 
 | Screen | Endpoint(s) | What it shows |
 |---|---|---|
 | **問答 Chat** | `POST /query` | Hybrid retrieval Q&A: grounded answer + citation chips + supporting nodes + relationships. Deep-link a question: `/?ask=...#chat` |
 | **圖譜 Graph** | `GET /neighbors`, `POST /concept-map` | Force-directed subgraph of a node or topic; click a node for detail. Deep-link: `/?node=hormone:insulin#graph` |
 | **典藏 Library** | `GET /library` | Approved nodes grouped by topic; click through to the graph |
-| **審訂 Curation** | `GET/POST /admin/curation/*` | Human-in-the-loop: propose a node/edge → review queue → approve/reject into the graph |
-| **審閱 Expert Review** | `GET /admin/expert-demo/cases` | Governance demo: AI proposal → engineer gate (form) → deterministic back-translation → expert gate (meaning, no JSON) → schema-gap backlog → gold regression. See `docs/expert-in-the-loop-workflow.md` |
+| **收錄 Ingestion** | `GET/POST /admin/ingest/*`, `POST /admin/curation/groups` | Propose knowledge two ways behind one toggle: LLM-extract from a chapter, or hand-build a statement (nodes+edges) — both stage as `proposed` |
+| **群組審閱 Review** | `GET /admin/review/groups`, `POST /admin/review/groups/{id}/approve\|reject` | The two-gate dispose surface: each proposal group gets an engineer gate (form) + a back-translated expert gate (meaning, no JSON); approve writes to the graph + audit. Seeded demo groups cover approve / form-reject / meaning-reject / schema-gap. See `docs/expert-in-the-loop-workflow.md` |
 | **評估 Evaluation** | `GET /admin/evaluation/latest` | Live recall@k / grounded / P95-latency dashboard over the golden questions |
 
 With no `OPENAI_API_KEY` the demo runs fully offline (lexical retrieval + an extractive, clearly-labelled answer), so a fresh clone works with no secrets.
