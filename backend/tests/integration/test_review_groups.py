@@ -7,6 +7,7 @@ row (invariant: absent before, present after), and that reject writes nothing.
 
 import asyncio
 import json
+import uuid
 
 import asyncpg
 import pytest
@@ -396,3 +397,40 @@ def test_approve_audit_records_full_payloads():
     assert len(after["nodes"]) == 3 and len(after["edges"]) == 3
     assert after["nodes"][0]["label"]  # full payloads, not bare ids
     assert after["item_ids"]
+
+
+def test_create_group_is_atomic_on_failure(monkeypatch):
+    """P3 condition 2: a failure partway through staging rolls the whole group back.
+
+    Pin group_id (fixed uuid), pre-insert a decoy occupying node_b's item_id so the *second*
+    insert PK-collides; node_a (inserted first, same transaction) must not survive.
+    """
+    fixed = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
+    monkeypatch.setattr(service.uuid, "uuid4", lambda: fixed)
+    group_id = f"group:human:{fixed}"
+    node_a = {"id": "hormone:atomic_a", "type": "Hormone", "label": "a", "description": "d"}
+    node_b = {"id": "hormone:atomic_b", "type": "Hormone", "label": "b", "description": "d"}
+
+    async def _run():
+        conn = await _conn()
+        try:
+            await conn.execute(
+                "INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by, group_id) "
+                "VALUES ($1,'node','create',$2,'proposed','test',$3)",
+                f"curation:{group_id}:{node_b['id']}",
+                json.dumps(node_b),
+                group_id,
+            )
+            with pytest.raises(asyncpg.UniqueViolationError):
+                await service.create_group([node_a, node_b], [])
+            rows = await conn.fetch(
+                "SELECT item_id FROM curation_items WHERE group_id = $1 ORDER BY item_id", group_id
+            )
+            return [r["item_id"] for r in rows]
+        finally:
+            await conn.execute("DELETE FROM curation_items WHERE group_id = $1", group_id)
+            await conn.close()
+
+    remaining = asyncio.run(_run())
+    # only the decoy survives — node_a's insert was rolled back with the failed transaction
+    assert remaining == [f"curation:{group_id}:{node_b['id']}"]

@@ -5,11 +5,16 @@ function E(tag, props, ...kids) {
   const el = document.createElement(tag);
   if (props) {
     for (const [k, v] of Object.entries(props)) {
-      if (v == null) continue;
+      // null/undefined AND boolean-false → omit the attribute entirely. Without this, a falsy
+      // boolean prop (e.g. `selected: false`) would setAttribute(k, "false"), and since an HTML
+      // boolean attribute is truthy by *presence*, every option ends up selected and the last one
+      // wins — staging a type the curator never chose. `true` → present with empty value.
+      if (v == null || v === false) continue;
       if (k === 'class') el.className = v;
       else if (k === 'html') el.innerHTML = v;
       else if (k === 'text') el.textContent = v;
       else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+      else if (v === true) el.setAttribute(k, '');
       else el.setAttribute(k, v);
     }
   }
@@ -137,8 +142,7 @@ const VIEWS = [
   { id: 'chat', label: '問答', render: renderChat },
   { id: 'graph', label: '圖譜', render: renderGraph },
   { id: 'library', label: '典藏', render: renderLibrary },
-  { id: 'ingest', label: '解析', render: renderIngest },
-  { id: 'curation', label: '審訂', render: renderCuration },
+  { id: 'ingest', label: '收錄', render: renderIngest },
   { id: 'review', label: '群組審閱', render: renderReview },
   { id: 'expert', label: '審閱', render: renderExpertDemo },
   { id: 'eval', label: '評估', render: renderEval },
@@ -503,165 +507,6 @@ async function renderLibrary(host) {
    ============================================================ */
 const NODE_TYPES = ['Hormone', 'Structure', 'Receptor', 'RegulatoryEffect', 'PhysiologicalVariable', 'Interaction', 'FeedbackLoop', 'Concept', 'System', 'Disease', 'Misconception'];
 const REL_TYPES = ['SECRETES', 'TARGETS', 'BINDS_TO', 'HAS_EFFECT', 'ON_VARIABLE', 'INCREASES', 'DECREASES', 'REGULATES_SECRETION_OF', 'PARTICIPATES_IN', 'USES_EFFECT', 'PREREQUISITE_OF', 'CAUSES', 'COMMONLY_CONFUSED_WITH'];
-
-/* edge endpoints only carry ids; resolve to human labels for the review cards.
-   優先序:佇列同儕候選節點 → approved 圖(GET /nodes/{id}) → 退回短 id。
-   查不到必須靜默 fallback,不可讓審核卡片報錯。 */
-const nodeLabelCache = {};
-async function resolveNodeLabels(ids, localMap) {
-  const out = {};
-  const missing = [];
-  Array.from(new Set(ids.filter(Boolean))).forEach((id) => {
-    if (localMap[id]) out[id] = localMap[id];
-    else if (nodeLabelCache[id]) out[id] = nodeLabelCache[id];
-    else missing.push(id);
-  });
-  await Promise.all(missing.map(async (id) => {
-    try {
-      const d = await api.get('/nodes/' + encodeURIComponent(id));
-      const lbl = d.label || shortId(id);
-      nodeLabelCache[id] = lbl; out[id] = lbl;
-    } catch { out[id] = shortId(id); }
-  }));
-  return out;
-}
-
-async function renderCuration(host) {
-  clear(host);
-  host.append(E('div', { class: 'page-head', style: 'padding-bottom:0' },
-    E('div', { class: 'eyebrow' }, 'CURATION · 人工審訂'),
-    E('div', { class: 'page-title', style: 'margin-top:8px;font-size:30px' }, '審訂佇列'),
-    E('div', { class: 'page-sub' }, 'LLM 或人工提出的候選節點/關係先進 proposed 狀態，經審核才寫入 approved graph。')));
-
-  const wrap = E('div', { class: 'cur-wrap' });
-  const left = E('div', { class: 'cur-col' });
-  const right = E('div', { class: 'cur-col' });
-  wrap.append(left, right); host.append(wrap);
-
-  /* ---- propose form ---- */
-  let itemType = 'node';
-  const notice = E('div');
-  const formHost = E('div');
-  left.append(E('div', { class: 'eyebrow', style: 'margin-bottom:14px' }, '提出候選'));
-  const seg = E('div', { class: 'seg' },
-    E('button', { class: 'on', onclick: (e) => { itemType = 'node'; toggleSeg(e.target); paintForm(); } }, '概念'),
-    E('button', { onclick: (e) => { itemType = 'edge'; toggleSeg(e.target); paintForm(); } }, '關係'));
-  function toggleSeg(btn) { seg.querySelectorAll('button').forEach((b) => b.classList.remove('on')); btn.classList.add('on'); }
-  left.append(seg, notice, formHost);
-
-  function field(label, input, hint) {
-    return E('div', { class: 'field' },
-      E('label', {}, label, hint ? E('span', { class: 'field-hint' }, hint) : null),
-      input);
-  }
-  function paintForm() {
-    clear(formHost);
-    if (itemType === 'node') {
-      const type = E('select', {}, ...NODE_TYPES.map((t) => E('option', { value: t }, nodeTypeLabel(t))));
-      const label = E('input', { placeholder: '例如:胰島素' });
-      const desc = E('textarea', { placeholder: '用一兩句話說明這個概念…' });
-      const id = E('input', { placeholder: 'hormone:insulin' });
-      const reason = E('input', { placeholder: '為什麼要新增這個概念?' });
-      formHost.append(
-        field('類型', type),
-        field('名稱', label),
-        field('說明', desc),
-        field('系統識別碼', id, '小寫英數與冒號,例如 hormone:insulin'),
-        field('提出理由', reason),
-        E('button', { class: 'btn', onclick: () => submit({ item_type: 'node', action: 'create', reason: reason.value, payload: { id: id.value.trim(), type: type.value, label: label.value.trim(), description: desc.value.trim() } }) }, '提出候選'));
-    } else {
-      const type = E('select', {}, ...REL_TYPES.map((t) => E('option', { value: t }, phraseRelation(t))));
-      const source = E('input', { placeholder: '起點概念的識別碼' });
-      const target = E('input', { placeholder: '終點概念的識別碼' });
-      const id = E('input', { placeholder: 'edge:insulin_decreases_glucose' });
-      const reason = E('input', { placeholder: '為什麼這兩個概念之間有這個關係?' });
-      formHost.append(
-        field('關係', type),
-        field('起點', source, '例如 hormone:insulin'),
-        field('終點', target, '例如 physiological_variable:blood_glucose'),
-        field('系統識別碼', id, '小寫英數與冒號'),
-        field('提出理由', reason),
-        E('button', { class: 'btn', onclick: () => submit({ item_type: 'edge', action: 'create', reason: reason.value, payload: { id: id.value.trim(), type: type.value, source: source.value.trim(), target: target.value.trim() } }) }, '提出候選'));
-    }
-  }
-  async function submit(body) {
-    clear(notice);
-    if (!body.payload.id) { notice.append(E('div', { class: 'notice err' }, 'id 為必填')); return; }
-    try {
-      await api.post('/admin/curation/items', body);
-      notice.append(E('div', { class: 'notice ok' }, '已提出，狀態 proposed。')); paintForm(); loadQueue();
-    } catch (err) { notice.append(E('div', { class: 'notice err' }, err.message)); }
-  }
-  paintForm();
-
-  /* ---- review queue ---- */
-  right.append(E('div', { class: 'eyebrow', style: 'margin-bottom:14px' }, '待審佇列 · PROPOSED'));
-  const queue = E('div');
-  right.append(queue);
-
-  async function loadQueue() {
-    clear(queue); queue.append(E('div', { class: 'loading', style: 'padding:8px' }, '載入…'));
-    let items;
-    try { items = await api.get('/admin/curation/items?status=proposed'); }
-    catch (err) { clear(queue); queue.append(E('div', { class: 'notice err' }, err.message)); return; }
-    if (!items.length) { clear(queue); queue.append(E('div', { class: 'muted', style: 'font-size:12px' }, '目前沒有待審項目。可用左側表單提出一個。')); return; }
-
-    // resolve edge endpoint ids → human labels before painting
-    const localMap = {};
-    items.forEach((it) => { if (it.item_type === 'node' && it.payload && it.payload.id) localMap[it.payload.id] = it.payload.label || it.payload.id; });
-    const endpointIds = [];
-    items.forEach((it) => { if (it.item_type === 'edge') endpointIds.push(it.payload.source, it.payload.target); });
-    const labels = await resolveNodeLabels(endpointIds, localMap);
-
-    clear(queue);
-    items.forEach((it) => {
-      const p = it.payload;
-      // headline reads as biology, not schema: 類型 + 名稱 / 關係句
-      let head;
-      if (it.item_type === 'node') {
-        head = E('div', { class: 'q-head' },
-          E('span', { class: 'q-kind', style: `--k:${typeColor(p.type)}` }, nodeTypeLabel(p.type)),
-          E('span', { class: 'q-name' }, p.label || labels[p.id] || shortId(p.id)));
-      } else {
-        head = E('div', { class: 'q-head q-edge' },
-          E('span', { class: 'q-name' }, labels[p.source] || shortId(p.source)),
-          E('span', { class: 'q-rel' }, phraseRelation(p.type)),
-          E('span', { class: 'q-name' }, labels[p.target] || shortId(p.target)));
-      }
-      const desc = (it.item_type === 'node' && p.description) ? E('div', { class: 'q-desc' }, p.description) : null;
-      const reason = it.reason ? E('div', { class: 'q-reason' }, '提出理由：' + it.reason) : null;
-
-      // technical details — collapsed by default so the engineer gate loses nothing
-      const sc = it.schema_check;
-      const schemaFailed = sc && !sc.passed;
-      const techRows = [
-        E('div', {}, `項目類型：${it.item_type} · 動作：${it.action}`),
-        E('div', {}, `id：${p.id}`),
-      ];
-      if (it.item_type === 'edge') techRows.push(E('div', {}, `原始關係：${p.source} —${p.type}→ ${p.target}`));
-      if (sc) {
-        const failed = (sc.checks || []).filter((c) => !c.passed);
-        techRows.push(E('div', { class: sc.passed ? 'ok' : 'warn' },
-          sc.passed ? 'Schema 自動檢查：通過'
-                    : 'Schema 自動檢查未過：' + failed.map((c) => c.detail || c.name).join('、')));
-      }
-      const tech = E('details', { class: 'q-tech' },
-        E('summary', {}, '技術細節', schemaFailed ? E('span', { class: 'q-warn' }, '⚠ schema 需注意') : null),
-        E('div', { class: 'q-tech-body' }, ...techRows));
-
-      const acts = E('div', { class: 'acts' },
-        E('button', { class: 'btn', onclick: () => decide(it.item_id, 'approve') }, '批准'),
-        E('button', { class: 'btn-ghost', onclick: () => decide(it.item_id, 'reject') }, '拒絕'));
-
-      queue.append(E('div', { class: `qitem${schemaFailed ? ' qitem-warn' : ''}` }, head, desc, reason, tech, acts));
-    });
-  }
-  async function decide(itemId, action) {
-    try { await api.post(`/admin/curation/items/${encodeURIComponent(itemId)}/${action}`, { reviewer: 'demo', reason: action === 'approve' ? '審核通過' : '不需要' }); loadQueue(); }
-    catch (err) { clear(notice); notice.append(E('div', { class: 'notice err' }, err.message)); }
-  }
-  loadQueue();
-}
 
 /* ============================================================
    EXPERT REVIEW / 審閱 — governance demo (AI 提案 → 工程師 gate → 反向翻譯 → 專家 gate)
@@ -1035,6 +880,7 @@ async function renderReview(host) {
   function paintProposal(body, g) {
     const p = g.proposal;
     body.append(E('div', { class: 'ex-sub' }, '提案者:' + g.proposed_by));
+    if (g.propose_reason) body.append(E('div', { class: 'ex-sub' }, '提出理由:' + g.propose_reason));
     body.append(E('div', { class: 'ex-h' }, '候選節點'));
     (p.proposed_nodes || []).forEach((n) => body.append(E('div', { class: 'ex-row' },
       E('span', { class: 'q-kind', style: `--k:${typeColor(n.type)}` }, nodeTypeLabel(n.type)),
@@ -1144,7 +990,159 @@ async function renderReview(host) {
   paintList(); paintPanel();
 }
 
+/* Ingestion (propose): one page, two sources for the SAME governance pipeline —
+   LLM extraction from a document, or an expert hand-building a statement. Both stage
+   `proposed` items; the group Review (dispose) applies the two gates. */
 async function renderIngest(host) {
+  clear(host);
+  host.append(E('div', { class: 'page-head' },
+    E('div', { class: 'eyebrow' }, 'INGESTION · 收錄提案'),
+    E('div', { class: 'page-title', style: 'margin-top:8px;font-size:30px' }, '知識收錄'),
+    E('div', { class: 'page-sub' },
+      '兩種來源、同一條治理管線:LLM 從文件抽取,或專家手工建構陳述。' +
+      '提案一律先進 proposed,經群組審閱兩道 gate(Schema gate + 專家審閱)才寫入 approved 圖。')));
+
+  let mode = 'extract';
+  let paintGen = 0;  // guards against a slow sub-view (paintExtract awaits an API call) resolving
+                     // after a newer toggle and clobbering the current view — see review F7.
+  const seg = E('div', { class: 'seg ing-toggle' });
+  const sub = E('div');
+
+  function paintToggle() {
+    clear(seg);
+    seg.append(
+      E('button', { class: mode === 'extract' ? 'on' : '',
+        onclick: () => switchMode('extract') }, 'LLM 抽取'),
+      E('button', { class: mode === 'handmade' ? 'on' : '',
+        onclick: () => switchMode('handmade') }, '人工建構'));
+  }
+  async function paint() {
+    const gen = ++paintGen;
+    const holder = E('div');
+    if (mode === 'extract') await paintExtract(holder);
+    else await paintHandmade(holder);
+    if (gen !== paintGen) return;  // a newer paint superseded us — drop this stale render
+    clear(sub);
+    sub.append(holder);
+  }
+  function switchMode(m) { if (m === mode) return; mode = m; paintToggle(); paint(); }
+
+  paintToggle();
+  host.append(seg, sub);
+  await paint();
+}
+
+/* Hand-made statement builder — compose 1+ concepts and 0+ relations into ONE proposal
+   group (shared group_id) and stage it via POST /admin/curation/groups, so it flows into
+   the group Review queue exactly like an LLM-extracted statement. */
+async function paintHandmade(host) {
+  clear(host);
+  const state = { nodes: [], edges: [], gap: false };
+  const notice = E('div');
+  const nodesHost = E('div', { class: 'sb-list' });
+  const edgesHost = E('div', { class: 'sb-list' });
+
+  // Build a <select> whose current value is set *after* construction (sel.value = …) rather than
+  // via a `selected` attribute — the robust way to reflect state without relying on attribute
+  // presence semantics.
+  function typeSelect(types, current, phraser, onchange) {
+    const sel = E('select', { onchange }, ...types.map((t) => E('option', { value: t }, phraser(t))));
+    sel.value = current;
+    return sel;
+  }
+  function paintNodes() {
+    clear(nodesHost);
+    if (!state.nodes.length) nodesHost.append(E('div', { class: 'sb-empty' }, '尚無概念。'));
+    state.nodes.forEach((n, i) => {
+      nodesHost.append(E('div', { class: 'sb-row' },
+        typeSelect(NODE_TYPES, n.type, nodeTypeLabel, (e) => { n.type = e.target.value; }),
+        E('input', { placeholder: '名稱,例如 胰島素', value: n.label,
+          oninput: (e) => { n.label = e.target.value; } }),
+        E('input', { placeholder: '識別碼 hormone:insulin', value: n.id,
+          oninput: (e) => { n.id = e.target.value.trim(); } }),
+        E('input', { placeholder: '說明(選填)', value: n.description,
+          oninput: (e) => { n.description = e.target.value; } }),
+        E('button', { class: 'sb-x', title: '移除',
+          onclick: () => { state.nodes.splice(i, 1); paintNodes(); } }, '✕')));
+    });
+  }
+  function paintEdges() {
+    clear(edgesHost);
+    if (!state.edges.length) edgesHost.append(E('div', { class: 'sb-empty' }, '尚無關係(只有概念也可以送審)。'));
+    state.edges.forEach((ed, i) => {
+      edgesHost.append(E('div', { class: 'sb-row' },
+        typeSelect(REL_TYPES, ed.type, phraseRelation, (e) => { ed.type = e.target.value; }),
+        E('input', { placeholder: '起點識別碼', value: ed.source,
+          oninput: (e) => { ed.source = e.target.value.trim(); } }),
+        E('input', { placeholder: '終點識別碼', value: ed.target,
+          oninput: (e) => { ed.target = e.target.value.trim(); } }),
+        E('input', { placeholder: '識別碼 e:insulin_decreases_bg', value: ed.id,
+          oninput: (e) => { ed.id = e.target.value.trim(); } }),
+        E('button', { class: 'sb-x', title: '移除',
+          onclick: () => { state.edges.splice(i, 1); paintEdges(); } }, '✕')));
+    });
+  }
+  function addNode() { state.nodes.push({ type: NODE_TYPES[0], label: '', id: '', description: '' }); paintNodes(); }
+  function addEdge() { state.edges.push({ type: REL_TYPES[0], source: '', target: '', id: '' }); paintEdges(); }
+
+  const gapBox = E('input', { type: 'checkbox', onchange: (e) => { state.gap = e.target.checked; } });
+
+  async function submit(btn) {
+    clear(notice);
+    if (!state.nodes.length && !state.edges.length) {
+      notice.append(E('div', { class: 'notice err' }, '請至少加入一個概念或關係。')); return;
+    }
+    if (state.nodes.some((n) => !n.id || !n.label)
+        || state.edges.some((e) => !e.id || !e.source || !e.target)) {
+      notice.append(E('div', { class: 'notice err' },
+        '每個概念需要識別碼與名稱;每個關係需要識別碼、起點與終點。')); return;
+    }
+    const body = {
+      proposed_nodes: state.nodes.map((n) => ({
+        id: n.id, type: n.type, label: n.label, description: n.description || '',
+      })),
+      proposed_edges: state.edges.map((e) => ({
+        id: e.id, type: e.type, source: e.source, target: e.target,
+      })),
+      possible_schema_gap: state.gap,
+      reason: reasonInput.value.trim() || null,
+    };
+    btn.disabled = true;
+    try {
+      const res = await api.post('/admin/curation/groups', body);
+      notice.append(E('div', { class: 'notice ok' },
+        `已提出提案群組(${res.nodes} 概念 / ${res.edges} 關係),狀態 proposed。`,
+        E('a', { href: '#review', style: 'margin-left:8px' }, '前往群組審閱 →')));
+      state.nodes = []; state.edges = []; state.gap = false; gapBox.checked = false;
+      reasonInput.value = '';
+      paintNodes(); paintEdges();
+    } catch (err) {
+      notice.append(E('div', { class: 'notice err' }, err.message));
+    } finally { btn.disabled = false; }
+  }
+  const reasonInput = E('input', { class: 'sb-reason', placeholder: '為什麼提出這個陳述?(選填,會記入審閱與稽核)' });
+  const submitBtn = E('button', { class: 'btn', onclick: () => submit(submitBtn) }, '提出提案群組');
+
+  host.append(E('div', { class: 'sb-wrap' },
+    E('div', { class: 'page-sub', style: 'margin-bottom:18px' },
+      '把一個生物陳述(相關的概念 + 它們之間的關係)組成一組,一起送審。' +
+      '這一組會作為單一提案群組進入群組審閱,套用兩道 gate。可只提概念、之後再補關係。'),
+    E('div', { class: 'sb-head' }, E('span', { class: 'eyebrow' }, '概念 · NODES'),
+      E('button', { class: 'btn-ghost sb-add', onclick: addNode }, '+ 概念')),
+    nodesHost,
+    E('div', { class: 'sb-head' }, E('span', { class: 'eyebrow' }, '關係 · EDGES'),
+      E('button', { class: 'btn-ghost sb-add', onclick: addEdge }, '+ 關係')),
+    edgesHost,
+    E('label', { class: 'sb-gap' }, gapBox,
+      '這個陳述可能超出現有 schema(標記為 possible schema gap;審閱時會走「需要擴充 schema」判定)'),
+    E('div', { class: 'sb-head', style: 'margin-bottom:8px' }, E('span', { class: 'eyebrow' }, '提出理由 · REASON')),
+    reasonInput,
+    notice,
+    submitBtn));
+  addNode();
+}
+
+async function paintExtract(host) {
   clear(host);
   const opts = await api.get('/admin/ingest/options');
 
@@ -1154,12 +1152,11 @@ async function renderIngest(host) {
     params: { chunk_size: 500, chunk_overlap: 80, max_section_size: 800 },
   };
 
-  host.append(E('div', { class: 'page-head' },
-    E('div', { class: 'eyebrow' }, 'EXTRACTION · 解析流程'),
-    E('div', { class: 'page-title', style: 'margin-top:8px;font-size:30px' }, '文件解析與收錄'),
-    E('div', { class: 'page-sub' },
-      '將原始章節切塊、逐塊送 LLM 抽取候選節點/關係,寫入審訂佇列(proposed)。' +
-      '預覽不消耗 token;實際注入僅限資料庫擁有者。')));
+  host.append(E('div', { class: 'notice', style: 'margin:0 48px 16px' },
+    '將原始章節切塊、逐塊送 LLM 抽取候選節點/關係,寫入 proposed。' +
+    '預覽不消耗 token;實際注入僅限資料庫擁有者。' +
+    '(注意:抽取結果目前以「單項」寫入,尚未自動組成審閱群組,因此還不會出現在「群組審閱」頁——' +
+    '抽取路徑的群組化與審閱介面留待後續階段;在那之前這些單項僅能經 API 存取。)'));
 
   const wrap = E('div', { class: 'ing-wrap' });
   host.append(wrap);

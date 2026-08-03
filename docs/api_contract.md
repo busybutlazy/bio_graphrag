@@ -155,6 +155,32 @@ class CurationItemCreate(BaseModel):
 
 寫入 `curation_items`,狀態預設 `proposed`。
 
+### `POST /admin/curation/groups`
+
+手工建構一個**提案群組**(一個生物陳述的 nodes+edges),共用一個 `group_id` 一起送進群組審閱佇列(`GET /admin/review/groups`)。這是 propose 側「人工建構」的入口,與 LLM 抽取共用同一條治理管線。
+
+```python
+class CurationGroupCreate(BaseModel):
+    proposed_nodes: list[dict] = []
+    proposed_edges: list[dict] = []
+    reason: str | None = None
+    possible_schema_gap: bool = False
+```
+
+副作用:每個成員以 `status='proposed'`、`proposed_by='human'`、共用 `group_id`(`group:human:{uuid}`)寫入 `curation_items`,置於**單一交易**內(任一元素失敗則整組 rollback)。**不**寫 Neo4j、不寫 `graph_change_logs`(提案階段不算圖變更;核准/退回時才記)。缺 `source_chunk_id` 的元素會補上 namespaced provenance 標記 `"manual:{proposed_by}"`(手工知識的來源即作者本人;namespaced 以免與真實 chunk id 相撞),以通過 Schema gate。`reason` 若有,存入各成員 `schema_check.propose_reason`(以免被核准/退回時覆蓋 `curation_items.reason`),並由 `GET /admin/review/groups` 以 `propose_reason` 回傳、顯示在審閱卡上。成功回傳 `201 {group_id, nodes, edges}`。
+
+驗證(皆回 `422`,遵循 `{"error":{code,message}}` 契約):
+
+| 情況 | 回應 |
+| --- | --- |
+| 空群組(0 nodes 且 0 edges) | `422 invalid_request` |
+| 元素型別不在白名單(injection guard) | `422 invalid_request` |
+| 元素總數超過上限(`MAX_GROUP_ELEMENTS = 20`) | `422 invalid_request` |
+| 群組內重複 id(node+edge 合併集合) | `422 invalid_request` |
+| edge 端點無法解析(既非本群組提案節點、也非既有 approved 節點) | `422 invalid_request` |
+
+此端點依 CLAUDE.md 契約回 `{"error":{code,message}}`(較舊的 `/admin/curation/items` 仍回 `{"detail"}`)。
+
 ### `POST /admin/curation/items/{item_id}/approve`
 
 ```python
@@ -207,6 +233,7 @@ class DeleteEdgeRequest(BaseModel):
 - `proposal`:`{proposed_nodes, proposed_edges}`(由群組成員組裝,已去除 curation 內部 `status` 欄位)。
 - `schema_gate`:`engineer_gate.evaluate` 的形式判定(`{result, checks[]}`)。
 - `understanding`:`back_translation` 的白話「系統理解」(`{pattern, is_gap, text}`)。
+- `propose_reason`:提案時的理由(`str | None`;來自成員 `schema_check.propose_reason`),供審閱者在專家 gate 前看見提案動機。
 
 只列 `status='proposed'` 的群組;唯讀。
 
