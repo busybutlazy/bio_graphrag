@@ -93,11 +93,33 @@ An earlier ① run additionally confirmed the free-text `reason` is persisted ve
 audit row and `curation_items` (`現行 schema 表達不了`); in the final run the owner left it blank,
 which correctly stored `NULL`.
 
+## Post-merge Evidence (2026-08-10, after PR #15)
+
+The independent review (`REVIEW_REPORT.md`) raised **M1**: the full suite had only ever been run
+**online**, while CI runs it offline (`cp .env.example .env`), so the project's defining property —
+*a fresh clone with no key is fully green* — had no post-merge evidence. Closed by running both CI
+commands on merged `main` in the offline posture:
+
+```
+docker compose run --rm -e OPENAI_API_KEY= backend pytest tests ingestion/tests -q
+  → 170 passed in 115.68s
+
+docker compose run --rm -e OPENAI_API_KEY= backend python -m app.eval.runner
+  → Recall@5 1.0 (threshold 0.8) · Grounded pass rate 1.0 (threshold 0.75)
+  → Latency P95 195.7 ms (threshold 5000 ms), mean 68.2 ms
+  → Overall: ✅ PASS
+```
+
+After the review remediation (branch `fix/review-remediation-gap-outcome`, findings L1/L2/L4/L5/S2/S3):
+**171 passed** offline (the added L5 bounds test), ruff + mypy clean, `node --check` OK, and a live
+`make demo-reset` round trip through the reworked transactional reset.
+
 ## Owed / Not Run
 
-- **CI has not run** (Task 2+3 uncommitted at the time of writing).
-- `make eval` not run — no retrieval-path change (gap never writes Neo4j; confirmed by querying the
-  three proposed node ids → **0 rows** in Neo4j after a successful record).
+- `make eval` **has now run** (above) — it was originally skipped because the gap path never writes
+  Neo4j (confirmed: the three proposed node ids → **0 rows** in Neo4j after a successful record).
+- **S1** (audit `actor` hardcoded to `'demo'` in the frontend) is knowingly unaddressed — scoped as
+  its own Phase; see `REVIEW_REPORT.md`.
 
 ## Environment Notes (pre-existing, unrelated, left alone)
 

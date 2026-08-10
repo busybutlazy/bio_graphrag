@@ -1,6 +1,12 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# Review-payload limits (see docs/api_contract.md section 1). Both values land verbatim in
+# `graph_change_logs`, and the gap flow actively invites a long free-text explanation, so the
+# audit log needs a bound like every other request field (review finding L5).
+MAX_REVIEWER_LEN = 100
+MAX_REASON_LEN = 2000
 
 
 class CurationItemCreate(BaseModel):
@@ -38,16 +44,16 @@ class CurationGroupCreate(BaseModel):
 
 
 class ApproveRejectRequest(BaseModel):
-    reviewer: str
-    reason: str | None = None
+    reviewer: str = Field(max_length=MAX_REVIEWER_LEN)
+    reason: str | None = Field(default=None, max_length=MAX_REASON_LEN)
 
 
 class SchemaGapRequest(BaseModel):
     """Record a proposal group as a schema gap. ``schema_gap_type`` is validated against the
     taxonomy whitelist in the service (422 on an unknown code), so the schema stays structural."""
 
-    reviewer: str
-    reason: str | None = None
+    reviewer: str = Field(max_length=MAX_REVIEWER_LEN)
+    reason: str | None = Field(default=None, max_length=MAX_REASON_LEN)
     schema_gap_type: str
 
 

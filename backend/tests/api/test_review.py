@@ -177,3 +177,29 @@ def test_double_approve_409_uses_error_contract():
         assert resp.json()["error"]["code"] == "conflict"
     finally:
         asyncio.run(_cleanup())
+
+
+# --- review remediation: payload bounds on the audit-bearing fields (finding L5) -----------
+
+
+def test_oversized_reason_and_reviewer_are_422_on_every_group_endpoint():
+    """`reviewer`/`reason` land verbatim in graph_change_logs, so they need a bound like any
+    other request field. Asserted on all three verbs — reject/gap must not be laxer than approve.
+
+    Deliberately uses an unknown group: the length check is a schema-level (422) rejection that
+    happens before any lookup, so it never depends on seeded state.
+    """
+    too_long_reason = "字" * 2001
+    too_long_reviewer = "r" * 101
+    for verb, extra in (("approve", {}), ("reject", {}), ("gap", {"schema_gap_type": "unknown"})):
+        url = f"/admin/review/groups/group:does_not_exist/{verb}"
+        assert (
+            client.post(url, json={"reviewer": "tester", "reason": too_long_reason, **extra})
+        ).status_code == 422, verb
+        assert (
+            client.post(url, json={"reviewer": too_long_reviewer, **extra})
+        ).status_code == 422, verb
+        # and a reason at the limit is still accepted by the schema (it reaches the 404 guard)
+        assert (
+            client.post(url, json={"reviewer": "tester", "reason": "字" * 2000, **extra})
+        ).status_code == 404, verb

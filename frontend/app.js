@@ -542,13 +542,20 @@ async function ingestRun(body, ownerToken) {
 
 // The schema-gap taxonomy (docs/schema-gap-policy.md), phrased so a domain expert can pick
 // one without knowing the schema. The code is what POST .../gap validates + audits.
+//
+// `unknown` (其他) is deliberately FIRST so it is the <select>'s default. A substantive category as
+// the default would be recorded whenever a reviewer submits without touching the dropdown, quietly
+// inflating one bucket — and the whole point of the whitelist is that the counts stay meaningful
+// enough to answer "which schema extension unblocks the most knowledge?". An unclassified gap is
+// honest; a wrongly classified one is worse than none. (Review finding L1 — observed in practice:
+// one of the two real records made during the browser pass carried the old default.)
 const GAP_OPTIONS = [
+  ['unknown', '其他 / 說不上來'],
   ['permissive_effect', 'A 不是直接影響 C,而是改變 B 對 C 的作用強度'],
   ['antagonistic_or_synergistic_interaction', 'A 和 B 之間不是因果,而是拮抗/協同'],
   ['pathway_or_cascade', '這是一個多步驟調控路徑,不是單一效果'],
   ['conditional_effect', '這是一個條件式效果,需要特定前提才成立'],
   ['threshold_effect', '這是一個閾值效果'],
-  ['unknown', '其他'],
 ];
 async function renderReview(host) {
   clear(host);
@@ -758,8 +765,8 @@ async function renderReview(host) {
     // is classifying *why* the schema falls short, which is what makes the gap backlog sortable.
     if (isGap) {
       box.append(E('div', { class: 'ex-gap-hint' },
-        '若要記為 gap:下面哪一種情況最接近「現行結構表達不了它」的原因?選最接近的一項即可;',
-        '拿不準就選「其他」,並把真正的意思寫在上面的說明欄——那一欄比分類更有用。'));
+        '若要記為 gap:下面哪一種情況最接近「現行結構表達不了它」的原因?',
+        '預設是「其他」,只有在確定時才改選;真正的意思請寫在上面的說明欄——那一欄比分類更有用。'));
       box.append(E('div', { class: 'ex-gap-row' }, gapSel, gapBtn));
     }
     box.append(msg);
