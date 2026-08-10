@@ -539,6 +539,17 @@ async function ingestRun(body, ownerToken) {
 // Data source: GET /admin/review/groups. Each group is one biological statement
 // (nodes+edges sharing a group_id) with its Schema gate (engineer_gate) + expert lens
 // (back_translation) computed live. Approve writes the whole group into the graph.
+
+// The schema-gap taxonomy (docs/schema-gap-policy.md), phrased so a domain expert can pick
+// one without knowing the schema. The code is what POST .../gap validates + audits.
+const GAP_OPTIONS = [
+  ['permissive_effect', 'A 不是直接影響 C,而是改變 B 對 C 的作用強度'],
+  ['antagonistic_or_synergistic_interaction', 'A 和 B 之間不是因果,而是拮抗/協同'],
+  ['pathway_or_cascade', '這是一個多步驟調控路徑,不是單一效果'],
+  ['conditional_effect', '這是一個條件式效果,需要特定前提才成立'],
+  ['threshold_effect', '這是一個閾值效果'],
+  ['unknown', '其他'],
+];
 async function renderReview(host) {
   clear(host);
   host.append(E('div', { class: 'page-head', style: 'padding-bottom:0' },
@@ -684,25 +695,46 @@ async function renderReview(host) {
 
   function reviewActions(g) {
     const gateOk = g.schema_gate.result === 'pass';
+    // The third outcome exists only where the gate says the *schema* is what falls short —
+    // a form problem is a 退回, not a gap. The backend enforces the same rule (409).
+    const isGap = g.schema_gate.result === 'needs_schema_extension';
     const box = E('div', { class: 'ex-review' });
     box.append(E('div', { class: 'ex-h' }, '你的裁決'));
-    const notes = E('textarea', { class: 'ex-notes', placeholder: '理由(選填)…' });
+    // On a gap the free-text reason is the *substance*: the 6-way taxonomy says what kind of
+    // expressiveness is missing, this says what the statement actually meant. Both land verbatim
+    // in the audit row, and this is the part an engineer can act on.
+    const notes = E('textarea', {
+      class: 'ex-notes',
+      placeholder: isGap
+        ? '用你自己的話寫下:這個陳述真正的意思是什麼?(選填,但這裡最有價值——會原樣寫入稽核紀錄,是日後擴充 schema 的依據)'
+        : '理由(選填)…',
+    });
     const msg = E('div', { class: 'muted', style: 'font-size:11px;margin-top:8px' },
       gateOk ? '核准 → 寫入知識圖譜並記錄稽核;退回 → 記錄稽核,不寫入。'
+             : isGap ? '這個陳述本身可能是對的,是現行知識結構表達不了它。記為 gap → 不寫入圖譜,登記成一筆待擴充 schema 的紀錄。'
              : 'Schema gate 未通過:形式有問題的提案不能進入知識圖譜,只能退回修正。');
     const approve = E('button', { class: 'btn' }, '核准並寫入');
     const reject = E('button', { class: 'btn-ghost' }, '退回');
     // Schema gate is enforcing — the backend refuses (409) too; the UI must not imply otherwise.
     if (!gateOk) { approve.disabled = true; approve.title = 'Schema gate 未通過,無法核准'; }
+    const gapSel = isGap ? E('select', { class: 'ex-gap-select' },
+      ...GAP_OPTIONS.map(([code, label]) => E('option', { value: code }, label))) : null;
+    const gapBtn = isGap ? E('button', { class: 'btn-ghost' }, '記為 gap') : null;
+    const buttons = [approve, reject, gapBtn].filter(Boolean);
     async function act(kind) {
-      approve.disabled = reject.disabled = true; setFlash('處理中…');
+      // Disable every action first: a double-click must not fire two requests (no duplicate audit).
+      buttons.forEach((b) => { b.disabled = true; });
+      setFlash('處理中…');
       try {
+        const body = { reviewer: 'demo', reason: notes.value || null };
+        if (kind === 'gap') body.schema_gap_type = gapSel.value;
         const res = await api.post(
-          `/admin/review/groups/${encodeURIComponent(g.group_id)}/${kind}`,
-          { reviewer: 'demo', reason: notes.value || null });
+          `/admin/review/groups/${encodeURIComponent(g.group_id)}/${kind}`, body);
         setFlash(kind === 'approve'
           ? `已核准並寫入知識圖譜(nodes ${res.nodes} / edges ${res.edges})`
-          : '已退回,未寫入知識圖譜。', 'ok');
+          : kind === 'gap'
+            ? '已記為 schema gap,未寫入知識圖譜;已登記在稽核紀錄中。'
+            : '已退回,未寫入知識圖譜。', 'ok');
         groups = groups.filter((x) => x.group_id !== g.group_id);
         if (!groups.length) {
           clear(list); clear(panel);
@@ -712,12 +744,25 @@ async function renderReview(host) {
         activeId = groups[0].group_id; paintList(); paintPanel();
       } catch (err) {
         setFlash('失敗:' + err.message, 'err');
-        approve.disabled = !gateOk; reject.disabled = false;
+        // Re-arm, so a failed call never leaves the reviewer stuck with dead buttons.
+        buttons.forEach((b) => { b.disabled = false; });
+        approve.disabled = !gateOk;
       }
     }
     approve.addEventListener('click', () => act('approve'));
     reject.addEventListener('click', () => act('reject'));
-    box.append(notes, E('div', { style: 'display:flex;gap:10px;margin-top:10px' }, approve, reject), msg);
+    if (gapBtn) gapBtn.addEventListener('click', () => act('gap'));
+    const row = E('div', { style: 'display:flex;gap:10px;margin-top:10px' }, approve, reject);
+    box.append(notes, row);
+    // A bare <select> under the buttons reads as noise. Say what the choice is for: the reviewer
+    // is classifying *why* the schema falls short, which is what makes the gap backlog sortable.
+    if (isGap) {
+      box.append(E('div', { class: 'ex-gap-hint' },
+        '若要記為 gap:下面哪一種情況最接近「現行結構表達不了它」的原因?選最接近的一項即可;',
+        '拿不準就選「其他」,並把真正的意思寫在上面的說明欄——那一欄比分類更有用。'));
+      box.append(E('div', { class: 'ex-gap-row' }, gapSel, gapBtn));
+    }
+    box.append(msg);
     return box;
   }
 

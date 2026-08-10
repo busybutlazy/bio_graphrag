@@ -96,6 +96,45 @@ Two pre-existing environment quirks, unrelated to this change and left alone:
 `scripts/wait_for_services.sh` polls port 8000, which `docker-compose.yml` does not expose — it times
 out while the stack is in fact healthy; `make health` (via nginx on 8080) is the working check.
 
-### Next
+Committed as `ddaf281` (later rebased onto `main` @ `da2eed2`, after PR #14 repo/CI hardening).
 
-Task 2 (frontend 記為 gap + browser pass), Task 3 (api_contract.md + `make test` + reports).
+## Task 2 — Frontend: 記為 gap  ✅ (2026-08-10)
+
+- `frontend/app.js`: `GAP_OPTIONS` re-added (verbatim from `docs/schema-gap-policy.md`);
+  `reviewActions` renders the gap `<select>` + 記為 gap button **only** for `needs_schema_extension`.
+  All actions share a `buttons` array — disabled together on click (double-click cannot fire twice),
+  re-enabled on failure (`approve` still respects the gate).
+- `frontend/styles.css`: `.ex-gap-hint`, `.ex-gap-row`, `.ex-gap-select`.
+  `.ex-gap-select` deliberately sets no `color`: the neighbouring `.sb-row select` uses
+  `var(--text)`, which is **not defined** in `:root` — a pre-existing no-op, not fixed here.
+- `frontend/index.html`: `?v=20260810-1` on both `app.js` and `styles.css`.
+
+**Copy added beyond the plan.** The plan specified only a `<select>` + button. Shown the result, the
+owner (the domain expert) found the bare dropdown meaningless — "是要他選擇最接近的一個？還是這是
+llm 解析出來的內容？". Added: an instruction line above the select, and a gap-specific placeholder on
+the reason textarea explaining that the free-text description is the substantive part (it lands
+verbatim in the audit row). The taxonomy option text itself is unchanged.
+
+Verified: `node --check` OK, plus the HTTP-level equivalents of the browser scenarios (409 on a pass
+group with the documented message, 422 on a bogus type, 200 + queue removal on a real record,
+re-armed by `make demo-reset`). **Browser pass completed by the owner — 4/4, every scenario
+cross-checked in Postgres** (see `VERIFICATION_REPORT.md`). Scenario ② was re-designed mid-run: the
+"stop the backend" recipe leaves no list to click on, so it became a two-tab stale-view test that
+exercises the same failure path and additionally proves two racing reviewers cannot duplicate an
+audit row.
+
+## Task 3 — Docs + full verification  ✅ (2026-08-10)
+
+- `docs/api_contract.md`: the endpoint, its four guards, the 6-value taxonomy, the
+  single-transaction property, and an explicit note that there is no backlog view yet.
+- `docs/schema-gap-policy.md`: its header claimed gaps are written to
+  `data/sample/expert_demo/schema_gap_backlog.json` — never true of this path. Now documents the
+  real landing place (`graph_change_logs` `action='schema_gap'`) and marks the JSON as legacy.
+- `make test` → **170 passed in 283.77s**; ruff check + format clean; mypy clean (77 files);
+  `node --check` OK.
+- `VERIFICATION_REPORT.md` + `CHANGE_REPORT.md` produced.
+
+### Raised for later (not implemented)
+
+Structured gap expression (`節點 —(新關係)→ 節點`) and node dropdowns on the hand-made builder — see
+`CHANGE_REPORT.md`.

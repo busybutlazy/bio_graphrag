@@ -257,6 +257,36 @@ class DeleteEdgeRequest(BaseModel):
 
 翻整個群組為 `rejected`,**不寫 Neo4j**,`graph_change_logs` 追加 `action='reject'` 一列。Request/錯誤碼同上,回傳 `{group_id, status:'rejected'}`。
 
+### `POST /admin/review/groups/{group_id}/gap`
+
+第三種處置:提案本身可能是對的,但**現行 schema 表達不了它**。這與「退回」語意不同——退回是形式有問題,gap 是知識結構不夠用。把整組成員翻成 `status='schema_gap'`(離開審閱佇列)、**不寫 Neo4j**,`graph_change_logs` 追加一列 `action='schema_gap'`、`target_type='proposal_group'`,`after_state` 含 `{schema_gap_type, item_ids}`。
+
+```python
+class SchemaGapRequest(BaseModel):
+    reviewer: str
+    reason: str | None = None
+    schema_gap_type: str
+```
+
+成功回傳 `{group_id, status:'schema_gap', schema_gap_type}`。`reviewer` 與 `reason` 一併寫入該筆稽核列(`actor` / `reason`)與各成員 `curation_items`(`reviewed_by` / `reason` / `reviewed_at`)。
+
+`schema_gap_type` 必須是下列 6 個之一(白名單,見 `docs/schema-gap-policy.md`;專家在 UI 上看到的是白話敘述,前端才映射成代碼)。以白名單擋住自由文字,是為了讓稽核語意可歸類、可排序——之後才回答得出「哪一類 gap 最多、該優先擴充什麼」:
+
+`permissive_effect`、`antagonistic_or_synergistic_interaction`、`pathway_or_cascade`、`conditional_effect`、`threshold_effect`、`unknown`
+
+**四道防線**(任一不過即拒絕,狀態與稽核都不寫):
+
+| 情況 | 狀態碼 |
+|---|---|
+| 群組不存在 | `404 not_found` |
+| 沒有 `proposed` 成員(含重複記錄) | `409 conflict` |
+| Schema gate 結果不是 `needs_schema_extension`(gap 只給真正的 schema 缺口,形式問題請走 reject) | `409 conflict` |
+| `schema_gap_type` 不在白名單,或 `reviewer` 空白 | `422 invalid_request` |
+
+狀態 UPDATE 與稽核 INSERT 在**同一個交易**內,兩者同生共死(不會出現翻了狀態卻沒有稽核紀錄)。
+
+目前**尚無 backlog 檢視介面**:記下的 gap 只存在於 `graph_change_logs` 的 `action='schema_gap'` 資料列。完整的 backlog 生命週期(累積、排序、接受/駁回、`proposed_schema_change`)是後續獨立變更。`make demo-reset` 會把 demo 來源的 `schema_gap` 群組還原成 `proposed`,方便重複展示。
+
 ## 4. 不提供的 API
 
 `POST /cypher`、`GET /all-nodes`、`GET /all-edges`、`GET /export-all`、`GET /raw-source/{id}` 一律不實作,理由見 `docs/graph_plan.md` 5.3 節。
