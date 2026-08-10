@@ -10,9 +10,18 @@ venv/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytype/
+.pyright/
 
 # Generated evaluation reports
 reports/
+test-results/
+junit.xml
 
 # Private IP: per-chapter extraction profiles (keep local, not public)
 /prompts/profiles/*.profile.md
@@ -28,9 +37,32 @@ reports/
 node_modules/
 dist/
 build/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
 
 # Docker
 *.local.yml
+docker-compose.override.yml
+compose.override.yml
+
+# Logs / local runtime data
+*.log
+*.pid
+*.sqlite
+*.sqlite3
+*.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+.cache/
 
 # OS / editor
 .DS_Store
