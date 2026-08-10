@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends
 from app.api.auth import require_admin
 from app.api.errors import APIError
 from app.curation import service
-from app.schemas.curation import ApproveRejectRequest
+from app.schemas.curation import ApproveRejectRequest, SchemaGapRequest
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
 
@@ -43,5 +43,20 @@ async def approve_review_group(group_id: str, body: ApproveRejectRequest) -> dic
 async def reject_review_group(group_id: str, body: ApproveRejectRequest) -> dict:
     try:
         return await service.reject_group(group_id, body.reviewer, body.reason)
+    except service.CurationError as exc:
+        raise _as_api_error(exc) from exc
+
+
+@router.post("/review/groups/{group_id}/gap")
+async def record_review_group_gap(group_id: str, body: SchemaGapRequest) -> dict:
+    """The third dispose outcome: the proposal is sound but the *schema* cannot express it.
+
+    Only for a group the Schema gate flags ``needs_schema_extension`` (409 otherwise); writes
+    nothing to Neo4j — it records a typed gap in the audit log and takes the group out of the queue.
+    """
+    try:
+        return await service.record_group_gap(
+            group_id, body.reviewer, body.reason, body.schema_gap_type
+        )
     except service.CurationError as exc:
         raise _as_api_error(exc) from exc

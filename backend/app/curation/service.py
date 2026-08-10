@@ -19,6 +19,20 @@ from ingestion.pipeline.normalize_concepts import (
 # small unit; the cap keeps a single request bounded (mirrors the project's request-limit posture).
 MAX_GROUP_ELEMENTS = 20
 
+# Plain-language ⇄ code schema-gap taxonomy (docs/schema-gap-policy.md). The reviewer picks a plain
+# option in the UI; the endpoint validates the resulting code against this whitelist so free text can
+# never enter the audit semantics.
+VALID_SCHEMA_GAP_TYPES = frozenset(
+    {
+        "permissive_effect",
+        "antagonistic_or_synergistic_interaction",
+        "pathway_or_cascade",
+        "conditional_effect",
+        "threshold_effect",
+        "unknown",
+    }
+)
+
 
 class CurationError(Exception):
     def __init__(self, status_code: int, message: str):
@@ -317,6 +331,17 @@ def _proposal_from_items(items: list) -> dict:
     return {"proposed_nodes": nodes, "proposed_edges": edges}
 
 
+def _group_possible_schema_gap(items: list) -> bool:
+    """D5: a group is a genuine schema gap only if explicitly flagged (stashed in ``schema_check``
+    by the seeder / proposer). The flag is what makes the renderer produce a gap sentence and the
+    gate answer ``needs_schema_extension``, so every path that evaluates a group's gate must apply
+    it — otherwise the queue and the dispose endpoints would disagree about the same group.
+    """
+    return any(
+        (_load_json(it["schema_check"]) or {}).get("group_possible_schema_gap") for it in items
+    )
+
+
 def _existing_approved_ids(driver, node_ids: list[str], edge_ids: list[str]) -> dict:
     """Which of these ids already exist in the **approved** graph? (sync — run in a thread)"""
     found: dict[str, list[str]] = {"nodes": [], "edges": []}
@@ -369,12 +394,9 @@ async def list_groups() -> list[dict]:
         grouped.setdefault(row["group_id"], []).append(row)
 
     proposals = {gid: _proposal_from_items(items) for gid, items in grouped.items()}
-    # D5: a group is a genuine schema gap only if explicitly flagged (stashed in schema_check
-    # by the seeder / proposer). Surface it on the proposal so the renderer + gate can branch.
+    # Surface the gap flag on the proposal so the renderer + gate can branch.
     for gid, items in grouped.items():
-        if any(
-            (_load_json(it["schema_check"]) or {}).get("group_possible_schema_gap") for it in items
-        ):
+        if _group_possible_schema_gap(items):
             proposals[gid]["possible_schema_gap"] = True
     # cross-group ctx so references_existing labels resolve in the expert lens
     ctx = build_context([{"proposal": p} for p in proposals.values()])
@@ -450,6 +472,8 @@ async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dic
                 )
 
             proposal = _proposal_from_items(proposed)
+            if _group_possible_schema_gap(proposed):
+                proposal["possible_schema_gap"] = True
             gate = evaluate_schema_gate(proposal)
             if gate["result"] != "pass":
                 raise CurationError(
@@ -549,6 +573,63 @@ async def reject_group(group_id: str, reviewer: str, reason: str | None) -> dict
                 after_state={"item_ids": [r["item_id"] for r in proposed]},
             )
         return {"group_id": group_id, "status": "rejected"}
+
+
+async def record_group_gap(
+    group_id: str, reviewer: str, reason: str | None, schema_gap_type: str
+) -> dict:
+    """Record a proposal group as a **schema gap** — the expert judges the current schema cannot
+    express its real meaning (distinct from a *form* problem, which is a reject).
+
+    Enforcing, and only for a group the Schema gate flags ``needs_schema_extension``. Sets the
+    group's ``proposed`` members to ``status='schema_gap'`` and appends exactly ONE
+    ``graph_change_logs`` row; writes nothing to Neo4j. The status UPDATE and the audit INSERT share a
+    single transaction — either both commit or both roll back.
+    """
+    if not reviewer or not reviewer.strip():
+        raise CurationError(422, "reviewer is required")
+    if schema_gap_type not in VALID_SCHEMA_GAP_TYPES:
+        raise CurationError(422, f"invalid schema_gap_type: {schema_gap_type!r}")
+    async with connection() as conn:
+        async with conn.transaction():
+            rows = await conn.fetch(
+                "SELECT * FROM curation_items WHERE group_id = $1 FOR UPDATE", group_id
+            )
+            if not rows:
+                raise CurationError(404, f"review group {group_id} not found")
+            proposed = [r for r in rows if r["status"] == "proposed"]
+            if not proposed:
+                raise CurationError(409, f"review group {group_id} has no proposed items")
+            proposal = _proposal_from_items(proposed)
+            if _group_possible_schema_gap(proposed):
+                proposal["possible_schema_gap"] = True
+            gate = evaluate_schema_gate(proposal)
+            if gate["result"] != "needs_schema_extension":
+                raise CurationError(
+                    409,
+                    f"group {group_id} is not a schema gap (gate result {gate['result']!r}); "
+                    "record-as-gap is only for needs_schema_extension",
+                )
+            await conn.execute(
+                "UPDATE curation_items SET status = 'schema_gap', reviewed_by = $2, "
+                "reason = $3, reviewed_at = now() WHERE group_id = $1 AND status = 'proposed'",
+                group_id,
+                reviewer,
+                reason,
+            )
+            await _log_change(
+                conn,
+                action="schema_gap",
+                target_type="proposal_group",
+                target_id=group_id,
+                actor=reviewer,
+                reason=reason,
+                after_state={
+                    "schema_gap_type": schema_gap_type,
+                    "item_ids": [r["item_id"] for r in proposed],
+                },
+            )
+        return {"group_id": group_id, "status": "schema_gap", "schema_gap_type": schema_gap_type}
 
 
 def _merge_nodes_in_neo4j(source_id: str, target_id: str) -> None:
