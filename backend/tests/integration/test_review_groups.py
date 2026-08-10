@@ -23,7 +23,8 @@ GROUP_BAD = "group:test_t2_gatefail"
 GROUP_ACT = "group:test_t2_badaction"
 GROUP_GAP = "group:test_t2_gap"
 GROUP_PLAIN = "group:test_t2_plain"
-_ALL_GROUPS = [GROUP_OK, GROUP_REJ, GROUP_BAD, GROUP_ACT, GROUP_GAP, GROUP_PLAIN]
+GROUP_REC = "group:test_gap_record"
+_ALL_GROUPS = [GROUP_OK, GROUP_REJ, GROUP_BAD, GROUP_ACT, GROUP_GAP, GROUP_PLAIN, GROUP_REC]
 
 _NODES = [
     {
@@ -71,7 +72,9 @@ _EDGES = [
         "source_chunk_id": "chunk:t2",
     },
 ]
-_NODE_IDS = [n["id"] for n in _NODES]
+# The gap-group members too: record-as-gap never writes them, but a *regression* (an approve that
+# should have been refused) would — teardown must be able to clean that up.
+_NODE_IDS = [n["id"] for n in _NODES] + ["hormone:test_rec_a", "hormone:test_rec_b"]
 
 
 async def _conn() -> asyncpg.Connection:
@@ -397,6 +400,188 @@ def test_approve_audit_records_full_payloads():
     assert len(after["nodes"]) == 3 and len(after["edges"]) == 3
     assert after["nodes"][0]["label"]  # full payloads, not bare ids
     assert after["item_ids"]
+
+
+# --- record-as-gap: the third dispose outcome (changes/group-review-gap-outcome) ----------
+
+_GAP_CANDIDATE = {
+    "nodes": [
+        {
+            "id": "hormone:test_rec_a",
+            "type": "Hormone",
+            "label": "A",
+            "description": "d",
+            "source_chunk_id": "c",
+        },
+        {
+            "id": "hormone:test_rec_b",
+            "type": "Hormone",
+            "label": "B",
+            "description": "d",
+            "source_chunk_id": "c",
+        },
+    ],
+    "edges": [],
+}
+
+
+def _stage_gap_group(group_id: str = GROUP_REC) -> None:
+    """Stage a group the Schema gate flags ``needs_schema_extension`` (the only gap-eligible one)."""
+    asyncio.run(_stage_demo(group_id, _GAP_CANDIDATE, gap=True))
+
+
+async def _gap_log_rows(group_id: str) -> list:
+    conn = await _conn()
+    try:
+        return await conn.fetch(
+            "SELECT action, actor, reason, after_state FROM graph_change_logs "
+            "WHERE target_id = $1 AND action = 'schema_gap'",
+            group_id,
+        )
+    finally:
+        await conn.close()
+
+
+def test_record_gap_flips_status_audits_once_and_leaves_queue():
+    """Happy path: status -> schema_gap, exactly one audit row carrying the type, no Neo4j write."""
+    _stage_gap_group()
+    assert GROUP_REC in {g["group_id"] for g in asyncio.run(service.list_groups())}
+
+    res = asyncio.run(
+        service.record_group_gap(GROUP_REC, "test_reviewer", "schema 表達不了", "permissive_effect")
+    )
+    assert res == {
+        "group_id": GROUP_REC,
+        "status": "schema_gap",
+        "schema_gap_type": "permissive_effect",
+    }
+
+    statuses = asyncio.run(_item_statuses(GROUP_REC))
+    assert statuses and all(s == "schema_gap" for s in statuses)
+
+    rows = asyncio.run(_gap_log_rows(GROUP_REC))
+    assert len(rows) == 1  # audit uniqueness
+    assert rows[0]["actor"] == "test_reviewer" and rows[0]["reason"] == "schema 表達不了"
+    after = rows[0]["after_state"]
+    after = json.loads(after) if isinstance(after, str) else after
+    assert after["schema_gap_type"] == "permissive_effect"
+    assert len(after["item_ids"]) == 2
+
+    # nothing written to the graph, and the group left the review queue
+    assert _neo4j_node_status("hormone:test_rec_a") is None
+    assert GROUP_REC not in {g["group_id"] for g in asyncio.run(service.list_groups())}
+
+
+def test_double_record_gap_is_409():
+    _stage_gap_group()
+    asyncio.run(service.record_group_gap(GROUP_REC, "r", None, "unknown"))
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.record_group_gap(GROUP_REC, "r", None, "unknown"))
+    assert exc.value.status_code == 409
+    assert len(asyncio.run(_gap_log_rows(GROUP_REC))) == 1  # still exactly one audit row
+
+
+def test_record_gap_only_touches_proposed_members():
+    """A member already disposed of stays as it was; only the proposed ones flip."""
+    _stage_gap_group()
+    frozen = f"curation:{GROUP_REC}:hormone:test_rec_b"
+
+    async def _freeze():
+        conn = await _conn()
+        try:
+            await conn.execute(
+                "UPDATE curation_items SET status = 'rejected' WHERE item_id = $1", frozen
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_freeze())
+    asyncio.run(service.record_group_gap(GROUP_REC, "r", None, "unknown"))
+
+    async def _by_item():
+        conn = await _conn()
+        try:
+            rows = await conn.fetch(
+                "SELECT item_id, status FROM curation_items WHERE group_id = $1", GROUP_REC
+            )
+            return {r["item_id"]: r["status"] for r in rows}
+        finally:
+            await conn.close()
+
+    statuses = asyncio.run(_by_item())
+    assert statuses[frozen] == "rejected"  # untouched
+    assert all(s == "schema_gap" for k, s in statuses.items() if k != frozen)
+
+    rows = asyncio.run(_gap_log_rows(GROUP_REC))
+    assert len(rows) == 1
+    after = rows[0]["after_state"]
+    after = json.loads(after) if isinstance(after, str) else after
+    assert after["item_ids"] == [f"curation:{GROUP_REC}:hormone:test_rec_a"]
+
+
+def test_record_gap_is_atomic(monkeypatch):
+    """Condition 3: the status UPDATE and the audit INSERT commit together or not at all."""
+    _stage_gap_group()
+
+    async def boom(*_a, **_k):
+        raise RuntimeError("injected: audit insert failed")
+
+    monkeypatch.setattr(service, "_log_change", boom)
+
+    with pytest.raises(RuntimeError, match="injected"):
+        asyncio.run(service.record_group_gap(GROUP_REC, "r", None, "unknown"))
+
+    statuses = asyncio.run(_item_statuses(GROUP_REC))
+    assert statuses and all(s == "proposed" for s in statuses)  # UPDATE rolled back
+    assert asyncio.run(_gap_log_rows(GROUP_REC)) == []
+
+
+def test_approve_refuses_a_flagged_schema_gap_group():
+    """The Schema gate must be enforcing *server-side* for a flagged gap group too.
+
+    Regression: the gap flag lives in ``schema_check``, not in the payloads, so a proposal
+    assembled without it evaluates as ``pass`` — the API would have approved a group the queue
+    and the UI both show as ``needs_schema_extension``, leaving the gate enforced by a disabled
+    button only.
+    """
+    _stage_gap_group()
+    g = next(x for x in asyncio.run(service.list_groups()) if x["group_id"] == GROUP_REC)
+    assert g["schema_gate"]["result"] == "needs_schema_extension"
+
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.approve_group(GROUP_REC, "test_reviewer", None))
+    assert exc.value.status_code == 409
+    assert "needs_schema_extension" in exc.value.message
+
+    assert _neo4j_node_status("hormone:test_rec_a") is None
+    assert all(s == "proposed" for s in asyncio.run(_item_statuses(GROUP_REC)))
+
+
+def test_record_gap_refuses_a_non_gap_group():
+    """D2: record-as-gap is only for needs_schema_extension — a passing group is a 409."""
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.record_group_gap(GROUP_OK, "r", None, "unknown"))
+    assert exc.value.status_code == 409
+    assert "needs_schema_extension" in exc.value.message
+    assert all(s == "proposed" for s in asyncio.run(_item_statuses(GROUP_OK)))
+
+
+def test_record_gap_rejects_unknown_type_blank_reviewer_and_missing_group():
+    _stage_gap_group()
+    with pytest.raises(service.CurationError) as exc:  # not in the taxonomy whitelist
+        asyncio.run(service.record_group_gap(GROUP_REC, "r", None, "not_a_real_gap_type"))
+    assert exc.value.status_code == 422
+
+    with pytest.raises(service.CurationError) as exc:  # blank reviewer
+        asyncio.run(service.record_group_gap(GROUP_REC, "   ", None, "unknown"))
+    assert exc.value.status_code == 422
+
+    with pytest.raises(service.CurationError) as exc:  # unknown group
+        asyncio.run(service.record_group_gap("group:nonexistent", "r", None, "unknown"))
+    assert exc.value.status_code == 404
+
+    # none of the rejected calls disposed of anything
+    assert all(s == "proposed" for s in asyncio.run(_item_statuses(GROUP_REC)))
 
 
 def test_create_group_is_atomic_on_failure(monkeypatch):

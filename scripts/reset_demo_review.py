@@ -1,9 +1,10 @@
-"""Undo demo review-group approvals so the Review demo is fresh again.
+"""Undo demo review-group dispositions so the Review demo is fresh again.
 
 Any proposal group approved in the demo (``proposed_by='demo'``) is removed from the
 knowledge graph and its curation_items are returned to ``proposed`` (so it re-appears in
-the review queue). Real curated knowledge is untouched — only demo-origin items are
-affected. Safe to re-run.
+the review queue). Groups recorded as a **schema gap** are re-armed the same way — there is
+no graph write to undo, only the status. Real curated knowledge is untouched — only
+demo-origin items are affected. Safe to re-run.
 
 Run: ``make demo-reset`` (or ``docker compose run --rm backend python -m scripts.reset_demo_review``).
 """
@@ -28,6 +29,37 @@ async def _audit_delete(pg: asyncpg.Connection, item_type: str, target_id: str) 
         item_type,
         target_id,
     )
+
+
+async def _reset_schema_gaps(pg: asyncpg.Connection) -> int:
+    """Return demo groups recorded as a schema gap to ``proposed``.
+
+    Nothing was written to Neo4j when the gap was recorded, so only the status is undone —
+    but the reset itself is still audited (one row per group), so the append-only log keeps
+    both the original ``schema_gap`` decision and its reversal.
+    """
+    group_ids = [
+        r["group_id"]
+        for r in await pg.fetch(
+            "SELECT DISTINCT group_id FROM curation_items "
+            "WHERE proposed_by = 'demo' AND status = 'schema_gap' AND group_id IS NOT NULL"
+        )
+    ]
+    for group_id in group_ids:
+        await pg.execute(
+            "INSERT INTO graph_change_logs "
+            "(change_id, action, target_type, target_id, actor, reason) "
+            "VALUES ($1, 'reset', 'proposal_group', $2, 'demo-reset', "
+            "'demo review reset: schema_gap -> proposed')",
+            f"change:{uuid.uuid4()}",
+            group_id,
+        )
+    await pg.execute(
+        "UPDATE curation_items SET status = 'proposed', reviewed_by = NULL, "
+        "reason = NULL, reviewed_at = NULL "
+        "WHERE proposed_by = 'demo' AND status = 'schema_gap'"
+    )
+    return len(group_ids)
 
 
 async def reset() -> dict:
@@ -69,7 +101,12 @@ async def reset() -> dict:
             "reason = NULL, reviewed_at = NULL "
             "WHERE proposed_by = 'demo' AND status = 'approved'"
         )
-        result = {"reset_items": len(rows), "graph_deleted": deleted}
+        gap_groups = await _reset_schema_gaps(pg)
+        result = {
+            "reset_items": len(rows),
+            "graph_deleted": deleted,
+            "reset_schema_gap_groups": gap_groups,
+        }
         print(f"demo review reset: {result}")
         return result
     finally:

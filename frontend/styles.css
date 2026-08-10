@@ -337,6 +337,14 @@ input, textarea, select { font-family: var(--sans); }
 .ex-review { margin-top: 18px; border-top: 1px solid var(--keisen); padding-top: 14px; }
 .ex-notes { width: 100%; border: 1px solid var(--keisen); background: var(--canvas); padding: 9px 11px; font-size: 13px; min-height: 60px; resize: vertical; }
 
+/* third dispose outcome: record-as-gap (only rendered for needs_schema_extension) */
+.ex-gap-hint { font-size: 12px; color: var(--text-2); margin-top: 14px; line-height: 1.7; }
+.ex-gap-row { display: flex; gap: 10px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+.ex-gap-select {
+  flex: 1 1 260px; min-width: 0; border: 1px solid var(--keisen);
+  background: var(--canvas); padding: 7px 9px; font-size: 13px;
+}
+
 /* toast / notice */
 .notice { padding: 10px 14px; font-size: 12px; margin: 12px 32px 0; border: 1px solid var(--keisen); background: var(--card); }
 .notice.ok { border-color: var(--matcha); color: var(--matcha); }

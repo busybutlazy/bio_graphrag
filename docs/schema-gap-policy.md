@@ -2,7 +2,17 @@
 
 > 對應 `docs/expert-in-the-loop-plan.md` 五.6。
 > 專家**不需要知道內部 gap code**。專家畫面只呈現白話選項,系統內部再映射成
-> `schema_gap_type`,並寫入 `data/sample/expert_demo/schema_gap_backlog.json`。
+> `schema_gap_type`。
+
+## 目前的落地位置
+
+下表的白話選項就是群組審閱頁「記為 gap」的下拉選單內容(`GAP_OPTIONS`,`frontend/app.js`);
+送出後走 `POST /admin/review/groups/{group_id}/gap`(見 `docs/api_contract.md`),記在
+**`graph_change_logs` 的 `action='schema_gap'` 資料列**(`after_state` 含 `schema_gap_type`,
+`reason` 存專家的白話說明),群組成員轉為 `status='schema_gap'`。
+
+`data/sample/expert_demo/schema_gap_backlog.json` 是早期的樣本檔,**已不是寫入目標**;
+下方〈Backlog 資料結構〉描述的是完整 backlog 生命週期的目標形態,尚未實作(獨立變更)。
 
 ## 為什麼需要這份 policy
 

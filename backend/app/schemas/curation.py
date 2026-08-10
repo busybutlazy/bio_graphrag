@@ -42,6 +42,15 @@ class ApproveRejectRequest(BaseModel):
     reason: str | None = None
 
 
+class SchemaGapRequest(BaseModel):
+    """Record a proposal group as a schema gap. ``schema_gap_type`` is validated against the
+    taxonomy whitelist in the service (422 on an unknown code), so the schema stays structural."""
+
+    reviewer: str
+    reason: str | None = None
+    schema_gap_type: str
+
+
 class MergeNodesRequest(BaseModel):
     source_node_id: str
     target_node_id: str
