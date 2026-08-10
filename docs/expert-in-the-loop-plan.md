@@ -220,6 +220,11 @@ gold{promote, gold_id}`。
 Backlog 資料(`data/sample/expert_demo/schema_gap_backlog.json`):
 `gap_id / raised_by_case / schema_gap_type / expert_facing_reason / example_text /
 status(backlog|proposed|accepted|rejected) / proposed_schema_change / raised_at`。
+
+> **現況(2026-08-10)**:上述 JSON **不是**任何程式碼的讀寫目標,沒有任何 runtime 讀它。
+> 實際記錄的 gap 走 `POST /admin/review/groups/{group_id}/gap`,落在 `graph_change_logs`
+> 的 `action='schema_gap'` 資料列(見 `docs/schema-gap-policy.md`)。這個 JSON 保留下來,是因為
+> 它是上述目標資料結構**唯一的完整範例**——做 backlog 生命週期變更時以它為藍本,屆時再決定去留。
 D6 排除的型別(CellType/Stimulus/STIMULATES/AntagonisticInteraction/ON_PROCESS)一併記為 backlog。
 
 ---

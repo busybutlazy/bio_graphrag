@@ -177,3 +177,39 @@ def test_double_approve_409_uses_error_contract():
         assert resp.json()["error"]["code"] == "conflict"
     finally:
         asyncio.run(_cleanup())
+
+
+# --- review remediation: payload bounds on the audit-bearing fields (finding L5) -----------
+
+
+def test_oversized_reason_and_reviewer_are_422_on_every_group_endpoint():
+    """`reviewer`/`reason` land verbatim in graph_change_logs, so they need a bound like any
+    other request field. Asserted on all three verbs — reject/gap must not be laxer than approve.
+
+    Deliberately uses an unknown group: the length check is a schema-level (422) rejection that
+    happens before any lookup, so it never depends on seeded state.
+
+    Body shape is asserted, not just the status code (review finding R1): a 422 from **Pydantic**
+    is FastAPI's default ``{"detail": [...]}``, NOT the project's ``{"error": {code, message}}``,
+    because ``main.py`` registers no ``RequestValidationError`` handler. That split is a documented,
+    site-wide exception (see docs/api_contract.md) — pinning it here means a future site-wide
+    handler cannot change the contract silently.
+    """
+    too_long_reason = "字" * 2001
+    too_long_reviewer = "r" * 101
+    for verb, extra in (("approve", {}), ("reject", {}), ("gap", {"schema_gap_type": "unknown"})):
+        url = f"/admin/review/groups/group:does_not_exist/{verb}"
+        for payload in (
+            {"reviewer": "tester", "reason": too_long_reason, **extra},
+            {"reviewer": too_long_reviewer, **extra},
+        ):
+            resp = client.post(url, json=payload)
+            assert resp.status_code == 422, verb
+            # documented exception: Pydantic-level validation keeps FastAPI's default shape
+            assert "detail" in resp.json(), verb
+            assert "error" not in resp.json(), verb
+        # a reason at the limit still passes the schema and reaches the 404 guard, which DOES
+        # use the project contract — the two shapes coexist on one endpoint, as documented
+        resp = client.post(url, json={"reviewer": "tester", "reason": "字" * 2000, **extra})
+        assert resp.status_code == 404, verb
+        assert resp.json()["error"]["code"] == "not_found", verb

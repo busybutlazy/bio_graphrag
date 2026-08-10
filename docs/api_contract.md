@@ -239,6 +239,8 @@ class DeleteEdgeRequest(BaseModel):
 
 ### `POST /admin/review/groups/{group_id}/approve`
 
+三個群組端點(`approve` / `reject` / `gap`)的 `reviewer` 上限 100 字元、`reason` 上限 2000 字元(超過回 `422`);兩者都會原樣寫入 `graph_change_logs`,所以與其他請求欄位一樣需要邊界。
+
 以一次交易核准整個群組:把所有成員 node/edge 寫入 Neo4j 為 `approved`、翻各 item 狀態、`graph_change_logs` 追加一列(`action='approve'`、`target_type='proposal_group'`、`target_id=group_id`,`after_state` 含**完整 payload** 與 `item_ids`,足以重建進圖內容)。Request `{reviewer, reason?}`。成功回傳 `{group_id, status:'approved', nodes, edges}`。
 
 **核准前的四道防線**(任一不過即拒絕,不寫入任何東西):
@@ -253,6 +255,16 @@ class DeleteEdgeRequest(BaseModel):
 
 錯誤 body 遵循 `{"error": {"code", "message"}}`(新端點依 CLAUDE.md 契約;較舊的 `/admin/curation/*` 仍回 `{"detail"}`)。列出時 `FOR UPDATE` 鎖列,兩個併發核准不會同時看到 `proposed`。
 
+> **已知例外 —— 兩種 422 body 形狀。** 上述 `{"error":{…}}` 契約涵蓋的是**服務層**拋出的錯誤
+> (`APIError`,由 `main.py` 的 handler 統一格式化)。**Pydantic 層級**的請求驗證失敗
+> (例如 `reason` 超過 2000 字元、缺必填欄位)由 FastAPI 自己處理,回的是預設的
+> `{"detail":[{"type":"string_too_long","loc":["body","reason"],…}]}` —— **沒有 `code` 欄位**。
+> `main.py` 只註冊了 `APIError` 與 `Exception` 兩個 handler,未註冊 `RequestValidationError`。
+>
+> 這不是本端點特有的:全站(`/query`、`/check-answer`、ingest 等)的 Pydantic 驗證 422 一律如此。
+> 依 `error.code` 分支的消費端必須同時容忍 `detail` 形狀(前端 `apiError` 的 `formatDetail` 已處理)。
+> 統一成單一形狀需要一個全站 handler,屬跨端點契約決策,留待獨立變更處理。
+
 ### `POST /admin/review/groups/{group_id}/reject`
 
 翻整個群組為 `rejected`,**不寫 Neo4j**,`graph_change_logs` 追加 `action='reject'` 一列。Request/錯誤碼同上,回傳 `{group_id, status:'rejected'}`。
@@ -263,8 +275,8 @@ class DeleteEdgeRequest(BaseModel):
 
 ```python
 class SchemaGapRequest(BaseModel):
-    reviewer: str
-    reason: str | None = None
+    reviewer: str = Field(max_length=100)
+    reason: str | None = Field(default=None, max_length=2000)
     schema_gap_type: str
 ```
 
@@ -283,9 +295,13 @@ class SchemaGapRequest(BaseModel):
 | Schema gate 結果不是 `needs_schema_extension`(gap 只給真正的 schema 缺口,形式問題請走 reject) | `409 conflict` |
 | `schema_gap_type` 不在白名單,或 `reviewer` 空白 | `422 invalid_request` |
 
+**檢查順序**:`reviewer` 與 `schema_gap_type` 在查詢群組**之前**就驗證(省一次 DB round-trip),所以帶著無效 `schema_gap_type` 打一個不存在的群組會拿到 `422` 而非 `404`。表格是「任一不過即拒絕」,不代表由上而下的評估順序。
+
 狀態 UPDATE 與稽核 INSERT 在**同一個交易**內,兩者同生共死(不會出現翻了狀態卻沒有稽核紀錄)。
 
-目前**尚無 backlog 檢視介面**:記下的 gap 只存在於 `graph_change_logs` 的 `action='schema_gap'` 資料列。完整的 backlog 生命週期(累積、排序、接受/駁回、`proposed_schema_change`)是後續獨立變更。`make demo-reset` 會把 demo 來源的 `schema_gap` 群組還原成 `proposed`,方便重複展示。
+目前**尚無 backlog 檢視介面**:記下的 gap 只存在於 `graph_change_logs` 的 `action='schema_gap'` 資料列。完整的 backlog 生命週期(累積、排序、接受/駁回、`proposed_schema_change`)是後續獨立變更。
+
+**`schema_gap` 是終局狀態,且復原路徑只涵蓋 demo 資料。** `make demo-reset` 只還原 `proposed_by='demo'` 的群組;**非 demo 來源**(手工提案、未來的 ingestion 提案)一旦被記為 gap,目前沒有任何 UI 可以復原,只能直接改資料庫。這與 `rejected` 同屬終局設計,不是本端點新引入的不一致,但在 backlog 生命週期做出來之前,這個限制是真的——請把「gap 的 accept/reject/復原」列入該變更的必要範圍。
 
 ## 4. 不提供的 API
 
