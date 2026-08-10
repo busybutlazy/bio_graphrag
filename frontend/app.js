@@ -547,8 +547,10 @@ async function ingestRun(body, ownerToken) {
 // the default would be recorded whenever a reviewer submits without touching the dropdown, quietly
 // inflating one bucket — and the whole point of the whitelist is that the counts stay meaningful
 // enough to answer "which schema extension unblocks the most knowledge?". An unclassified gap is
-// honest; a wrongly classified one is worse than none. (Review finding L1 — observed in practice:
-// one of the two real records made during the browser pass carried the old default.)
+// honest; a wrongly classified one is worse than none. (Review finding L1. Note the audit log
+// cannot evidence this: the demo group genuinely *is* a permissive effect, so a record carrying
+// the old default is indistinguishable from a correct deliberate choice — which is itself the
+// problem, and the argument stands on the default-bias alone.)
 const GAP_OPTIONS = [
   ['unknown', '其他 / 說不上來'],
   ['permissive_effect', 'A 不是直接影響 C,而是改變 B 對 C 的作用強度'],

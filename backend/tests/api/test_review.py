@@ -188,18 +188,28 @@ def test_oversized_reason_and_reviewer_are_422_on_every_group_endpoint():
 
     Deliberately uses an unknown group: the length check is a schema-level (422) rejection that
     happens before any lookup, so it never depends on seeded state.
+
+    Body shape is asserted, not just the status code (review finding R1): a 422 from **Pydantic**
+    is FastAPI's default ``{"detail": [...]}``, NOT the project's ``{"error": {code, message}}``,
+    because ``main.py`` registers no ``RequestValidationError`` handler. That split is a documented,
+    site-wide exception (see docs/api_contract.md) — pinning it here means a future site-wide
+    handler cannot change the contract silently.
     """
     too_long_reason = "字" * 2001
     too_long_reviewer = "r" * 101
     for verb, extra in (("approve", {}), ("reject", {}), ("gap", {"schema_gap_type": "unknown"})):
         url = f"/admin/review/groups/group:does_not_exist/{verb}"
-        assert (
-            client.post(url, json={"reviewer": "tester", "reason": too_long_reason, **extra})
-        ).status_code == 422, verb
-        assert (
-            client.post(url, json={"reviewer": too_long_reviewer, **extra})
-        ).status_code == 422, verb
-        # and a reason at the limit is still accepted by the schema (it reaches the 404 guard)
-        assert (
-            client.post(url, json={"reviewer": "tester", "reason": "字" * 2000, **extra})
-        ).status_code == 404, verb
+        for payload in (
+            {"reviewer": "tester", "reason": too_long_reason, **extra},
+            {"reviewer": too_long_reviewer, **extra},
+        ):
+            resp = client.post(url, json=payload)
+            assert resp.status_code == 422, verb
+            # documented exception: Pydantic-level validation keeps FastAPI's default shape
+            assert "detail" in resp.json(), verb
+            assert "error" not in resp.json(), verb
+        # a reason at the limit still passes the schema and reaches the 404 guard, which DOES
+        # use the project contract — the two shapes coexist on one endpoint, as documented
+        resp = client.post(url, json={"reviewer": "tester", "reason": "字" * 2000, **extra})
+        assert resp.status_code == 404, verb
+        assert resp.json()["error"]["code"] == "not_found", verb

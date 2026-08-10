@@ -74,39 +74,44 @@ async def reset() -> dict:
         password=os.getenv("POSTGRES_PASSWORD", "change_me"),
     )
     try:
-        # One transaction for the whole Postgres side (review finding L4): a failure partway must
-        # not leave audit rows without their status change, or half the items reset. The Neo4j
-        # deletes below cannot join it — that cross-store limit is inherent, and they are
-        # idempotent, so a re-run completes the job.
-        async with pg.transaction():
-            rows = await pg.fetch(
-                "SELECT item_id, item_type, payload FROM curation_items "
-                "WHERE proposed_by = 'demo' AND status = 'approved'"
-            )
-            deleted = {"nodes": 0, "edges": 0}
-            driver = GraphDatabase.driver(
-                os.getenv("NEO4J_URI", "bolt://neo4j:7687"),
-                auth=(
-                    os.getenv("NEO4J_USERNAME", "neo4j"),
-                    os.getenv("NEO4J_PASSWORD", "change_me"),
-                ),
-            )
-            try:
-                with driver.session() as session:
-                    for row in rows:
-                        payload = row["payload"]
-                        payload = json.loads(payload) if isinstance(payload, str) else payload
-                        node_id = payload["id"]
-                        if row["item_type"] == "node":
-                            session.run("MATCH (n {id: $id}) DETACH DELETE n", id=node_id)
-                            deleted["nodes"] += 1
-                        else:
-                            session.run("MATCH ()-[e {id: $id}]->() DELETE e", id=node_id)
-                            deleted["edges"] += 1
-                        await _audit_delete(pg, row["item_type"], node_id)
-            finally:
-                driver.close()
+        rows = await pg.fetch(
+            "SELECT item_id, item_type, payload FROM curation_items "
+            "WHERE proposed_by = 'demo' AND status = 'approved'"
+        )
 
+        # Graph deletes run FIRST, outside the Postgres transaction (review finding R2). Neo4j
+        # cannot join a PG transaction, so if the two were interleaved a later rollback would
+        # discard the audit rows for deletions that had already happened — a graph mutated with no
+        # trace, the one shape an append-only audit log must never produce. Deleting first means
+        # the worst case is the opposite and harmless: deletions recorded, statuses not yet reset,
+        # fixed by re-running (the deletes are idempotent).
+        deleted = {"nodes": 0, "edges": 0}
+        deleted_items: list[tuple[str, str]] = []
+        driver = GraphDatabase.driver(
+            os.getenv("NEO4J_URI", "bolt://neo4j:7687"),
+            auth=(os.getenv("NEO4J_USERNAME", "neo4j"), os.getenv("NEO4J_PASSWORD", "change_me")),
+        )
+        try:
+            with driver.session() as session:
+                for row in rows:
+                    payload = row["payload"]
+                    payload = json.loads(payload) if isinstance(payload, str) else payload
+                    node_id = payload["id"]
+                    if row["item_type"] == "node":
+                        session.run("MATCH (n {id: $id}) DETACH DELETE n", id=node_id)
+                        deleted["nodes"] += 1
+                    else:
+                        session.run("MATCH ()-[e {id: $id}]->() DELETE e", id=node_id)
+                        deleted["edges"] += 1
+                    deleted_items.append((row["item_type"], node_id))
+        finally:
+            driver.close()
+
+        # One transaction for the whole Postgres side (review finding L4): the audit rows for the
+        # deletions above and the status resets commit together or not at all.
+        async with pg.transaction():
+            for item_type, node_id in deleted_items:
+                await _audit_delete(pg, item_type, node_id)
             await pg.execute(
                 "UPDATE curation_items SET status = 'proposed', reviewed_by = NULL, "
                 "reason = NULL, reviewed_at = NULL "

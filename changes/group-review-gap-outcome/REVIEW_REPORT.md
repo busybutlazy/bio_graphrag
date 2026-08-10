@@ -6,18 +6,120 @@
 > | Finding | 處置 |
 > |---|---|
 > | **M1** CI/離線完整套件無證據 | **CLOSED with machine evidence** — 在合併後的 `main`、離線姿態下實跑:`pytest tests ingestion/tests` → **170 passed**;`app.eval.runner` → Recall@5 1.0 / Grounded 1.0 / P95 195.7ms / **Overall PASS**。不再只是人工口頭確認。 |
-> | **L1** 下拉預設值 | **FIXED** — `unknown` 移到 `GAP_OPTIONS[0]`,提示文字同步改寫,`app.js?v=20260810-2`。 |
+> | **L1** 下拉預設值 | **FIXED** — `unknown` 移到 `GAP_OPTIONS[0]`,提示文字同步改寫,`app.js?v=20260810-2`。<br>**更正**:commit `2a72bdf` 的訊息與初版程式註解宣稱「browser pass 的兩筆紀錄中有一筆帶著舊預設值」,**此宣稱無法由資料證實**——demo 群組本來就真的是 permissive effect,「帶著預設」與「刻意正確選擇」在 `graph_change_logs` 裡無法區分。註解已改寫;L1 的正當性不依賴這筆觀察,預設值偏誤的論證本身成立。 |
 > | **L2** 非 demo 不可復原 | **DOCUMENTED** — `api_contract.md` 明寫此限制並要求列入 backlog 變更範圍。程式碼依 owner 決議不動。 |
 > | **L3** 旗標封鎖核准 | 維持 owner 決議(選項 A),與 L2 一起設計。無新動作。 |
 > | **L4** reset 腳本 | **FIXED** — SELECT/UPDATE 共用同一個 predicate;Postgres 端整段包進 `pg.transaction()`。 |
 > | **L5** `reason` 無上限 | **FIXED** — `MAX_REVIEWER_LEN=100` / `MAX_REASON_LEN=2000` 套用在三個群組端點,新增 HTTP 層測試。 |
 > | **S2** 文件 guard 順序 | **FIXED** — `api_contract.md` 補「檢查順序」說明(422 先於 404)。 |
 > | **S3** 孤兒 sample 檔 | **DOCUMENTED, 不刪** — 它是 backlog 目標資料結構唯一的完整範例,`expert-in-the-loop-plan.md` 補現況說明。 |
-> | **S4** origin 的 revert-14 分支 | **NOT REPRODUCIBLE** — `git ls-remote --heads origin` 只有 `main` 與 `feat/two-gate-review-p4`;`main` 上無任何 Revert commit,`backend/.dockerignore` 與 CI 硬化完好。此項關閉。 |
+> | **S4** origin 的 revert-14 分支 | **RESOLVED —— 該分支已被刪除**(更正,見 R3)。finding 在 2026-08-10 提出時**確實成立**:`87229e4 Revert "chore: harden repository ignores and CI"` 至今仍存在於本地 object store,可證該 ref 曾經存在。2026-08-11 `git ls-remote --heads origin` 已無此 ref;`main` 上無任何 Revert commit,`backend/.dockerignore` 與 CI 硬化完好。此項關閉。<br>**先前本列誤寫為「NOT REPRODUCIBLE」**——那等於宣稱 finding 從未成立,與事實不符。稽核紀錄上「從未成立」與「成立後已被處理」意義不同,故更正。 |
 > | **S1** 稽核 actor 恆為 `'demo'` | **未處理**(owner 指示排除)——維持「獨立 Phase」定位。 |
 >
 > 修正後:離線完整套件 **171 passed**(新增 1 個 L5 測試)、ruff + mypy 全清、`node --check` OK、
 > `make demo-reset` live round trip 通過。下方原始報告內容保持不動。
+
+## Remediation Verification（獨立複驗，2026-08-11）
+
+對上方 remediation 宣稱的獨立核實。分支 `fix/review-remediation-gap-outcome` @ `2a72bdf`
+（單一 commit，`main...HEAD` 9 檔 +442/−51）。**複驗者未修改任何實作**，唯一寫入是本節。
+
+### 逐項核實結果
+
+| 宣稱 | 核實方式 | 結果 |
+|---|---|---|
+| **M1** 離線 171 passed | 我在分支上實跑 `docker compose run --rm -e OPENAI_API_KEY= backend pytest tests ingestion/tests -q` → **171 passed in 73.64s** | ✅ 屬實 |
+| **M1** eval PASS | 實跑 `python -m app.eval.runner`（離線）→ Recall@5 **1.0**／Grounded **1.0**／P95 **205.2ms**／**Overall PASS** | ✅ 屬實（P95 與宣稱的 195.7ms 差異屬正常抖動） |
+| ruff / mypy / node | ruff 0.15.21 `check` → All checks passed；`format --check` → 99 files already formatted；host `mypy` → 77 files clean；`node --check` OK | ✅ 全部屬實 |
+| **L1** `unknown` 排第一 | diff 核對：`GAP_OPTIONS[0]` 已是 `['unknown','其他 / 說不上來']`，提示文字改為「預設是『其他』」，`app.js?v=20260810-2`（`styles.css` 未改故未 bump，正確） | ✅ 已修 |
+| **L2** 文件化 | `api_contract.md` 新增粗體段落，明寫「非 demo 來源一旦記為 gap 沒有任何 UI 可以復原」並要求列入 backlog 變更範圍 | ✅ 已做，且比我原本建議的一句話更完整 |
+| **L3** 無動作 | 程式碼未動 | ✅ 符合 owner 決議 |
+| **L4** reset 腳本 | SELECT/UPDATE 已共用 `where` 變數；Postgres 端包進 `pg.transaction()` | ✅ 已修，**但交易邊界被擴大，見 R2** |
+| **L5** 長度上限 | `MAX_REVIEWER_LEN=100`／`MAX_REASON_LEN=2000` 套在兩個 request model；新測試涵蓋三個 verb | ✅ 已修，**但回傳格式脫離契約，見 R1** |
+| **S2** guard 順序 | `api_contract.md` 新增「檢查順序」段；實測 bogus type 打不存在群組 → `422` | ✅ 屬實 |
+| **S3** 孤兒檔 | `expert-in-the-loop-plan.md` 補現況說明，檔案保留 | ✅ 已做 |
+| **S4** revert 分支 | `git ls-remote --heads origin` → 只有 `main`、`feat/two-gate-review-p4`、本分支；`main` 無 Revert commit；`backend/.dockerignore` 存在 | ✅ 結論正確，**但敘述失準，見 R3** |
+| `make demo-reset` round trip | 查 Postgres：`proposed_by='demo'` 全部 19 筆／5 群組皆為 `proposed`；`graph_change_logs` 留有 `actor='remediation-check'` 的驗證痕跡 | ✅ 佐證成立，環境已清乾淨 |
+
+**結論：除 S1（依指示排除）外，所有宣稱皆屬實，且證據等級由「人工口頭確認」升級為「機器可複現」。**
+以下三點是本次複驗**新發現**的，不影響上述判定，但應記錄。
+
+### R1（Low，新發現）— L5 的 422 脫離了本端點自己文件化的錯誤契約
+
+- 證據：`backend/app/main.py` 只註冊 `APIError` 與 `Exception` 兩個 handler，**沒有
+  `RequestValidationError` handler**，所以 Pydantic 的長度違規走 FastAPI 預設格式。全新容器實測：
+  ```
+  超長 reason  → 422 {"detail":[{"type":"string_too_long","loc":["body","reason"], ...}]}
+  未知 gap type → 422 {"error":{"code":"invalid_request","message":"invalid schema_gap_type: 'bogus'"}}
+  ```
+- 違反的要求：`docs/api_contract.md:256` 對這三個群組端點明寫「錯誤 body 遵循
+  `{"error": {"code", "message"}}`」，gap 端點的四道防線表格也標示 `422 invalid_request`。
+  同一個端點的同一個狀態碼現在有**兩種 body 形狀**，其中一種沒有 `code` 欄位。
+- 影響：契約消費端若依 `error.code` 分支會拿到 `undefined`。前端 `apiError` 的 `formatDetail`
+  有處理 `detail` 陣列，所以 UI 不會壞，但會在中文介面顯示英文的
+  「reason：String should have at most 2000 characters」。**新測試只斷言 `status_code == 422`，
+  沒有斷言 body 形狀，所以抓不到這件事。**
+- 補救方向（有界）：在 `main.py` 加一個 `RequestValidationError` handler 轉成
+  `{"error":{"code":"invalid_request","message":…}}`，或在文件明列「Pydantic 層級驗證回
+  FastAPI 預設格式」這個例外。前者一致性較好但會影響**全站**所有 422，屬跨端點決策，
+  不該夾在這次 remediation 裡做——建議獨立處理。
+
+### R2（Low，新發現）— L4 的交易邊界被擴大，failure path 的性質被反轉
+
+- 證據：`scripts/reset_demo_review.py::reset()` 現在把**整段**包進 `async with pg.transaction()`，
+  Neo4j 的 `DETACH DELETE` 迴圈與 `_audit_delete` 都在其中。
+- 我原本的 L4 只針對 `_reset_schema_gaps` 內「稽核 INSERT + 狀態 UPDATE」這組**純 Postgres**
+  的不對稱；擴大到涵蓋跨 store 的刪除是超出該 finding 的範圍。
+- 性質變化：舊行為的失敗態是「稽核列已寫、狀態未翻」（記錄誠實，狀態落後）；新行為的失敗態是
+  「Neo4j 已刪、稽核列被 rollback」——**圖被改動卻沒有稽核紀錄**，正好是 append-only 稽核
+  最不該出現的形狀。
+- 為何仍只評 Low：(a) 這是 demo 腳本，不在 production 路徑；(b) 程式碼註解**已預見**此限制
+  （"that cross-store limit is inherent … a re-run completes the job"），且推論成立——rollback 後
+  項目仍是 `approved`，重跑會重新刪（冪等）並重新寫稽核列後 commit，最終狀態與稽核都正確。
+  殘留風險僅限「失敗後從未重跑」的窗口。次要副作用：交易在跨 store 網路 I/O 期間持續持有列鎖。
+- 補救方向（有界）：把 Neo4j 迴圈移出交易（先刪圖、再於單一 PG 交易內寫稽核＋翻狀態），
+  或維持現狀並在註解中把「必須重跑」寫成操作要求。低優先。
+
+### R3（記錄準確性）— S4 的「NOT REPRODUCIBLE」敘述失準
+
+- 該分支在 **2026-08-10 審查當下確實存在**：本報告的原始 S4 依據是當時 `git branch -a` 輸出中的
+  `remotes/origin/revert-14-chore/repo-ci-hardening`（commit `87229e4 Revert "chore: harden
+  repository ignores and CI"`，基底 `da2eed2`，不含 PR #15）。
+- 今日（2026-08-11）`git ls-remote` 已無此 ref，本地 remote-tracking ref 亦已被 prune。
+- 正確敘述應為「**已解決：該分支已被刪除**」，而非「無法重現」。結論（關閉此項）不變，
+  但「finding 從未成立」與「finding 成立且已被處理」在稽核紀錄上意義不同，故更正。
+
+### 其他觀察（不構成 finding）
+
+- **L1 註解中的經驗性宣稱不完全可證。** 註解寫「browser pass 的兩筆真實紀錄中有一筆帶著舊預設值」。
+  查 `graph_change_logs`：該時段兩筆分別為 `permissive_effect`（有理由文字）與 `unknown`（空理由），
+  與敘述相符；但 demo 群組（甲狀腺素調節腎上腺素對代謝率的作用）**本來就真的是 permissive effect**,
+  所以「帶著舊預設」與「審閱者刻意正確選擇」在資料上無法區分。方向不影響 L1 的正當性
+  （預設值偏誤的論證本來就不依賴這筆觀察），但註解的語氣強過證據。
+- **L5 的邊界只覆蓋 dispose 側。** `CurationGroupCreate.reason` 與 `CurationItemCreate.reason`
+  （propose 側）仍無上限，而 propose 側的 reason 會存進 `curation_items` 與 `schema_check`。
+  與 finding 原文（「三個群組端點一起做」）相符，非偏差，但一致性缺口仍在。
+- **流程觀察：** 此 remediation 沒有自己的 `IMPLEMENTATION_PLAN` / `CHANGE_REPORT`，證據是追加在
+  被審變更的 `VERIFICATION_REPORT.md` 中。因 change-id 相同，尚屬合理；但「修正審查發現」本身
+  也是一次變更，若日後 remediation 規模再放大，建議獨立成 change 以維持可追溯性。
+
+### 複驗者執行的指令（皆唯讀或容器內拋棄式）
+
+```
+docker compose run --rm -e OPENAI_API_KEY= backend pytest tests ingestion/tests -q   → 171 passed
+docker compose run --rm -e OPENAI_API_KEY= backend python -m app.eval.runner         → Overall PASS
+docker run --rm ghcr.io/astral-sh/ruff:0.15.21 check <LINT_PATHS>                    → All checks passed
+docker run --rm ghcr.io/astral-sh/ruff:0.15.21 format --check <LINT_PATHS>           → 99 formatted
+mypy backend/app ingestion scripts                                                    → 77 files clean
+node --check frontend/app.js                                                          → OK
+git ls-remote --heads origin                                                          → 3 refs (S4)
+psql（唯讀 SELECT）：graph_change_logs / curation_items 狀態查核
+```
+
+**注意（環境事實，非缺陷）：** 運行中的 `backend` 容器啟動於 `2026-08-10T14:57:59Z`，早於 remediation
+的檔案修改時間，且 `backend/Dockerfile` 的 uvicorn **沒有 `--reload`**。因此透過
+`http://localhost:8080` 打到的是**舊碼**——我最初對 L5 的 live 探測回了 404 就是這個原因，
+改用全新容器後才得到正確的 422。要讓修正在本機或公開網域生效，需 `docker compose up -d backend`。
 
 ## Review Context
 

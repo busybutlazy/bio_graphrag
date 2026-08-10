@@ -255,6 +255,16 @@ class DeleteEdgeRequest(BaseModel):
 
 錯誤 body 遵循 `{"error": {"code", "message"}}`(新端點依 CLAUDE.md 契約;較舊的 `/admin/curation/*` 仍回 `{"detail"}`)。列出時 `FOR UPDATE` 鎖列,兩個併發核准不會同時看到 `proposed`。
 
+> **已知例外 —— 兩種 422 body 形狀。** 上述 `{"error":{…}}` 契約涵蓋的是**服務層**拋出的錯誤
+> (`APIError`,由 `main.py` 的 handler 統一格式化)。**Pydantic 層級**的請求驗證失敗
+> (例如 `reason` 超過 2000 字元、缺必填欄位)由 FastAPI 自己處理,回的是預設的
+> `{"detail":[{"type":"string_too_long","loc":["body","reason"],…}]}` —— **沒有 `code` 欄位**。
+> `main.py` 只註冊了 `APIError` 與 `Exception` 兩個 handler,未註冊 `RequestValidationError`。
+>
+> 這不是本端點特有的:全站(`/query`、`/check-answer`、ingest 等)的 Pydantic 驗證 422 一律如此。
+> 依 `error.code` 分支的消費端必須同時容忍 `detail` 形狀(前端 `apiError` 的 `formatDetail` 已處理)。
+> 統一成單一形狀需要一個全站 handler,屬跨端點契約決策,留待獨立變更處理。
+
 ### `POST /admin/review/groups/{group_id}/reject`
 
 翻整個群組為 `rejected`,**不寫 Neo4j**,`graph_change_logs` 追加 `action='reject'` 一列。Request/錯誤碼同上,回傳 `{group_id, status:'rejected'}`。
