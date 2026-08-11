@@ -225,7 +225,14 @@ def test_every_pattern_the_renderer_can_answer_with_is_accounted_for():
     """
     source = inspect.getsource(back_translation)
     answerable = set(re.findall(r'"(P\d+)"', source))
-    assert answerable, "could not read any pattern ids out of back_translation"
+    # Reading source is the only way to enumerate without importing ingestion *into* the renderer,
+    # and it assumes the ids stay double-quoted literals. The floor below is the tripwire: if a
+    # refactor moves them into an enum or f-string, this fails loudly rather than silently passing
+    # on an empty set — which would turn the guard into decoration.
+    assert len(answerable) >= len(_TEMPLATES) + len(_FALLBACK_PATTERNS), (
+        f"only found {sorted(answerable)} in back_translation — the pattern ids are no longer "
+        "plain double-quoted literals, so this guard is not reading them any more"
+    )
 
     shapes = answerable - _FALLBACK_PATTERNS
     templated = {name for name, _focus, _reqs in _TEMPLATES}

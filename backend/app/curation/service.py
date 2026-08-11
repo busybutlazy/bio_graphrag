@@ -342,6 +342,37 @@ def _group_possible_schema_gap(items: list) -> bool:
     )
 
 
+def _deprecated_member_ids(driver, node_ids: list[str], edge_ids: list[str]) -> dict:
+    """Which of these ids exist but were **deleted** by a curator? (sync — run in a thread)
+
+    Deletion here is a status change, not a removal: ``delete_node`` sets ``status='deprecated'`` and
+    leaves the element in the graph. So a re-proposal of a deleted concept would sail past an
+    approved-only lookup, and ``write_nodes``' ``MERGE … SET n.status`` would flip it back to
+    approved — undoing a human decision as a side effect of approving something else. Restoring
+    deleted knowledge has to be a decision someone makes on purpose.
+    """
+    found: dict[str, list[str]] = {"nodes": [], "edges": []}
+    with driver.session() as session:
+        if node_ids:
+            found["nodes"] = [
+                r["id"]
+                for r in session.run(
+                    "MATCH (n) WHERE n.id IN $ids AND n.status = 'deprecated' RETURN n.id AS id",
+                    ids=node_ids,
+                )
+            ]
+        if edge_ids:
+            found["edges"] = [
+                r["id"]
+                for r in session.run(
+                    "MATCH ()-[r]->() WHERE r.id IN $ids AND r.status = 'deprecated' "
+                    "RETURN r.id AS id",
+                    ids=edge_ids,
+                )
+            ]
+    return found
+
+
 def _existing_approved_ids(driver, node_ids: list[str], edge_ids: list[str]) -> dict:
     """Which of these ids already exist in the **approved** graph? (sync — run in a thread)"""
     found: dict[str, list[str]] = {"nodes": [], "edges": []}
@@ -518,6 +549,26 @@ async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dic
             reused_edges = set(existing["edges"])
             node_writes = [n for n in node_payloads if n["id"] not in reused_nodes]
             edge_writes = [e for e in edge_payloads if e["id"] not in reused_edges]
+
+            # "Reuse, don't rewrite" only protects what is *approved*. A member a curator deleted
+            # sits in the graph as `deprecated`, so an approved-only lookup misses it and the write
+            # below would MERGE it back to approved with the proposal's wording — quietly reversing
+            # a deletion as a side effect of approving something else. Restoring deleted knowledge
+            # is a decision, so it is refused here rather than performed silently.
+            buried = await anyio.to_thread.run_sync(
+                _deprecated_member_ids,
+                driver,
+                [n["id"] for n in node_writes],
+                [e["id"] for e in edge_writes],
+            )
+            resurrected = sorted(buried["nodes"] + buried["edges"])
+            if resurrected:
+                raise CurationError(
+                    409,
+                    f"group {group_id} re-proposes knowledge a curator deleted "
+                    f"({', '.join(resurrected)}); approving would restore it — "
+                    "decide that explicitly instead",
+                )
 
             # A group may legitimately reference a node it does not propose — an interaction is a
             # claim *about* effects that are their own statements, so it points at them rather than

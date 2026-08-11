@@ -300,6 +300,112 @@ def test_approve_reuses_an_already_approved_member_without_rewriting_it():
     assert after["reused_nodes"] == ["hormone:t2_insulin"]
 
 
+def test_approve_refuses_to_resurrect_a_deleted_member():
+    """A curator's deletion must not be undone as a side effect of approving something else.
+
+    `delete_node` is a status change, not a removal, so a deprecated node is invisible to the
+    approved-only lookup that decides what to reuse — and `write_nodes` would MERGE it back to
+    approved with the proposal's wording. Restoring deleted knowledge is a decision.
+    """
+    driver = GraphDatabase.driver(
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+    )
+    with driver.session() as session:
+        session.run(
+            "MERGE (n:Hormone {id:'hormone:t2_insulin'}) "
+            "SET n.label='curated wording', n.status='deprecated'"
+        )
+
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+    assert exc.value.status_code == 409
+    assert "deleted" in exc.value.message
+
+    with driver.session() as session:
+        row = session.run(
+            "MATCH (n {id:'hormone:t2_insulin'}) RETURN n.label AS l, n.status AS s"
+        ).single()
+    driver.close()
+    assert (row["l"], row["s"]) == ("curated wording", "deprecated")  # decision intact
+
+
+def test_two_groups_sharing_a_concept_can_both_be_approved():
+    """The case the whole reuse change exists for: an ordinary paragraph's statements share a
+    concept, and each must still be approvable on its own terms."""
+    shared = _NODES[0]  # hormone:t2_insulin — proposed by both groups
+    second = "group:test_t2_shared"
+    other_effect = {
+        "id": "regulatory_effect:t2_other",
+        "type": "RegulatoryEffect",
+        "label": "t2 other",
+        "description": "d",
+        "source_chunk_id": "chunk:t2",
+    }
+    other_var = {
+        "id": "physiological_variable:t2_other_v",
+        "type": "PhysiologicalVariable",
+        "label": "t2 other v",
+        "description": "d",
+        "source_chunk_id": "chunk:t2",
+    }
+    try:
+        for item, kind in ((shared, "node"), (other_effect, "node"), (other_var, "node")):
+            asyncio.run(_insert_item(second, item, kind))
+        for edge in (
+            ("e:t2s:has", "HAS_EFFECT", shared["id"], other_effect["id"]),
+            ("e:t2s:on", "ON_VARIABLE", other_effect["id"], other_var["id"]),
+            ("e:t2s:inc", "INCREASES", other_effect["id"], other_var["id"]),
+        ):
+            asyncio.run(
+                _insert_item(
+                    second,
+                    {
+                        "id": edge[0],
+                        "type": edge[1],
+                        "source": edge[2],
+                        "target": edge[3],
+                        "source_chunk_id": "chunk:t2",
+                    },
+                    "edge",
+                )
+            )
+
+        first = asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+        assert first["reused_nodes"] == 0 and first["nodes"] == 3
+
+        again = asyncio.run(service.approve_group(second, "test_reviewer", None))
+        assert again["status"] == "approved"
+        assert again["reused_nodes"] == 1  # the shared concept
+        assert again["nodes"] == 2  # only the statement's own members were written
+
+        # one node in the graph, carrying both statements' relationships
+        driver = GraphDatabase.driver(
+            settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+        )
+        with driver.session() as session:
+            count = session.run(
+                "MATCH (n {id:'hormone:t2_insulin'}) RETURN count(n) AS c"
+            ).single()["c"]
+            rels = session.run(
+                "MATCH (:Hormone {id:'hormone:t2_insulin'})-[r]->() RETURN count(r) AS c"
+            ).single()["c"]
+        driver.close()
+        assert (count, rels) == (1, 2)
+    finally:
+        conn_cleanup = second
+        asyncio.run(_drop_group(conn_cleanup))
+        _drop_nodes([other_effect["id"], other_var["id"]])
+
+
+async def _drop_group(group_id: str) -> None:
+    conn = await _conn()
+    try:
+        await conn.execute("DELETE FROM curation_items WHERE group_id = $1", group_id)
+        await conn.execute("DELETE FROM graph_change_logs WHERE target_id = $1", group_id)
+    finally:
+        await conn.close()
+
+
 def test_approve_refuses_when_schema_gate_fails():
     """H2: the Schema gate is enforcing — a malformed group cannot reach the graph."""
     # RegulatoryEffect with HAS_EFFECT but no ON_VARIABLE / direction edge -> fail_pattern

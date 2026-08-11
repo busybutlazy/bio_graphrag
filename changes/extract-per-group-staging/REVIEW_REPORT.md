@@ -435,3 +435,148 @@ grill 自己找出來的,判斷正確。
 但**本輪不改變第一輪的結論:仍不建議合併。**
 
 The reviewer does not approve, fix, merge, or release this change.
+
+---
+
+# Verification Round 3 — 複核(2026-08-11,commit `747f52e`)
+
+## Scope
+
+複核對象:`747f52e`(`f4af033..747f52e`,18 檔 +1409 / −117),工作區已無未提交變更
+(僅 `docs/notes.md` 未追蹤,如預期)。
+
+## Verdict
+
+**V1–V5 五項全部修好,而且修得比我建議的更好——尤其 V3 的第三道守衛,是真正跳出「人工窮舉防人工
+窮舉」迴圈的作法。commit message 主動撤回自己先前的不實宣稱,`CHANGE_REPORT.md` 也補了更正段落,
+這在誠實揭露上是加分的。**
+
+**但仍不建議合併,理由從技術面轉為治理面:這次動的是已批准 Contract 的核准語意,
+`docs/api_contract.md` 沒有同步,現在載著一條**明確錯誤**的防線;而且這個改動超出 plan revision 4
+自訂的範圍,沒有 revision 5、沒有決策紀錄、stop condition 未觸發。**
+
+## Commands Executed（本輪,離線姿態）
+
+```
+docker compose run --rm -e OPENAI_API_KEY= backend pytest tests ingestion/tests -q
+  → 197 passed in 72.65s          （前一輪 194，本輪新增 3）
+```
+
+前一輪已驗的 ruff / mypy 未重跑(本輪未觸及格式面);`app.eval.runner`、CI、瀏覽器確認仍未由我複核。
+
+## V1–V5 逐項複核
+
+| finding | 狀態 | 我的驗證 |
+|---|---|---|
+| **V1** 共用節點導致「一段最多核准一組」 | ✅ **已修** | 第四道防線由「拒絕整組」改為「沿用已核准成員」。`node_writes`／`edge_writes` 排除已核准 id,`before_state.members_existed_in_graph` 與 `after_state.reused_nodes/reused_edges` 都入稽核。`test_approve_reuses_an_already_approved_member_without_rewriting_it` 直接斷言預寫 label `pre-existing` 在核准後**未被覆蓋**——這是關鍵斷言,寫對了 |
+| **V2** 模板收下多餘同型邊 | ✅ **已修** | `picked.extend(found[:needed])`。實跑複現我原本的兩個案例:兩個 Hormone 指向同一 RE → 第二條 `HAS_EFFECT` 落殘餘,殘餘 `gate: fail_pattern` 並在 P0 句中**指名升糖素**;兩個 Structure 分泌同一 Hormone → 腺體B 同樣被誠實列出 |
+| **V3** 守衛宣稱不實 | ✅ **已修,且修得對** | 新增 `test_every_pattern_the_renderer_can_answer_with_is_accounted_for`,以 `inspect.getsource(back_translation)` 掃出 pattern id,要求每個不是有模板就是列入 `_DELIBERATELY_UNTEMPLATED`(目前只有 P3,附理由)。並反向斷言豁免清單不得腐爛。這確實跳脫了原本的盲區 |
+| **V4** 模板優先序未測 | ✅ **已修** | 新增 `test_no_edge_is_claimed_by_two_templates` 與 `test_interaction_and_effect_each_keep_their_own_on_variable`,測試自己註明「currently holds by luck of the type set」——誠實 |
+| **V5** `LIKE` 的 `_` 萬用字元 | ✅ **已修** | 改用 `starts_with(group_id, ...)`,並註明理由 |
+| **B1 / H2** 回歸 | ✅ 未回歸 | 原 repro 重跑:三組全 `DANGLING: []`,殘餘為 `P0` |
+| **M2** 交互作用句退化 | ❌ **第三輪仍未處置、仍未揭露** | `back_translation.py` 最後一次變動遠早於本 change;`service.py` 無 `effect_to_hormone`。`TASK_LOG.md` 本輪列了 V1–V5,**仍未提及 M2** |
+
+## 新 findings
+
+### W1（Blocking）— 改了已批准 Contract 的核准語意,但契約文件沒同步,且超出批准範圍
+
+**(a) `docs/api_contract.md` 現在載著一條明確錯誤的防線。** 核准端點的表格仍列:
+
+```
+| **成員 id 已存在於 approved 圖**（核准會 MERGE 覆蓋既有策展知識）— 必須改走明確的 update 決策 | `409 conflict` |
+```
+
+這個 409 **已經不存在**。同節的回應形狀仍寫 `{group_id, status:'approved', nodes, edges}`,
+未含新增的 `reused_nodes` / `reused_edges`;小標題仍寫「核准前的**四道**防線」而表內有七列。
+`docs/api_contract.md` 依 CLAUDE.md 是 Source of Truth,且本 change 的 **AC8 明文要求
+「`api_contract.md` 同步」**——目前不成立。任何依這份契約行事的人(或未來的 agent)會得到錯的行為預期。
+
+**(b) 這是 Contract 變更,且超出 plan revision 4 的自訂範圍。**
+revision 4 的範圍聲明白紙黑字寫「`approve_group` **僅動 docstring**(L1)」;本 commit 改了它的
+核准語意與回應形狀。CLAUDE.md 的 Stop Conditions 明列「**必須改變已批准的 Contract**」為應停止
+回報的情況。查證結果:`IMPLEMENTATION_PLAN.md` 仍停在 **revision 4**
+(`Approved plan revision: **4**`),`DECISION_INVENTORY_R2.md` 自我審查後**未新增任何關於核准語意的
+決策紀錄**——G6 當時的立場恰恰相反,是「共用節點撞第四道防線是 G2 已接受的語意」。
+也就是說:**一個被明確記錄為「已接受」的設計決定,在沒有新決策紀錄的情況下被推翻了。**
+
+我要說清楚:**我認為這個技術判斷是對的**——「圖裡一個節點掛多條關係」確實是基本行為,舊防線
+確實把「重用」誤當成「覆蓋」,而且新作法(跳過寫入)在保護策展文字上**嚴格優於**舊作法
+(舊的擋得住整組,但一旦有東西被核准就照樣覆蓋)。問題不在判斷,在**這個判斷該由誰做**:
+它推翻的是 owner 已記錄的決定,並改動 Source of Truth 契約。
+
+- **有界的處置方向:** 補 plan **revision 5** 或一則決策紀錄(明載「G6 的立場被 V1 的實測推翻」),
+  取得 owner 對契約變更的明確批准;同步更新 `api_contract.md` 的防線表(刪除該列、改寫為
+  「已核准成員沿用而非重寫」)、回應形狀、以及小標題的「四道」。
+
+### W2（Medium）— 「策展版本永遠優先」對**已停用(deprecated)**的節點不成立
+
+- **證據:** `_existing_approved_ids` 只匹配 `status = 'approved'`。`delete_node` 走
+  `_deprecate_node_in_neo4j`,把節點留在圖上並改為 `status='deprecated'`(`service.py:776-784`)。
+  因此一個**曾被核准、後被刪除**的 id 不會進入 `reused_nodes`,會落入 `node_writes`,而
+  `load_neo4j.write_nodes` 的 `MERGE … SET n.label/.status/.description/n += $props`
+  會把它**改回 `approved` 並覆蓋策展文字**。
+- **影響:** 核准一個含有已停用概念的群組,會**無聲地撤銷那次刪除決定**,並覆寫當初的策展措辭。
+  這正是被移除的那道防線所要防的風險,在唯一沒被新作法涵蓋的那個狀態上仍然開著。
+  edge 同理(`delete_edge` 亦為 deprecate)。
+- **這是既有缺陷,非本輪引入**(舊防線同樣只看 approved,同樣會復活)。但本次 docstring 明確宣稱
+  「Skipping the write removes that risk **outright** — the curated version **always** wins」,
+  對 deprecated 狀態而言這句話是**不成立的**,而該宣稱正是這次改動的正當性基礎。
+- **有界的修正方向:** 把重用判定從 `status='approved'` 放寬為「id 已存在於圖上」,或對 deprecated
+  的成員明確報錯(復活必須是明示決定);至少要把 docstring 的「always」改成「對已核准成員」並記錄
+  deprecated 這個缺口。
+
+### W3（Medium）— 專家在決策當下不知道哪些成員會被沿用
+
+`list_groups` 不計算、也不回傳「本組哪些成員已在已核准圖譜中」。專家看到的理解句由**提案的**
+label 渲染,但真正留在圖上的是**策展版**。兩者若有出入,專家等於是對一段他看到、卻不會進入圖譜的
+文字按下核准;稽核紀錄事後看得到(`reused_nodes`),但決策當下看不到。
+舊行為在這個情境是 409(強迫成為明示決定),新行為是靜默沿用——這是這次修法真正的治理成本,
+`TASK_LOG.md` 未提及。
+**有界的修正方向:** 在 `list_groups` 的回應加一個「將被沿用的成員」清單,並在審閱面板標示;
+或在核准回應／flash 中明講。
+
+### W4（Low）— 前端未跟上新的回應形狀
+
+`frontend/app.js` 的成功訊息仍為
+`已核准並寫入知識圖譜(nodes ${res.nodes} / edges ${res.edges})`。`res.nodes` 現在**已扣除沿用的
+成員**,所以一個三節點、其中一個沿用的群組會顯示「nodes 2」,畫面上沒有任何地方解釋少掉的那一個。
+`reused_nodes` / `reused_edges` 未被使用。本 change 的瀏覽器確認本來就 owed,建議一併處理。
+
+### W5（Low）— commit message 的一項驗證宣稱沒有對應的自動化測試
+
+commit message 寫「Two approvals sharing a concept now both succeed, leaving one node with two
+relationships」。測試套件裡沒有「連續核准兩個共用節點的群組」的測試——
+`test_approve_reuses_an_already_approved_member_without_rewriting_it` 是以
+`_write_approved_node` **預先寫入**一個已核准節點來覆蓋沿用路徑。
+兩者在程式路徑上等價,所以**不是覆蓋缺口**,但 message 描述的那個具體情境(也正是 V1 的實際症狀)
+只有手動實跑、沒有回歸測試釘住。建議補一個依序核准兩組的整合測試,讓 V1 不會靜默復發。
+
+### W6（Suggestion）— 列舉守衛的正則有一個小前提
+
+`re.findall(r'"(P\d+)"', source)` 依賴 pattern id 以**雙引號字面值**出現在 `back_translation` 中。
+今天成立(ruff 統一雙引號),但若日後改用常數或 f-string 傳入 `_ok(...)`,守衛會靜默漏掉。
+可考慮改為讀 `_ok` 呼叫的第一個引數,或在 `back_translation` 端宣告一個明確的 pattern id 常數表。
+這是強化,不是缺陷。
+
+## 文件與流程狀態（更新）
+
+1. **`CHANGE_REPORT.md` / `VERIFICATION_REPORT.md` / `TASK_LOG.md` 均已更新**——上一輪的落差 1
+   已解決。`CHANGE_REPORT.md` 新增的「更正」段落主動承認兩處先前的不實宣稱,並指出 `f4af033` 的
+   commit message 含同一句、無法追溯修改故在此記錄——**這是應該被肯定的揭露品質**。
+2. **上一輪落差 2(M2 未修也未列 deferred)仍然存在**,已連續兩輪未處置。
+3. **新落差:`api_contract.md` 未同步核准語意變更(W1a),且該變更無決策紀錄與 plan 修訂(W1b)。**
+4. 全部變更已提交於 `747f52e`,工作區乾淨。
+
+## Human Disposition Required（第三輪）
+
+- **W1** 建議在合併前處置,且**必須由 owner 決定**:它推翻了一個已記錄為「已接受」的設計決定,
+  並改動 Source of Truth 契約。技術判斷我認同;需要的是補上批准與文件,不是回退程式碼。
+- **W2** 建議一併修或明確記錄:它讓本次改動的核心宣稱(「策展版本永遠優先」)在一個真實狀態下不成立。
+- **W3、W4** 建議與 owed 的瀏覽器確認一起處理。
+- **W5、W6** 可另開。
+- **M2** 已第三輪未處置,需要一句明確的「修」或「deferred + 理由」。
+
+技術上,V1–V5 這一輪的修正品質高於前兩輪:根因找得準(問題在核准語意而非切分)、修法比症狀治療更
+根本、並且主動撤回自己的錯誤宣稱。**剩下的阻礙不在程式碼,在治理紀錄與契約文件。**
+
+The reviewer does not approve, fix, merge, or release this change.

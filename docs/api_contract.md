@@ -259,7 +259,7 @@ class DeleteEdgeRequest(BaseModel):
 
 以一次交易核准整個群組:把所有成員 node/edge 寫入 Neo4j 為 `approved`、翻各 item 狀態、`graph_change_logs` 追加一列(`action='approve'`、`target_type='proposal_group'`、`target_id=group_id`,`after_state` 含**完整 payload** 與 `item_ids`,足以重建進圖內容)。Request `{reviewer, reason?}`。成功回傳 `{group_id, status:'approved', nodes, edges}`。
 
-**核准前的四道防線**(任一不過即拒絕,不寫入任何東西):
+**核准前的防線**(任一不過即拒絕,不寫入任何東西):
 
 | 情況 | 狀態碼 |
 |---|---|
@@ -267,9 +267,21 @@ class DeleteEdgeRequest(BaseModel):
 | 沒有 `proposed` 成員(含重複核准) | `409 conflict` |
 | 成員 `action` 不是 `create`(此路徑只實作 create) | `422 invalid_request` |
 | **Schema gate 未通過**(`result != 'pass'`,含 `needs_schema_extension`)— gate 為**強制**,形式不合格的提案不得進入圖譜 | `409 conflict` |
-| **成員 id 已存在於 approved 圖**(核准會 MERGE 覆蓋既有策展知識)— 必須改走明確的 update 決策 | `409 conflict` |
+| **成員重新提出策展者已刪除的知識**(圖上狀態為 `deprecated`)— 核准會把它復原 | `409 conflict` |
 | **邊的端點既不在本群組、也不是既有 approved 節點** — 核准會寫出懸空的邊 | `409 conflict` |
 | 邊的 source／target 為空 | `422 invalid_request` |
+
+**成員已存在於 approved 圖不再是拒絕理由**,而是**沿用不重寫**。圖上一個節點本來就掛多條關係,所以一段課文裡的每個陳述都會提到同一批概念（胰島素、血糖);把這件事當成衝突,等於讓審閱者一段課文只能核准一個陳述。改為沿用之後,既有的策展內容**永遠不會被提案覆蓋**（原本的作法擋得住整組核准,但一旦核准仍會覆寫 label 與 description),而 `deprecated` 的成員則由上表新增的那道防線擋下,避免刪除決定被無聲撤銷。
+
+回應因此新增兩個欄位:
+
+```json
+{"group_id": "...", "status": "approved",
+ "nodes": 2, "edges": 3,          // 實際寫入圖譜的數量
+ "reused_nodes": 1, "reused_edges": 0}   // 已存在而沿用、未被改寫的數量
+```
+
+沿用的 id 記入該次稽核列的 `after_state.reused_nodes` / `reused_edges`。**已知限制**:審閱者在按下核准的當下,畫面上看到的理解句是由**提案的** label 渲染的,但圖上留下的是策展版本——哪些成員被沿用,目前只能事後從稽核紀錄得知。
 
 最後兩道是**順序**與**格式**的分工。一個群組可以合法地**引用**它沒有提案的節點——交互作用是「關於某些調控效果」的主張,那些效果各自是獨立的陳述,所以它指向而非重新提案。但這個引用只有在被引用的節點已存在時才成立:先核准交互作用組會把邊寫進空無一物。訊息會列出缺少的端點並指出「先核准提案它們的那一組」。`POST /admin/curation/groups` 在**提案時**做同樣的檢查(回 `422`),核准時再檢查一次,是因為群組也可能由抽取路徑 staging、或被以不滿足依賴的順序核准。
 

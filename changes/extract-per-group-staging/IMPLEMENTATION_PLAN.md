@@ -401,8 +401,49 @@ Revert 上列檔案即可：無 migration、無新依賴、不寫 Neo4j。若已
 範圍新增檔案:`ingestion/pipeline/group_statements.py`（重寫）。`approve_group` 僅動 docstring（L1）。
 **不含**:抽取語意品質（N1／N2）、backlog 生命週期（DF1）、`back_translation` 任何改動。
 
+### revision 5（2026-08-11）——補批准:核准語意變更超出 revision 4 的範圍
+
+**這是一次補救性的修訂。實作先於批准發生,獨立審查（W1）指出,此處如實記錄。**
+
+revision 4 白紙黑字寫「`approve_group` **僅動 docstring**」。實際做的是變更它的**核准語意**:
+「成員已存在於 approved 圖 → 整組 409」改為「沿用不重寫」。這同時推翻了
+`DECISION_INVENTORY_R2.md` 的 **G6** ——當時把「共用節點撞第四道防線」定性為
+「G2 已接受的語意（退回重提)」。
+
+**為什麼推翻**:第二輪審查（V1）實測顯示該定性低估了頻率——不是偶發,而是一個普通血糖 chunk 切出
+三組、共用「胰島素」與「血糖」,**核准第一組後其餘組全部 409**,審閱者一段課文最多只能核准一個陳述。
+根因是那道防線把「節點重用」誤當成「覆蓋策展知識」;圖層的 `MERGE` 本來就冪等,真正的覆蓋風險在
+`write_nodes` 的 `SET n.label/.description`。
+
+**Contract 影響（需 owner 批准的部分)**:
+- `POST /admin/review/groups/{id}/approve` **移除**一道 409（成員已存在於 approved 圖)
+- **新增**一道 409（成員重新提出 `deprecated` 的知識——見下)
+- 回應**新增** `reused_nodes` / `reused_edges` 兩個欄位（加欄位,既有欄位語意不變:`nodes`/`edges`
+  仍是實際寫入數)
+- `docs/api_contract.md` 已同步（W1)
+
+**同時修正的既有缺陷（W2)**:`_existing_approved_ids` 只看 `approved`,而 `delete_node` 是把節點留在
+圖上設為 `deprecated`。因此一個被策展者刪除的概念會落入寫入清單,`MERGE … SET` 把它改回 `approved`
+並覆寫文字——**無聲撤銷刪除決定**。已實測複現,並新增一道 409 擋下。此缺陷在舊防線下同樣存在
+（舊查詢也只看 approved),但本次改動的正當性正是「策展版本永遠優先」,不修則該宣稱不成立。
+
+**已知治理成本（W3，如實揭露）**:審閱者在核准的當下看到的理解句由**提案的** label 渲染,而圖上留下
+的是策展版本;哪些成員被沿用只能事後查稽核紀錄。舊行為在這個情境是 409（強迫當場做明示決定),
+新行為是靜默沿用。這是本次修法真實的取捨,已記入 `api_contract.md` 的已知限制。
+
 - **Status:** **Approved**
-- **Approved plan revision:** **4**（owner，2026-08-11:「開始實作」;revision 3 於同日先行批准)
+- **Approved plan revision:** **5**（owner，2026-08-11:「三項都批准」)
+- **revision 5 補批准的三項 Contract 變更**（owner 逐項確認後批准）:
+  1. **移除**「成員已存在於 approved 圖 → 409」,改為沿用不重寫。放寬核准條件、同時收緊寫入保護:
+     策展內容從此不會被提案覆寫。**已知代價**:不再強迫審閱者當場面對「這個概念已存在」——見 W3。
+  2. **新增**「重新提出 `deprecated` 的知識 → 409」。範圍比它取代的那道窄得多,只擋被明確刪除過的
+     成員。**已知缺口**:系統沒有「復原」動作,被擋下時只能退回該組,真正復原需直接改資料庫。
+     是否補復原功能列為後續決定。
+  3. 回應**新增** `reused_nodes` / `reused_edges`。純加法,但**既有欄位 `nodes`/`edges` 的值會變**——
+     它們現在是「實際寫入數」而非群組成員數,與本路徑其他統計的語意一致。前端 flash 已同步說明。
+- **流程偏差紀錄（不因批准而消失）**:實作先於批准發生。revision 4 的範圍寫「僅動 docstring」,
+  實際變更了核准語意並推翻 `DECISION_INVENTORY_R2.md` 的 G6;CLAUDE.md 的
+  「必須改變已批准的 Contract」stop condition 當時未觸發。由獨立審查（W1）指出後補正。
 - **Approved risk level and automation mode:** risk **medium**；**混合模式**——T1 單獨停點 →
   T1.5（owner 執行真實抽取觀察）→ T2、T3 `supervised-auto`。
 - **Approved by/date:** owner，2026-08-11

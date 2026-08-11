@@ -740,7 +740,14 @@ async function renderReview(host) {
         const res = await api.post(
           `/admin/review/groups/${encodeURIComponent(g.group_id)}/${kind}`, body);
         setFlash(kind === 'approve'
+          // Say what was reused, not just what was written: the counts are lower than the group's
+          // membership whenever a concept already exists, and an unexplained shortfall reads like
+          // something went missing.
           ? `已核准並寫入知識圖譜(nodes ${res.nodes} / edges ${res.edges})`
+            + ((res.reused_nodes || res.reused_edges)
+              ? `;另有 ${(res.reused_nodes || 0) + (res.reused_edges || 0)} 個成員已存在於圖譜,`
+                + '沿用既有的策展內容、未覆寫。'
+              : '')
           : kind === 'gap'
             ? '已記為 schema gap,未寫入知識圖譜;已登記在稽核紀錄中。'
             : '已退回,未寫入知識圖譜。', 'ok');
