@@ -77,6 +77,28 @@ T1.5 留下的殘留使 `test_pipeline_run_is_idempotent` 持續失敗。清除:
 
 commit `f4af033` 的訊息含第 2 項的同一句不實宣稱;訊息無法追溯修改,在此記錄更正。
 
+## 交付狀態的誠實結論（2026-08-11）
+
+**主線接通了,但目前沒有任何抽取結果可以被核准。**
+
+抽取產出確實進入審閱佇列、切成一組一個陳述、每組有節點且 lens 講得出話——這些都經 owner 實跑確認。
+但真實抽取的**語意品質**使每一組都被 Schema gate 判 `fail_pattern`:LLM 把 `HAS_EFFECT` 用在
+`RegulatoryEffect → PhysiologicalVariable` 的位置（該位置應為 `ON_VARIABLE`）,且不提案 Hormone 節點、
+不產生方向邊。**gate 攔下它們是正確的**;切分與邊的歸屬經查證無誤。
+
+換句話說:治理機制運作正常（形式錯誤的知識一個字都沒進圖譜),但**展示效果上,這條主線目前走不到終點**。
+
+### 後續建議順序（皆不屬本次範圍）
+
+1. **base prompt 補上三段式建模原則與正例。** `schema/relationship_types.md` 已寫明正確方向,
+   但**從未被餵進 prompt**——這是通過率 0 最可能的單一原因,且改動極小、驗證成本 <1 美分。
+   優先於 profile,因為這是所有內分泌內容的通用規則,不是章節特有。
+2. **改用 OpenAI Structured Outputs**（`json_schema` + `strict`)並改為逐元素失敗。
+   解決的是另一個問題:owner 第一次抽取因**一條邊缺 `id`** 而整章報銷。
+   注意 strict 模式要求所有屬性列入 `required`,`extraction_output_schema` 的選用欄位需調整。
+   **不能**解決上述語意問題——那些輸出完全符合 schema。
+3. **章節 profile**:留給真正章節特有的內容（術語對應、該章限用型別、特有陷阱)。
+
 ## Verification summary
 
 離線 **186 passed**;`app.eval.runner` Overall **PASS**;ruff + mypy 全清;`node --check` OK。

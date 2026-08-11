@@ -78,6 +78,19 @@ def evaluate(proposal: dict) -> dict:
             {"name": name, "passed": passed, "detail": detail, "code": None if passed else code}
         )
 
+    # 0. describable — 沒有節點的提案,back_translation 只能回「沒有可呈現的內容」,
+    #    而下面每一項檢查的判斷依據都是 nodes,空集合會讓它們全部真空通過。
+    #    結果是 gate 放行一個專家在畫面上讀不到任何內容的提案,核准鈕仍然亮著——
+    #    這與「專家看得懂才能核准」的前提直接衝突,故在此擋下。
+    #    (邊本身是有意義的知識;讓它可被審閱的作法是 lens 學會描述關係,
+    #     而不是讓一個描述不出來的提案通過 gate。)
+    add(
+        "describable",
+        bool(nodes),
+        "提案有可呈現的概念" if nodes else "提案沒有任何節點,專家 lens 無內容可呈現,無法據以判斷",
+        "fail_schema",
+    )
+
     # 1. schema_validation(複用 extraction_output_schema)
     try:
         validate_extraction_output({"nodes": nodes, "edges": edges})

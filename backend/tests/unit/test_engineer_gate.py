@@ -227,3 +227,27 @@ def test_pattern_anchor_types_cover_every_type_the_gate_special_cases():
         "engineer_gate and group_statements disagree about what anchors a statement; "
         f"gate={sorted(gate_anchors)} splitter={sorted(PATTERN_ANCHOR_TYPES)}"
     )
+
+
+def test_a_proposal_with_no_nodes_cannot_pass():
+    """An empty proposal used to sail through: every other check reads `nodes`, so an empty list
+    satisfied them all vacuously, while back_translation could only answer 「本提案沒有可呈現的
+    內容」. The gate said pass, the lens said nothing, and the approve button was live — a reviewer
+    could commit knowledge the system had just told them it could not show.
+    """
+    proposal = {
+        "proposed_nodes": [],
+        "proposed_edges": [
+            {
+                "id": "e:empty",
+                "type": "SECRETED_BY",
+                "source": "hormone:insulin",
+                "target": "structure:pancreas",
+                "source_chunk_id": "c",
+            }
+        ],
+    }
+    result = evaluate(proposal)
+    assert result["result"] == "fail_schema"
+    failed = [c["name"] for c in result["checks"] if not c["passed"]]
+    assert "describable" in failed

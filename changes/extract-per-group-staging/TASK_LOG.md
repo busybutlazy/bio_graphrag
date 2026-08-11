@@ -172,6 +172,47 @@ V2 修法:模板只取 renderer 會讀到的邊數,多的落入殘餘並被誠�
 - **W5**:補「兩組共用概念都能核准」的實際測試,斷言圖上一個節點掛兩條關係。
 - **W6**:列舉守衛加下限斷言——抓不到足夠 pattern id 即失敗,避免 renderer 改寫格式後守衛靜默失效。
 
+## 瀏覽器驗證揭露的 Blocking 問題（2026-08-11）
+
+owner 實跑真實抽取後回報:**七個群組全部顯示「本提案沒有可呈現的內容」,而 gate 全部 pass
+——核准按鈕是亮的**。專家可以在系統明說沒有內容可呈現的情況下核准知識。
+
+**根因一(我的設計錯誤)**:`stage_extraction_output` 在寫入前把「已核准的節點」濾掉。這份章節正是
+seed 的內容,45 個概念全已核准,於是**每個群組的節點被濾光**,只剩邊。
+「不要重複核准既有知識、不要覆蓋策展內容」這個目的在**核准階段已經完全達成**（沿用不重寫）;
+staging 再濾一次沒有保護任何東西,只是把專家判斷所需的資訊拿走。
+
+原則:**staging 決定專家讀到什麼,approval 決定圖上寫什麼。** 過濾已移除,連同為它存在的
+`_fetch_approved_ids`、`approved_ids` 參數與 `skipped_groups` 統計一併刪除。
+
+**根因二(gate 的盲區)**:`engineer_gate` 的每一項檢查判斷依據都是 `nodes`,空集合讓它們**全部真空
+通過**;`back_translation_available` 只問「是不是 gap」,而「沒有可呈現的內容」不是 gap。
+新增 `describable` 檢查（`fail_schema`）。此為 owner 批准的範圍擴大（動到 stop condition 檔案）。
+
+修正後同情境實測:`節點: 3 個 | gate: pass |「當血糖改變時,胰臟會分泌胰島素。」`
+
+**過程中我重犯了一次已知錯誤**:新測試的斷言查詢未限定範圍,撈到其他測試留下的資料,
+單獨跑會過、整批跑失敗——正是第三輪審查 M4 指出的同一類問題。已改用
+`starts_with(group_id, 'group:llm:' || DOC_ID)` 限定。
+
+## 環境陷阱（三次踩到，記錄於此）
+
+`backend/app` 有掛 volume,但 `backend/Dockerfile` 的 uvicorn **沒有 `--reload`**。
+因此**改完程式碼必須 `docker compose up -d backend` 才會對瀏覽器生效**。
+`docker compose run --rm backend pytest` 永遠是新容器,會讓人誤以為程式碼已生效。
+本 change 期間此陷阱造成三次誤判(第二輪審查者一次、owner 的瀏覽器驗證兩次)。
+
+## 抽取語意品質（已知、未解、不在本次範圍）
+
+owner 實跑後,四條邊全部是 `RegulatoryEffect ─HAS_EFFECT→ PhysiologicalVariable`,
+且**完全沒有提案任何 Hormone 節點**、沒有 `ON_VARIABLE`、沒有方向邊。
+schema 規範的三段式是 `Hormone ─HAS_EFFECT→ RE ─ON_VARIABLE→ Var` 外加方向邊。
+gate 判 `fail_pattern` **正確**——切分與歸屬均無誤,是抽取語意錯誤。
+
+**目前通過率為 0**:主線接通,但沒有任何群組可被核准。
+根因推測:`schema/relationship_types.md` 的「建模原則」（已寫明正確方向）**從未被餵進 prompt**。
+建議順序見 `CHANGE_REPORT.md` 的後續項目;皆不屬本次範圍。
+
 ### 附帶確認
 
 抽取產生的 9 列 `curation_items` 全部 `group_id IS NULL`，未出現在群組審閱佇列——

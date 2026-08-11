@@ -269,10 +269,13 @@ async def test_extracted_statements_reach_the_group_review_queue(tmp_path, pg_co
         report = await _ingest(path, pg_conn, qdrant_client)
         assert report.stats["proposed_groups"] == 2  # one statement + one residual
 
+        # scoped to this test's own document: tests share a database, and an unscoped filter picks
+        # up whatever another test left staged — the same mistake the teardown was corrected for
+        prefix = f"group:llm:{DOC_ID}"
         groups = {
             g["group_id"]: g
             for g in await service.list_groups()
-            if g["group_id"].startswith("group:llm:")
+            if g["group_id"].startswith(prefix)
         }
         assert len(groups) == 2
 
@@ -324,45 +327,40 @@ async def test_re_ingest_does_not_duplicate_the_review_queue(tmp_path, pg_conn, 
 
 
 @pytest.mark.asyncio
-async def test_already_approved_nodes_are_referenced_not_reproposed(
+async def test_a_group_keeps_every_member_so_the_lens_can_describe_it(
     tmp_path, pg_conn, qdrant_client
 ):
-    """A reviewer must never be asked to re-approve knowledge that is already curated. The edge
-    still points at it — only the node item is skipped."""
+    """Staging keeps concepts that are already curated; approval is where reuse is decided.
+
+    Filtering them out here instead produced groups with no nodes at all on a chapter whose
+    concepts were all already approved — and the expert lens, which names a proposal's nodes, told
+    the reviewer "本提案沒有可呈現的內容" while the gate passed it, because every gate check reads
+    `nodes` and an empty list satisfies them vacuously. The reviewer could approve knowledge the
+    system had just said it could not show them.
+    """
     path = _write_chapter(tmp_path)
-    approved = frozenset({"hormone:test_stmt_insulin"})
     try:
-        report = await runner.ingest_document(
-            source_path=path,
-            strategy="fixed",
-            chunk_params={"chunk_size": 10_000, "chunk_overlap": 0},
-            extract_fn=_one_chunk_extractor(),
-            pg_conn=pg_conn,
-            qdrant=qdrant_client,
-            neo4j_driver=None,
-            approved_ids=approved,
-        )
+        report = await _ingest(path, pg_conn, qdrant_client)
         assert report.status == "success"
 
         staged = {
             r["payload_id"]
             for r in await pg_conn.fetch(
                 "SELECT payload->>'id' AS payload_id FROM curation_items "
-                "WHERE proposed_by = 'llm' AND item_type = 'node'"
+                "WHERE starts_with(group_id, 'group:llm:' || $1) AND item_type = 'node'",
+                DOC_ID,
             )
         }
-        assert "hormone:test_stmt_insulin" not in staged  # referenced, not re-proposed
+        assert "hormone:test_stmt_insulin" in staged
         assert "regulatory_effect:test_stmt_lower" in staged
 
-        # the edge into it is still staged, so the statement stays complete
-        edges = {
-            r["payload_id"]
-            for r in await pg_conn.fetch(
-                "SELECT payload->>'id' AS payload_id FROM curation_items "
-                "WHERE proposed_by = 'llm' AND item_type = 'edge'"
-            )
-        }
-        assert "e:test_stmt:has_effect" in edges
+        # and every staged group has at least one node, so none of them can render as empty
+        rows = await pg_conn.fetch(
+            "SELECT group_id, count(*) FILTER (WHERE item_type = 'node') AS nodes "
+            "FROM curation_items WHERE starts_with(group_id, 'group:llm:' || $1) GROUP BY group_id",
+            DOC_ID,
+        )
+        assert rows and all(r["nodes"] > 0 for r in rows), [dict(r) for r in rows]
     finally:
         await _cleanup(pg_conn, qdrant_client)
 
