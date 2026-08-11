@@ -152,12 +152,217 @@ async def test_full_run_stages_proposed_and_writes_chunks(tmp_path, pg_conn, qdr
         rows = await pg_conn.fetch("SELECT concept_ids FROM chunks WHERE doc_id = $1", DOC_ID)
         assert len(rows) == report.stats["chunks"]
 
-        # node staged as a proposed curation item
+        # node staged as a proposed curation item, now carrying a group_id so the review queue
+        # can actually show it (item_id is group-scoped, so it is no longer `curation:{node_id}`)
         item = await pg_conn.fetchrow(
-            "SELECT status, proposed_by FROM curation_items WHERE item_id = $1",
-            "curation:hormone:test_sample_insulin",
+            "SELECT item_id, status, proposed_by, group_id FROM curation_items "
+            "WHERE payload->>'id' = $1",
+            "hormone:test_sample_insulin",
         )
         assert item is not None and item["status"] == "proposed" and item["proposed_by"] == "llm"
+        assert item["group_id"] is not None
+        assert item["item_id"] == f"curation:{item['group_id']}:hormone:test_sample_insulin"
+        assert report.stats["proposed_groups"] >= 1
+    finally:
+        await _cleanup(pg_conn, qdrant_client)
+
+
+# --- T2: per-group staging (changes/extract-per-group-staging) ----------------
+
+
+def _statement_candidate(chunk_id: str) -> dict:
+    """A complete three-part statement plus an unrelated concept, so one chunk yields both a
+    pattern group and a residual group."""
+    return {
+        "nodes": [
+            {
+                "id": "hormone:test_stmt_insulin",
+                "type": "Hormone",
+                "label": "胰島素",
+                "description": "d",
+                "source_chunk_id": chunk_id,
+            },
+            {
+                "id": "regulatory_effect:test_stmt_lower",
+                "type": "RegulatoryEffect",
+                "label": "降血糖",
+                "description": "d",
+                "source_chunk_id": chunk_id,
+            },
+            {
+                "id": "physiological_variable:test_stmt_bg",
+                "type": "PhysiologicalVariable",
+                "label": "血糖",
+                "description": "d",
+                "source_chunk_id": chunk_id,
+            },
+            {
+                "id": "misconception:test_stmt_wrong",
+                "type": "Misconception",
+                "label": "誤解",
+                "description": "d",
+                "source_chunk_id": chunk_id,
+            },
+        ],
+        "edges": [
+            {
+                "id": "e:test_stmt:has_effect",
+                "type": "HAS_EFFECT",
+                "source": "hormone:test_stmt_insulin",
+                "target": "regulatory_effect:test_stmt_lower",
+                "source_chunk_id": chunk_id,
+            },
+            {
+                "id": "e:test_stmt:on_variable",
+                "type": "ON_VARIABLE",
+                "source": "regulatory_effect:test_stmt_lower",
+                "target": "physiological_variable:test_stmt_bg",
+                "source_chunk_id": chunk_id,
+            },
+            {
+                "id": "e:test_stmt:decreases",
+                "type": "DECREASES",
+                "source": "regulatory_effect:test_stmt_lower",
+                "target": "physiological_variable:test_stmt_bg",
+                "source_chunk_id": chunk_id,
+            },
+        ],
+    }
+
+
+def _one_chunk_extractor(candidate_fn=_statement_candidate):
+    def fake_extract(system_prompt, user_prompt):
+        chunk_id = next(
+            line.split("chunk_id:")[1].strip()
+            for line in user_prompt.splitlines()
+            if line.startswith("chunk_id:")
+        )
+        return candidate_fn(chunk_id), 1
+
+    return fake_extract
+
+
+async def _ingest(path, pg_conn, qdrant_client, **kw):
+    return await runner.ingest_document(
+        source_path=path,
+        strategy="fixed",
+        chunk_params={"chunk_size": 10_000, "chunk_overlap": 0},  # whole chapter = one chunk
+        extract_fn=_one_chunk_extractor(),
+        pg_conn=pg_conn,
+        qdrant=qdrant_client,
+        neo4j_driver=None,
+        **kw,
+    )
+
+
+@pytest.mark.asyncio
+async def test_extracted_statements_reach_the_group_review_queue(tmp_path, pg_conn, qdrant_client):
+    """The point of the change: extraction output becomes reviewable statements, not loose items.
+
+    Imports the API service on purpose — this is the seam the change exists to close, and asserting
+    on `curation_items` alone would not prove the queue can see them.
+    """
+    from app.curation import service
+
+    path = _write_chapter(tmp_path)
+    try:
+        report = await _ingest(path, pg_conn, qdrant_client)
+        assert report.stats["proposed_groups"] == 2  # one statement + one residual
+
+        groups = {
+            g["group_id"]: g
+            for g in await service.list_groups()
+            if g["group_id"].startswith("group:llm:")
+        }
+        assert len(groups) == 2
+
+        pattern = next(
+            g for k, g in groups.items() if k.endswith("regulatory_effect:test_stmt_lower")
+        )
+        assert pattern["schema_gate"]["result"] == "pass"
+        assert "胰島素" in pattern["understanding"]["text"]
+        assert "血糖" in pattern["understanding"]["text"]
+
+        residual = next(g for k, g in groups.items() if k.endswith(":residual"))
+        assert [n["id"] for n in residual["proposal"]["proposed_nodes"]] == [
+            "misconception:test_stmt_wrong"
+        ]
+    finally:
+        await _cleanup(pg_conn, qdrant_client)
+
+
+@pytest.mark.asyncio
+async def test_re_ingest_does_not_duplicate_the_review_queue(tmp_path, pg_conn, qdrant_client):
+    """Group-scoped item_ids only stay idempotent because group_id is derived, not random."""
+    path = _write_chapter(tmp_path)
+    try:
+        await _ingest(path, pg_conn, qdrant_client)
+        after_first = await pg_conn.fetchval(
+            "SELECT count(*) FROM curation_items WHERE proposed_by = 'llm'"
+        )
+        groups_first = await pg_conn.fetchval(
+            "SELECT count(DISTINCT group_id) FROM curation_items WHERE proposed_by = 'llm'"
+        )
+
+        second = await _ingest(path, pg_conn, qdrant_client)
+
+        assert (
+            await pg_conn.fetchval("SELECT count(*) FROM curation_items WHERE proposed_by = 'llm'")
+            == after_first
+        )
+        assert (
+            await pg_conn.fetchval(
+                "SELECT count(DISTINCT group_id) FROM curation_items WHERE proposed_by = 'llm'"
+            )
+            == groups_first
+        )
+        # and the second run reports honestly that it inserted nothing new
+        assert second.stats["proposed_nodes"] == 0
+        assert second.stats["proposed_edges"] == 0
+    finally:
+        await _cleanup(pg_conn, qdrant_client)
+
+
+@pytest.mark.asyncio
+async def test_already_approved_nodes_are_referenced_not_reproposed(
+    tmp_path, pg_conn, qdrant_client
+):
+    """A reviewer must never be asked to re-approve knowledge that is already curated. The edge
+    still points at it — only the node item is skipped."""
+    path = _write_chapter(tmp_path)
+    approved = frozenset({"hormone:test_stmt_insulin"})
+    try:
+        report = await runner.ingest_document(
+            source_path=path,
+            strategy="fixed",
+            chunk_params={"chunk_size": 10_000, "chunk_overlap": 0},
+            extract_fn=_one_chunk_extractor(),
+            pg_conn=pg_conn,
+            qdrant=qdrant_client,
+            neo4j_driver=None,
+            approved_ids=approved,
+        )
+        assert report.status == "success"
+
+        staged = {
+            r["payload_id"]
+            for r in await pg_conn.fetch(
+                "SELECT payload->>'id' AS payload_id FROM curation_items "
+                "WHERE proposed_by = 'llm' AND item_type = 'node'"
+            )
+        }
+        assert "hormone:test_stmt_insulin" not in staged  # referenced, not re-proposed
+        assert "regulatory_effect:test_stmt_lower" in staged
+
+        # the edge into it is still staged, so the statement stays complete
+        edges = {
+            r["payload_id"]
+            for r in await pg_conn.fetch(
+                "SELECT payload->>'id' AS payload_id FROM curation_items "
+                "WHERE proposed_by = 'llm' AND item_type = 'edge'"
+            )
+        }
+        assert "e:test_stmt:has_effect" in edges
     finally:
         await _cleanup(pg_conn, qdrant_client)
 
@@ -227,4 +432,8 @@ async def _cleanup(pg_conn, qdrant_client):
     await pg_conn.execute("DELETE FROM chunks WHERE doc_id = $1", DOC_ID)
     await pg_conn.execute("DELETE FROM documents WHERE doc_id = $1", DOC_ID)
     await pg_conn.execute("DELETE FROM ingestion_jobs WHERE source_path LIKE '%chapter.md'")
+    # Staged proposals too: without this they survive the test and pile up in the review queue,
+    # and a later run's `ON CONFLICT DO NOTHING` silently stages nothing — which is how a run
+    # counting inserted rows ends up asserting zero.
+    await pg_conn.execute("DELETE FROM curation_items WHERE proposed_by = 'llm'")
     load_qdrant.delete_chunks_for_doc(qdrant_client, DOC_ID)

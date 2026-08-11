@@ -4,7 +4,7 @@ from pathlib import Path
 import asyncpg
 import jsonschema
 
-from ingestion.pipeline import parse_source, schema_checker, validate_extraction
+from ingestion.pipeline import group_statements, parse_source, schema_checker, validate_extraction
 
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
 
@@ -107,50 +107,76 @@ async def finish_ingestion_job(
 
 
 async def stage_extraction_output(
-    conn: asyncpg.Connection, candidate: dict
-) -> tuple[bool, str | None, int, int]:
-    """Stage validated nodes/edges as proposed curation items.
+    conn: asyncpg.Connection,
+    candidate: dict,
+    chunk_id: str,
+    approved_ids: frozenset[str] = frozenset(),
+) -> tuple[bool, str | None, int, int, int]:
+    """Stage validated nodes/edges as proposed curation items, **grouped by statement**.
 
-    Returns ``(ok, error, staged_nodes, staged_edges)`` where the two counts are
+    Returns ``(ok, error, staged_nodes, staged_edges, staged_groups)`` where the counts are
     rows *actually* inserted — duplicates hit ``ON CONFLICT DO NOTHING`` and are
     excluded, so callers can report an honest proposed-count.
+
+    Items carry a ``group_id`` so the whole statement is reviewed as one unit; without it the
+    extraction path writes rows the group Review queue can never show (it lists only grouped
+    items), which is what this staging path used to do.
+
+    ``approved_ids`` are nodes already in the approved graph: they are referenced by edges but
+    **not re-proposed**, so a reviewer is never asked to re-approve knowledge that is already
+    curated. It is a parameter rather than a Neo4j lookup here because staging owns no graph
+    handle — the caller resolves it, which also lets the offline tests exercise the referencing
+    branch with no Neo4j at all.
     """
     try:
         validate_extraction.validate_extraction_output(candidate)
     except jsonschema.ValidationError as exc:
-        return False, str(exc), 0, 0
+        return False, str(exc), 0, 0, 0
 
     staged_nodes = 0
-    for node in candidate["nodes"]:
-        check = schema_checker.check_node(node)
-        row = await conn.fetchrow(
-            """
-            INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by, schema_check)
-            VALUES ($1, 'node', 'create', $2, 'proposed', 'llm', $3)
-            ON CONFLICT (item_id) DO NOTHING
-            RETURNING item_id
-            """,
-            f"curation:{node['id']}",
-            json.dumps(node),
-            json.dumps(check),
-        )
-        staged_nodes += row is not None
     staged_edges = 0
-    for edge in candidate["edges"]:
-        check = schema_checker.check_edge(edge)
-        row = await conn.fetchrow(
-            """
-            INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by, schema_check)
-            VALUES ($1, 'edge', 'create', $2, 'proposed', 'llm', $3)
-            ON CONFLICT (item_id) DO NOTHING
-            RETURNING item_id
-            """,
-            f"curation:{edge['id']}",
-            json.dumps(edge),
-            json.dumps(check),
-        )
-        staged_edges += row is not None
-    return True, None, staged_nodes, staged_edges
+    staged_groups = 0
+    for group in group_statements.split_into_statements(candidate, chunk_id):
+        group_id = group["group_id"]
+        nodes = [n for n in group["nodes"] if n["id"] not in approved_ids]
+        edges = group["edges"]
+        if not nodes and not edges:
+            continue  # everything in this statement is already curated — nothing to review
+        staged_groups += 1
+
+        for node in nodes:
+            check = schema_checker.check_node(node)
+            row = await conn.fetchrow(
+                """
+                INSERT INTO curation_items
+                    (item_id, item_type, action, payload, status, proposed_by, schema_check, group_id)
+                VALUES ($1, 'node', 'create', $2, 'proposed', 'llm', $3, $4)
+                ON CONFLICT (item_id) DO NOTHING
+                RETURNING item_id
+                """,
+                f"curation:{group_id}:{node['id']}",
+                json.dumps(node),
+                json.dumps(check),
+                group_id,
+            )
+            staged_nodes += row is not None
+        for edge in edges:
+            check = schema_checker.check_edge(edge)
+            row = await conn.fetchrow(
+                """
+                INSERT INTO curation_items
+                    (item_id, item_type, action, payload, status, proposed_by, schema_check, group_id)
+                VALUES ($1, 'edge', 'create', $2, 'proposed', 'llm', $3, $4)
+                ON CONFLICT (item_id) DO NOTHING
+                RETURNING item_id
+                """,
+                f"curation:{group_id}:{edge['id']}",
+                json.dumps(edge),
+                json.dumps(check),
+                group_id,
+            )
+            staged_edges += row is not None
+    return True, None, staged_nodes, staged_edges, staged_groups
 
 
 _REVIEW_GROUPS = parse_source.DATA_DIR / "expert_demo" / "review_groups.json"

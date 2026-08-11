@@ -106,6 +106,23 @@ def _fetch_existing_concepts(neo4j_driver, limit: int) -> str:
     return "\n".join(f"- {r['id']}: {r['label']}" for r in rows)
 
 
+def _fetch_approved_ids(neo4j_driver) -> frozenset[str]:
+    """Ids already in the **approved** graph, so staging references them instead of re-proposing.
+
+    Distinct from ``_fetch_existing_concepts``, which is a prompt hint covering proposed nodes too:
+    re-proposing something merely *proposed* is fine (it is still awaiting review), re-proposing
+    something already **approved** would ask a reviewer to bless curated knowledge twice.
+
+    No driver (the offline tests, and any run without Neo4j) → empty set → propose everything,
+    exactly today's behaviour.
+    """
+    if neo4j_driver is None:
+        return frozenset()
+    with neo4j_driver.session() as session:
+        rows = session.run("MATCH (n) WHERE n.status = 'approved' RETURN n.id AS id").data()
+    return frozenset(r["id"] for r in rows)
+
+
 async def _extract_chunk(
     *,
     extract_fn,
@@ -160,6 +177,7 @@ async def ingest_document(
     pg_conn=None,
     qdrant=None,
     neo4j_driver=None,
+    approved_ids: frozenset[str] | None = None,
     max_existing: int = 200,
     retries: int = 1,
 ) -> IngestReport:
@@ -169,6 +187,10 @@ async def ingest_document(
     ``qdrant``; ``neo4j_driver`` is optional (missing → no existing-concept
     hints). ``extract_fn(system, user) -> (dict, tokens)`` defaults to the
     OpenAI client and is injectable for tests.
+
+    ``approved_ids`` names nodes already in the approved graph, which staging references instead of
+    re-proposing. Left unset it is read from ``neo4j_driver``; passing it explicitly lets a test
+    exercise that branch with no graph at all.
     """
     chunk_params = chunk_params or {}
     extract_fn = extract_fn or llm_client.extract
@@ -195,6 +217,7 @@ async def ingest_document(
     existing_concepts = _fetch_existing_concepts(neo4j_driver, max_existing)
 
     # ---- dry run: assemble prompts only, no spend, no writes ------------------
+    # (approved ids are only needed when staging, so the lookup stays below the dry-run branch)
     if dry_run:
         for index, content in enumerate(pieces):
             chunk_id = _make_chunk_id(doc.doc_id, index)
@@ -227,9 +250,13 @@ async def ingest_document(
     failed_chunks = 0
     proposed_nodes = 0
     proposed_edges = 0
+    proposed_groups = 0
     chunk_rows: list[dict] = []
     status = "success"
     error_message = None
+    resolved_approved_ids = (
+        approved_ids if approved_ids is not None else _fetch_approved_ids(neo4j_driver)
+    )
 
     try:
         for index, content in enumerate(pieces):
@@ -259,7 +286,10 @@ async def ingest_document(
                     stage_error,
                     staged_nodes,
                     staged_edges,
-                ) = await load_postgres.stage_extraction_output(pg_conn, candidate)
+                    staged_groups,
+                ) = await load_postgres.stage_extraction_output(
+                    pg_conn, candidate, chunk_id, resolved_approved_ids
+                )
                 if not ok:
                     # Should not happen (already validated), but stay defensive.
                     chunk_report.extraction_failed = True
@@ -275,6 +305,7 @@ async def ingest_document(
                     # ON CONFLICT DO NOTHING and must not inflate the stats.
                     proposed_nodes += staged_nodes
                     proposed_edges += staged_edges
+                    proposed_groups += staged_groups
 
             chunk_rows.append(_chunk_row(doc, chunk_id, content, concept_ids))
             report.chunks.append(chunk_report)
@@ -304,6 +335,7 @@ async def ingest_document(
             "chunks": len(chunk_rows),
             "proposed_nodes": proposed_nodes,
             "proposed_edges": proposed_edges,
+            "proposed_groups": proposed_groups,
             "failed_chunks": failed_chunks,
             "extraction_errors": [
                 {"chunk_id": chunk.chunk_id, "error": chunk.extraction_error}

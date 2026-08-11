@@ -943,8 +943,8 @@ async function paintExtract(host) {
   host.append(E('div', { class: 'notice', style: 'margin:0 48px 16px' },
     '將原始章節切塊、逐塊送 LLM 抽取候選節點/關係,寫入 proposed。' +
     '預覽不消耗 token;實際注入僅限資料庫擁有者。' +
-    '(注意:抽取結果目前以「單項」寫入,尚未自動組成審閱群組,因此還不會出現在「群組審閱」頁——' +
-    '抽取路徑的群組化與審閱介面留待後續階段;在那之前這些單項僅能經 API 存取。)'));
+    '抽取結果會依「一個生物陳述一組」自動組成提案群組,直接進入「群組審閱」頁等待兩道 gate;' +
+    '已核准的概念只會被引用,不會請你重新核准一次。'));
 
   const wrap = E('div', { class: 'ing-wrap' });
   host.append(wrap);

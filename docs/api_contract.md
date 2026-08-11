@@ -237,6 +237,16 @@ class DeleteEdgeRequest(BaseModel):
 
 只列 `status='proposed'` 的群組;唯讀。
 
+**群組的三個來源**(皆走同一條治理管線,回應形狀相同):
+
+| `proposed_by` | `group_id` 形態 | 來源 |
+|---|---|---|
+| `demo` | `group:demo_*` | seed 的展示資料(`stage_demo_review_groups`) |
+| `human` | `group:human:{uuid}` | 手工建構(`POST /admin/curation/groups`) |
+| `llm` | `group:llm:{chunk_id}:{anchor_id}`<br>`group:llm:{chunk_id}:residual` | 文件抽取(`POST /admin/ingest/run`) |
+
+抽取路徑以「**一個生物陳述 = 一個群組**」切分:每個 `RegulatoryEffect` / `Interaction` 連同其相連邊與端點自成一組,不屬於任何模式的元素每 chunk 歸為一個 `residual` 組。`group_id` 由 chunk 與 anchor 推導(非隨機),所以重新匯入同一章節不會灌爆審閱佇列。**已在 approved 圖的節點只被邊引用、不重新提案**,避免請審閱者重複核准既有知識。`POST /admin/ingest/run` 的 `stats` 因此新增 `proposed_groups` 欄位。
+
 ### `POST /admin/review/groups/{group_id}/approve`
 
 三個群組端點(`approve` / `reject` / `gap`)的 `reviewer` 上限 100 字元、`reason` 上限 2000 字元(超過回 `422`);兩者都會原樣寫入 `graph_change_logs`,所以與其他請求欄位一樣需要邊界。
@@ -252,6 +262,10 @@ class DeleteEdgeRequest(BaseModel):
 | 成員 `action` 不是 `create`(此路徑只實作 create) | `422 invalid_request` |
 | **Schema gate 未通過**(`result != 'pass'`,含 `needs_schema_extension`)— gate 為**強制**,形式不合格的提案不得進入圖譜 | `409 conflict` |
 | **成員 id 已存在於 approved 圖**(核准會 MERGE 覆蓋既有策展知識)— 必須改走明確的 update 決策 | `409 conflict` |
+| **邊的端點既不在本群組、也不是既有 approved 節點** — 核准會寫出懸空的邊 | `409 conflict` |
+| 邊的 source／target 為空 | `422 invalid_request` |
+
+最後兩道是**順序**與**格式**的分工。一個群組可以合法地**引用**它沒有提案的節點——交互作用是「關於某些調控效果」的主張,那些效果各自是獨立的陳述,所以它指向而非重新提案。但這個引用只有在被引用的節點已存在時才成立:先核准交互作用組會把邊寫進空無一物。訊息會列出缺少的端點並指出「先核准提案它們的那一組」。`POST /admin/curation/groups` 在**提案時**做同樣的檢查(回 `422`),核准時再檢查一次,是因為群組也可能由抽取路徑 staging、或被以不滿足依賴的順序核准。
 
 錯誤 body 遵循 `{"error": {"code", "message"}}`(新端點依 CLAUDE.md 契約;較舊的 `/admin/curation/*` 仍回 `{"detail"}`)。列出時 `FOR UPDATE` 鎖列,兩個併發核准不會同時看到 `proposed`。
 
