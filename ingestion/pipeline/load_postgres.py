@@ -111,12 +111,17 @@ async def stage_extraction_output(
     candidate: dict,
     chunk_id: str,
     approved_ids: frozenset[str] = frozenset(),
-) -> tuple[bool, str | None, int, int, int]:
+) -> tuple[bool, str | None, int, int, int, int]:
     """Stage validated nodes/edges as proposed curation items, **grouped by statement**.
 
-    Returns ``(ok, error, staged_nodes, staged_edges, staged_groups)`` where the counts are
-    rows *actually* inserted — duplicates hit ``ON CONFLICT DO NOTHING`` and are
-    excluded, so callers can report an honest proposed-count.
+    Returns ``(ok, error, staged_nodes, staged_edges, staged_groups, skipped_groups)`` where every
+    count is of things *actually* written — duplicates hit ``ON CONFLICT DO NOTHING`` and are
+    excluded, so a re-ingest honestly reports zeros rather than claiming it queued work it did not
+    (review finding M3).
+
+    ``skipped_groups`` counts statements dropped because every member was already approved. Without
+    it an over-broad ``approved_ids`` would silently shrink the review queue with nothing in the
+    stats to show for it (review finding L3).
 
     Items carry a ``group_id`` so the whole statement is reviewed as one unit; without it the
     extraction path writes rows the group Review queue can never show (it lists only grouped
@@ -126,24 +131,29 @@ async def stage_extraction_output(
     **not re-proposed**, so a reviewer is never asked to re-approve knowledge that is already
     curated. It is a parameter rather than a Neo4j lookup here because staging owns no graph
     handle — the caller resolves it, which also lets the offline tests exercise the referencing
-    branch with no Neo4j at all.
+    branch with no Neo4j at all. Deliberately asymmetric: **edges are not filtered the same way**
+    (review finding S1). Today an already-approved edge is absorbed by ``ON CONFLICT DO NOTHING``
+    on the identical item_id; if the group_id derivation ever changes, such an edge would be
+    re-proposed under a new item_id and collide at approval instead.
     """
     try:
         validate_extraction.validate_extraction_output(candidate)
     except jsonschema.ValidationError as exc:
-        return False, str(exc), 0, 0, 0
+        return False, str(exc), 0, 0, 0, 0
 
     staged_nodes = 0
     staged_edges = 0
     staged_groups = 0
+    skipped_groups = 0
     for group in group_statements.split_into_statements(candidate, chunk_id):
         group_id = group["group_id"]
         nodes = [n for n in group["nodes"] if n["id"] not in approved_ids]
         edges = group["edges"]
         if not nodes and not edges:
-            continue  # everything in this statement is already curated — nothing to review
-        staged_groups += 1
+            skipped_groups += 1  # every member already curated — recorded, never silent
+            continue
 
+        group_rows = 0
         for node in nodes:
             check = schema_checker.check_node(node)
             row = await conn.fetchrow(
@@ -160,6 +170,7 @@ async def stage_extraction_output(
                 group_id,
             )
             staged_nodes += row is not None
+            group_rows += row is not None
         for edge in edges:
             check = schema_checker.check_edge(edge)
             row = await conn.fetchrow(
@@ -176,7 +187,11 @@ async def stage_extraction_output(
                 group_id,
             )
             staged_edges += row is not None
-    return True, None, staged_nodes, staged_edges, staged_groups
+            group_rows += row is not None
+        # only count a group as staged if it actually put rows in the queue — a re-ingest inserts
+        # nothing and must not report N new statements awaiting review (review finding M3)
+        staged_groups += group_rows > 0
+    return True, None, staged_nodes, staged_edges, staged_groups, skipped_groups
 
 
 _REVIEW_GROUPS = parse_source.DATA_DIR / "expert_demo" / "review_groups.json"

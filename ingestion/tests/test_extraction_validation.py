@@ -16,12 +16,13 @@ async def test_invalid_extraction_output_is_rejected_and_not_staged(pg_conn):
         staged_nodes,
         staged_edges,
         staged_groups,
+        skipped_groups,
     ) = await load_postgres.stage_extraction_output(pg_conn, candidate, CHUNK)
     after_count = await pg_conn.fetchval("SELECT count(*) FROM curation_items")
 
     assert ok is False
     assert error is not None
-    assert (staged_nodes, staged_edges, staged_groups) == (0, 0, 0)
+    assert (staged_nodes, staged_edges, staged_groups, skipped_groups) == (0, 0, 0, 0)
     assert after_count == before_count
 
 
@@ -47,12 +48,13 @@ async def test_valid_extraction_output_is_staged_as_proposed(pg_conn):
             staged_nodes,
             staged_edges,
             staged_groups,
+            skipped_groups,
         ) = await load_postgres.stage_extraction_output(pg_conn, candidate, CHUNK)
 
         assert ok is True
         assert error is None
         # a lone concept anchors no pattern, so it lands in the chunk's residual statement
-        assert (staged_nodes, staged_edges, staged_groups) == (1, 0, 1)
+        assert (staged_nodes, staged_edges, staged_groups, skipped_groups) == (1, 0, 1, 0)
 
         row = await pg_conn.fetchrow(
             "SELECT status, item_type, proposed_by, group_id FROM curation_items "

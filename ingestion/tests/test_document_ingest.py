@@ -435,5 +435,12 @@ async def _cleanup(pg_conn, qdrant_client):
     # Staged proposals too: without this they survive the test and pile up in the review queue,
     # and a later run's `ON CONFLICT DO NOTHING` silently stages nothing — which is how a run
     # counting inserted rows ends up asserting zero.
-    await pg_conn.execute("DELETE FROM curation_items WHERE proposed_by = 'llm'")
+    # Scoped to this test's own document (review finding M4): tests share the app's Postgres, so an
+    # unscoped delete would wipe real proposals waiting for an expert — the review queue is the
+    # asset this whole project is about, and a teardown has no business reaching it.
+    # starts_with, not LIKE: DOC_ID contains an underscore, which LIKE would read as a wildcard
+    # and quietly widen the delete beyond this test's own rows.
+    await pg_conn.execute(
+        "DELETE FROM curation_items WHERE starts_with(group_id, 'group:llm:' || $1)", DOC_ID
+    )
     load_qdrant.delete_chunks_for_doc(qdrant_client, DOC_ID)

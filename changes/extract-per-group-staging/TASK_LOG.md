@@ -117,6 +117,43 @@ T1.5 留下兩項殘留使 `test_pipeline_run_is_idempotent` 持續失敗:
   抽取端切分規則與確定性命名、`stats.proposed_groups`;核准防線表新增第六道與空端點 422,
   並說明「順序與格式的分工」。
 
+## 獨立審查後的重做（revision 4，2026-08-11）
+
+`REVIEW_REPORT.md` 的 B1／H2 顯示切分只對齊 `engineer_gate`、未對齊 `back_translation`;
+第二輪 grill（`DECISION_INVENTORY_R2.md`）另查出 **P3 也被切壞**——四個 pattern 壞了兩個。
+
+**切分器改為模板法**:宣告式寫出 P2／P4／P1 的形狀,依 renderer 優先序貪婪匹配;未匹配的 anchor
+仍自成一組（讓 gate 判 `fail_pattern`,不被稀釋進殘餘);殘餘邊連同端點納入（懸空從結構上消失)。
+
+## 第二輪審查（V1–V5）與第一層修正
+
+複審再找出兩個 High,兩者都經實跑複現:
+
+- **V1**:節點跨組重複提案 → 核准第一組後,其餘組撞「成員已存在於已核准圖譜」→ **一個 chunk 最多
+  只能核准一組**。實跑證實:第一組 approved,第二組 409。
+- **V2**:模板收下所有同型邊,但 renderer 只描述第一條 → 兩個激素指向同一效果時,第二個主張
+  無聲搭便車。
+
+**根因不在切分,在核准語意。** 圖層的 `MERGE` 本來就是冪等的——一個節點掛多條關係是圖最基本的行為;
+是核准防線把「節點重用」當成「覆蓋策展知識」在擋。真正的風險在 `write_nodes` 的
+`SET n.label/.description`（無條件覆蓋),不在 MERGE。
+
+修法:**已存在於已核准圖譜的成員改為沿用而非重寫**。實跑:兩組都核准成功,圖上一個胰島素節點掛
+兩條關係;第二組回報 `reused_nodes: 1`,沿用的 id 記入稽核 `after_state.reused_nodes`。
+比原本更安全——原本擋得住整組核准,但一旦核准就照樣覆蓋 label/description;現在策展版本永遠優先。
+測試直接斷言:預寫 label 為 `pre-existing` 的節點,核准後仍是 `pre-existing`。
+
+V2 修法:模板只取 renderer 會讀到的邊數,多的落入殘餘並被誠實列出（gate 標 `fail_pattern`)。
+
+其餘:V3（守衛宣稱不實)見下;V4 補模板優先序測試;V5 teardown 改 `starts_with` 避開 `_` 萬用字元。
+
+### 守衛的更正（V3）
+
+原先兩個守衛的輸入全是手寫實例,**一個既沒模板也沒實例的新句型不會觸發任何失敗**——與當初漏掉 P2
+是同一種盲區。新增第三個守衛,以 `inspect.getsource` 從 `back_translation` 列舉可回傳的 pattern id,
+要求每一個不是被模板涵蓋就是列入「刻意不涵蓋」清單並附理由（目前只有 P3)。
+反向驗證:移除 P3 的豁免紀錄後該守衛失敗。
+
 ### 附帶確認
 
 抽取產生的 9 列 `curation_items` 全部 `group_id IS NULL`，未出現在群組審閱佇列——

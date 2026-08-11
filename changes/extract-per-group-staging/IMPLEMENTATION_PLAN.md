@@ -383,8 +383,26 @@ Revert 上列檔案即可：無 migration、無新依賴、不寫 Neo4j。若已
   排入後續 change（N1／N2）。owner 確認 Structured Outputs 目前**未**使用
   （`llm_client.py:47` 僅 `response_format={"type":"json_object"}`）。
 
+### revision 4（2026-08-11）——獨立審查後的重新設計
+
+獨立審查（`REVIEW_REPORT.md`）的 B1／H2 顯示切分規則只對齊 `engineer_gate`、未對齊
+`back_translation`;第二輪 grill（`DECISION_INVENTORY_R2.md`）另發現 **P3 也被切壞**,四個 pattern
+壞了兩個。決議（owner，2026-08-11）:
+
+- **G5** 切分改**模板法**:在 `ingestion` 宣告 pattern 模板（收斂點型別 + 必要邊型別與方向），
+  依 renderer 優先序 P2 → P4 → P1 貪婪匹配;**不改 `back_translation`**。
+  一致性靠兩個行為守衛:每個模板的最小實例必須渲染出對應 pattern;**殘餘組永不得渲染出 pattern 句**。
+- **G6** 殘餘邊連同端點一起納入（懸空從結構上消失;共用節點重複提案是 G2 已接受的語意）。
+- **G7** P3 不是切分單位（機制與效果分開審）→ 須記載「P3 在抽取路徑不會觸發」。
+- **I7** 一併修審查的 M1／M3／M4／L1／L3／S1／S2。
+- **新增決定（實作時定義）**:模板未匹配的 anchor **仍自成一組**（保留現行行為,讓 gate 判
+  `fail_pattern`),而非混進殘餘——否則不完整的調控效果會被靜默稀釋成 P0。
+
+範圍新增檔案:`ingestion/pipeline/group_statements.py`（重寫）。`approve_group` 僅動 docstring（L1）。
+**不含**:抽取語意品質（N1／N2）、backlog 生命週期（DF1）、`back_translation` 任何改動。
+
 - **Status:** **Approved**
-- **Approved plan revision:** **3**（owner，2026-08-11:「同意 開始實作」）
+- **Approved plan revision:** **4**（owner，2026-08-11:「開始實作」;revision 3 於同日先行批准)
 - **Approved risk level and automation mode:** risk **medium**；**混合模式**——T1 單獨停點 →
   T1.5（owner 執行真實抽取觀察）→ T2、T3 `supervised-auto`。
 - **Approved by/date:** owner，2026-08-11

@@ -251,6 +251,7 @@ async def ingest_document(
     proposed_nodes = 0
     proposed_edges = 0
     proposed_groups = 0
+    skipped_groups = 0
     chunk_rows: list[dict] = []
     status = "success"
     error_message = None
@@ -287,6 +288,7 @@ async def ingest_document(
                     staged_nodes,
                     staged_edges,
                     staged_groups,
+                    skipped,
                 ) = await load_postgres.stage_extraction_output(
                     pg_conn, candidate, chunk_id, resolved_approved_ids
                 )
@@ -306,6 +308,7 @@ async def ingest_document(
                     proposed_nodes += staged_nodes
                     proposed_edges += staged_edges
                     proposed_groups += staged_groups
+                    skipped_groups += skipped
 
             chunk_rows.append(_chunk_row(doc, chunk_id, content, concept_ids))
             report.chunks.append(chunk_report)
@@ -336,6 +339,7 @@ async def ingest_document(
             "proposed_nodes": proposed_nodes,
             "proposed_edges": proposed_edges,
             "proposed_groups": proposed_groups,
+            "skipped_groups": skipped_groups,
             "failed_chunks": failed_chunks,
             "extraction_errors": [
                 {"chunk_id": chunk.chunk_id, "error": chunk.extraction_error}

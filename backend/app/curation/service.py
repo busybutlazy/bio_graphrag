@@ -446,8 +446,14 @@ async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dic
     2. every member is an ``action='create'`` (the only verb this path implements);
     3. the **Schema gate is enforcing** — ``result != 'pass'`` is refused (409). An audited
        engineer override may be added later; today a failing form never reaches the graph;
-    4. no member id already exists in the **approved** graph (409) — approving would
-       MERGE-overwrite curated knowledge, which must be an explicit update decision instead.
+    4. every edge has a non-empty source and target (422);
+    5. every edge endpoint is either proposed in this group or already approved (409) — a group may
+       legitimately reference a node another statement proposes, but only once that node exists,
+       or the edge would be written into nothing.
+
+    Members that already exist in the approved graph are **reused, not rewritten** — see the note at
+    the write site. A node many statements talk about belongs to all of them; refusing the group for
+    that reason once meant only one statement per paragraph could ever be approved.
 
     Row selection is ``FOR UPDATE`` inside the transaction so two concurrent approvals
     cannot both observe ``proposed``. Neo4j writes happen inside the same block, so a
@@ -496,14 +502,22 @@ async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dic
                 [n["id"] for n in node_payloads],
                 [e["id"] for e in edge_payloads],
             )
-            clashes = existing["nodes"] + existing["edges"]
-            if clashes:
-                raise CurationError(
-                    409,
-                    f"group {group_id} has members that already exist in the approved graph "
-                    f"({', '.join(clashes)}); approving would overwrite curated knowledge — "
-                    "resolve as an explicit update instead",
-                )
+            # A member that already exists approved is **reused, not rewritten**. In a graph one
+            # node carries many relationships, so a concept every statement in a paragraph talks
+            # about — insulin, blood glucose — necessarily appears in several proposal groups. The
+            # graph layer has always handled that (`MERGE` on id); what did not was this guard,
+            # which refused the whole group and so let a reviewer approve only one statement per
+            # paragraph no matter which they picked.
+            #
+            # The risk it was written for is real but narrower: `write_nodes` follows its MERGE with
+            # an unconditional `SET n.label/.description`, so re-approving would silently replace
+            # curated wording with the proposal's. Skipping the write removes that risk outright —
+            # the curated version always wins — and the reused ids go into the audit row so the
+            # decision is visible rather than implied.
+            reused_nodes = set(existing["nodes"])
+            reused_edges = set(existing["edges"])
+            node_writes = [n for n in node_payloads if n["id"] not in reused_nodes]
+            edge_writes = [e for e in edge_payloads if e["id"] not in reused_edges]
 
             # A group may legitimately reference a node it does not propose — an interaction is a
             # claim *about* effects that are their own statements, so it points at them rather than
@@ -534,10 +548,10 @@ async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dic
                         "approve the group that proposes them first",
                     )
 
-            if node_payloads:
-                await anyio.to_thread.run_sync(load_neo4j.write_nodes, driver, node_payloads)
-            if edge_payloads:
-                await anyio.to_thread.run_sync(load_neo4j.write_edges, driver, edge_payloads)
+            if node_writes:
+                await anyio.to_thread.run_sync(load_neo4j.write_nodes, driver, node_writes)
+            if edge_writes:
+                await anyio.to_thread.run_sync(load_neo4j.write_edges, driver, edge_writes)
             await conn.execute(
                 "UPDATE curation_items SET status = 'approved', reviewed_by = $2, "
                 "reason = $3, reviewed_at = now() WHERE group_id = $1 AND status = 'proposed'",
@@ -554,18 +568,27 @@ async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dic
                 reason=reason,
                 # Audit the full delta, not just ids: the log must be able to reconstruct
                 # exactly what entered the graph.
-                before_state={"members_existed_in_graph": [], "schema_gate": gate["result"]},
+                before_state={
+                    "members_existed_in_graph": sorted(reused_nodes | reused_edges),
+                    "schema_gate": gate["result"],
+                },
                 after_state={
                     "item_ids": [r["item_id"] for r in proposed],
-                    "nodes": node_payloads,
-                    "edges": edge_payloads,
+                    "nodes": node_writes,
+                    "edges": edge_writes,
+                    # what this approval deliberately did NOT write, so "the curated version won"
+                    # is a recorded decision rather than an absence in the log
+                    "reused_nodes": sorted(reused_nodes),
+                    "reused_edges": sorted(reused_edges),
                 },
             )
         return {
             "group_id": group_id,
             "status": "approved",
-            "nodes": len(node_payloads),
-            "edges": len(edge_payloads),
+            "nodes": len(node_writes),
+            "edges": len(edge_writes),
+            "reused_nodes": len(reused_nodes),
+            "reused_edges": len(reused_edges),
         }
 
 

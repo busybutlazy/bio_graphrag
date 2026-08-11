@@ -25,11 +25,17 @@
 | AC7 套件、lint、type、node --check、文件 | — | 見下方命令 | Pass |
 | AC8 前端揭露文字移除 + `?v=` bump;`api_contract.md` 同步 | `app.js`、`index.html`、`api_contract.md` | `node --check` OK;**瀏覽器確認owed** | Partial（owed) |
 
+> **狀態更新（2026-08-11，兩輪獨立審查後）。** 下表寫於 revision 3 完成時。此後經歷:
+> 第一輪審查（B1／H2）→ 切分器改模板法;第二輪審查（V1／V2）→ 核准語意改為「沿用而非重寫」。
+> **最終數字:離線 197 passed**、`app.eval.runner` Overall PASS、ruff + mypy 全清、`node --check` OK。
+> 逐項經過見 `TASK_LOG.md`;AC1c 的「不誤擋合法群組」現由三個新守衛與 V1／V2 的回歸測試共同覆蓋。
+> 仍 owed:**瀏覽器確認**、CI 未跑。
+
 ## Commands Executed
 
 ```
 docker compose run --rm -e OPENAI_API_KEY= backend pytest tests ingestion/tests -q
-  → 186 passed in 74.97s   （main baseline 183 + 3 新增;T1/T1b/T1c/T2 期間逐步累積)
+  → 197 passed（最終）;revision 3 當時為 186 passed
 
 docker compose run --rm -e OPENAI_API_KEY= backend python -m app.eval.runner
   → Recall@5 1.0 (門檻 0.8) · Grounded 1.0 (門檻 0.75) · P95 284.6ms (門檻 5000ms) · Overall PASS

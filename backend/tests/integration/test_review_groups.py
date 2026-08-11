@@ -210,7 +210,7 @@ def test_approve_group_writes_all_and_audits():
     assert _neo4j_node_status("hormone:t2_insulin") is None
 
     res = asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", "looks correct"))
-    assert res == {"group_id": GROUP_OK, "status": "approved", "nodes": 3, "edges": 3}
+    assert res["status"] == "approved" and (res["nodes"], res["edges"]) == (3, 3)
 
     # invariant: now present + approved
     assert _neo4j_node_status("hormone:t2_insulin") == "approved"
@@ -268,15 +268,36 @@ def _write_approved_node(node_id: str) -> None:
     d.close()
 
 
-def test_approve_refuses_when_a_member_already_exists_approved():
-    """B1: approving must never MERGE-overwrite curated knowledge."""
-    _write_approved_node("hormone:t2_insulin")
-    with pytest.raises(service.CurationError) as exc:
-        asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
-    assert exc.value.status_code == 409
-    assert "already exist" in exc.value.message
-    # and the pre-existing node was left untouched
-    assert _neo4j_node_status("hormone:t2_insulin") == "approved"
+def test_approve_reuses_an_already_approved_member_without_rewriting_it():
+    """Curated wording must survive a later proposal, and a shared concept must not block approval.
+
+    This replaces an earlier guard that refused the whole group. In a graph one node carries many
+    relationships, so a concept every statement in a paragraph mentions appears in several groups —
+    refusing on that basis let a reviewer approve only one statement per paragraph, whichever they
+    picked. The real risk was `write_nodes` following its MERGE with an unconditional SET of
+    label/description; not writing the member at all removes that risk outright.
+    """
+    _write_approved_node("hormone:t2_insulin")  # curated label: 'pre-existing'
+
+    res = asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+
+    assert res["status"] == "approved"
+    assert res["reused_nodes"] == 1
+    assert res["nodes"] == 2  # the other two members were written; the curated one was not
+
+    # the curated version won — the proposal's label did NOT replace it
+    driver = GraphDatabase.driver(
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+    )
+    with driver.session() as session:
+        label = session.run("MATCH (n {id:'hormone:t2_insulin'}) RETURN n.label AS l").single()["l"]
+    driver.close()
+    assert label == "pre-existing"
+
+    # and the reuse is recorded, not implied
+    after = asyncio.run(_latest_after_state(GROUP_OK))
+    after = json.loads(after) if isinstance(after, str) else after
+    assert after["reused_nodes"] == ["hormone:t2_insulin"]
 
 
 def test_approve_refuses_when_schema_gate_fails():
@@ -527,7 +548,7 @@ def test_approve_succeeds_once_the_referenced_nodes_are_approved():
 def test_existing_groups_still_approve_under_the_endpoint_guard():
     """Regression: the guard must not block groups whose edges stay inside the group."""
     res = asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
-    assert res == {"group_id": GROUP_OK, "status": "approved", "nodes": 3, "edges": 3}
+    assert res["status"] == "approved" and (res["nodes"], res["edges"]) == (3, 3)
 
 
 # --- record-as-gap: the third dispose outcome (changes/group-review-gap-outcome) ----------

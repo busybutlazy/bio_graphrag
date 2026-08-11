@@ -69,8 +69,8 @@ def test_two_statements_split_and_share_their_common_variable():
     assert not any(g["group_id"].endswith(":residual") for g in groups)
 
 
-def test_no_anchor_yields_a_single_residual_group():
-    """A misconception / part-of chunk has no pattern anchor but is still worth reviewing."""
+def test_no_pattern_yields_a_single_residual_group():
+    """A misconception chunk matches no template and has no anchor, but is still worth reviewing."""
     candidate = {
         "nodes": [
             _n("misconception:insulin_raises", "Misconception", "誤以為胰島素升血糖"),
@@ -274,3 +274,123 @@ def test_group_ids_are_deterministic_across_calls():
     # and the chunk id is what scopes them — a different chunk yields different groups
     other = split_into_statements(_TWO_STATEMENTS, "doc:test:chunk:001")
     assert {g["group_id"] for g in first}.isdisjoint({g["group_id"] for g in other})
+
+
+# --- template-based splitting (revision 4, after the independent review) ------------------
+
+
+def test_secretion_statement_forms_its_own_group():
+    """P2 has no distinctive node type — it converges on a Hormone via two incoming edges. Keying
+    on node types alone could never give it a group, so it always fell into residual and got
+    described there while its bagmates rode along (review finding H2)."""
+    candidate = {
+        "nodes": [
+            _n("hormone:insulin", "Hormone", "胰島素"),
+            _n("structure:pancreas", "Structure", "胰臟"),
+            _n("physiological_variable:bg", "PhysiologicalVariable", "血糖"),
+            _n("misconception:enzyme", "Misconception", "誤以為激素是酵素"),
+        ],
+        "edges": [
+            _e("e:sec", "SECRETES", "structure:pancreas", "hormone:insulin"),
+            _e("e:reg", "REGULATES_SECRETION_OF", "physiological_variable:bg", "hormone:insulin"),
+            _e("e:conf", "COMMONLY_CONFUSED_WITH", "misconception:enzyme", "hormone:insulin"),
+        ],
+    }
+    groups = {
+        g["group_id"].replace(f"group:llm:{CHUNK}:", ""): g
+        for g in split_into_statements(candidate, CHUNK)
+    }
+
+    assert set(groups) == {"hormone:insulin", "residual"}
+    secretion = groups["hormone:insulin"]
+    assert {e["id"] for e in secretion["edges"]} == {"e:sec", "e:reg"}
+    assert {n["id"] for n in secretion["nodes"]} == {
+        "hormone:insulin",
+        "structure:pancreas",
+        "physiological_variable:bg",
+    }
+    # the unrelated misconception is NOT swept into the secretion statement
+    assert "misconception:enzyme" not in {n["id"] for n in secretion["nodes"]}
+
+
+def test_mechanism_is_reviewed_apart_from_the_effect():
+    """Domain decision: `Hormone ─CAUSES→ Process` is its own claim, not part of the three-part
+    effect. The renderer's P3 (which describes both in one sentence) therefore cannot fire on the
+    extraction path — recorded in api_contract.md."""
+    candidate = {
+        "nodes": [
+            _n("hormone:insulin", "Hormone", "胰島素"),
+            _n("regulatory_effect:lower_bg", "RegulatoryEffect", "降血糖"),
+            _n("physiological_variable:bg", "PhysiologicalVariable", "血糖"),
+            _n("process:uptake", "Process", "葡萄糖進入細胞"),
+        ],
+        "edges": [
+            _e("e:1", "HAS_EFFECT", "hormone:insulin", "regulatory_effect:lower_bg"),
+            _e("e:2", "ON_VARIABLE", "regulatory_effect:lower_bg", "physiological_variable:bg"),
+            _e("e:3", "DECREASES", "regulatory_effect:lower_bg", "physiological_variable:bg"),
+            _e("e:4", "CAUSES", "hormone:insulin", "process:uptake"),
+        ],
+    }
+    groups = {
+        g["group_id"].replace(f"group:llm:{CHUNK}:", ""): g
+        for g in split_into_statements(candidate, CHUNK)
+    }
+
+    assert set(groups) == {"regulatory_effect:lower_bg", "residual"}
+    assert {e["id"] for e in groups["regulatory_effect:lower_bg"]["edges"]} == {"e:1", "e:2", "e:3"}
+    assert [e["id"] for e in groups["residual"]["edges"]] == ["e:4"]
+
+
+def test_no_group_ever_carries_a_dangling_endpoint():
+    """Review finding B1: residual edges used to point at nodes another group had taken, so the
+    group could not be approved — and if that other group was rejected, never could be."""
+    candidate = {
+        "nodes": [
+            _n("hormone:insulin", "Hormone"),
+            _n("regulatory_effect:lower_bg", "RegulatoryEffect"),
+            _n("physiological_variable:bg", "PhysiologicalVariable"),
+            _n("structure:pancreas", "Structure"),
+            _n("misconception:enzyme", "Misconception"),
+        ],
+        "edges": [
+            _e("e:1", "HAS_EFFECT", "hormone:insulin", "regulatory_effect:lower_bg"),
+            _e("e:2", "ON_VARIABLE", "regulatory_effect:lower_bg", "physiological_variable:bg"),
+            _e("e:3", "DECREASES", "regulatory_effect:lower_bg", "physiological_variable:bg"),
+            _e("e:4", "SECRETES", "structure:pancreas", "hormone:insulin"),
+            _e("e:5", "COMMONLY_CONFUSED_WITH", "misconception:enzyme", "hormone:insulin"),
+        ],
+    }
+    for group in split_into_statements(candidate, CHUNK):
+        member_ids = {n["id"] for n in group["nodes"]}
+        endpoints = {ep for e in group["edges"] for ep in (e["source"], e["target"])}
+        proposed_here = {n["id"] for n in candidate["nodes"]}
+        # every endpoint is either a member of this group, or lives outside the extraction output
+        # entirely (an already-approved concept the edge merely references)
+        assert not (endpoints & proposed_here) - member_ids, group["group_id"]
+
+
+def test_anchor_to_anchor_edge_lands_where_the_gate_reads_it():
+    """Review finding M1: 'source wins' only agreed with the gate by accident. HAS_EFFECT is checked
+    as an *incoming* edge of the RegulatoryEffect, so if both ends anchor, the target must own it —
+    otherwise the target loses the edge its own pattern rule requires."""
+    candidate = {
+        "nodes": [
+            _n("regulatory_effect:upstream", "RegulatoryEffect"),
+            _n("regulatory_effect:downstream", "RegulatoryEffect"),
+        ],
+        "edges": [
+            _e(
+                "e:chain",
+                "HAS_EFFECT",
+                "regulatory_effect:upstream",
+                "regulatory_effect:downstream",
+            )
+        ],
+    }
+    groups = {
+        g["group_id"].replace(f"group:llm:{CHUNK}:", ""): g
+        for g in split_into_statements(candidate, CHUNK)
+    }
+
+    assert [e["id"] for e in groups["regulatory_effect:downstream"]["edges"]] == ["e:chain"]
+    assert groups["regulatory_effect:upstream"]["edges"] == []

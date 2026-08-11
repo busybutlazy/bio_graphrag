@@ -245,7 +245,13 @@ class DeleteEdgeRequest(BaseModel):
 | `human` | `group:human:{uuid}` | 手工建構(`POST /admin/curation/groups`) |
 | `llm` | `group:llm:{chunk_id}:{anchor_id}`<br>`group:llm:{chunk_id}:residual` | 文件抽取(`POST /admin/ingest/run`) |
 
-抽取路徑以「**一個生物陳述 = 一個群組**」切分:每個 `RegulatoryEffect` / `Interaction` 連同其相連邊與端點自成一組,不屬於任何模式的元素每 chunk 歸為一個 `residual` 組。`group_id` 由 chunk 與 anchor 推導(非隨機),所以重新匯入同一章節不會灌爆審閱佇列。**已在 approved 圖的節點只被邊引用、不重新提案**,避免請審閱者重複核准既有知識。`POST /admin/ingest/run` 的 `stats` 因此新增 `proposed_groups` 欄位。
+抽取路徑以「**一個生物陳述 = 一個群組**」切分,依序:(1) 比對已知的陳述模板(對應專家 lens 的 P2 分泌觸發、P4 拮抗、P1 調控效果),完整者各自成組;(2) 模板未匹配到的 `RegulatoryEffect` / `Interaction` **仍自成一組**,好讓 Schema gate 判 `fail_pattern` 由專家退回,而不是被稀釋進殘餘;(3) 其餘元素每 chunk 歸為一個 `residual` 組,**殘餘邊連同其端點一起納入**,所以群組內不會有指向組外的懸空邊。
+
+`group_id` 由 chunk 與收斂節點推導(非隨機),所以重新匯入同一章節不會灌爆審閱佇列。**注意 `group_id` 字串本身含多個冒號**(`chunk_id` 內就有),請整體比對,**不要以 `:` 切分解析**。
+
+**已在 approved 圖的節點只被邊引用、不重新提案**,避免請審閱者重複核准既有知識。`POST /admin/ingest/run` 的 `stats` 因此新增 `proposed_groups`(**實際寫入列的群組數**,重跑為 0)與 `skipped_groups`(成員全部已核准而未寫入的群組數)。
+
+專家 lens 的 **P3(含機制的調控效果)在抽取路徑不會被觸發**:機制(`CAUSES`)與調控效果依設計分屬不同的審閱單位。P3 仍適用於手工提案。
 
 ### `POST /admin/review/groups/{group_id}/approve`
 
