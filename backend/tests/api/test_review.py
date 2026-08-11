@@ -133,7 +133,9 @@ def test_approve_endpoint():
             json={"reviewer": "tester", "reason": "ok"},
         )
         assert resp.status_code == 200
-        assert resp.json() == {"group_id": G_OK, "status": "approved", "nodes": 3, "edges": 3}
+        body = resp.json()
+        assert body["group_id"] == G_OK and body["status"] == "approved"
+        assert (body["nodes"], body["edges"]) == (3, 3)
     finally:
         asyncio.run(_cleanup())
 

@@ -199,3 +199,55 @@ def test_incomplete_regulatory_effect_fails_pattern():
         ],
     }
     assert evaluate(proposal)["result"] == "fail_pattern"
+
+
+# --- drift guard: the splitter's anchor set vs the gate's pattern rules --------------------
+# `ingestion.pipeline.group_statements` splits an extraction output into one review group per
+# statement, using PATTERN_ANCHOR_TYPES to decide what anchors a statement. The gate is the other
+# half of the same idea — it special-cases exactly the types a pattern hangs off. If someone teaches
+# the gate a third pattern without telling the splitter, that pattern's members would quietly land in
+# the residual group instead of forming their own reviewable statement. Backend may import ingestion
+# (never the reverse), so the check lives here.
+
+
+def test_pattern_anchor_types_cover_every_type_the_gate_special_cases():
+    from app.graph.engineer_gate import _pattern_check
+
+    from ingestion.pipeline.normalize_concepts import PATTERN_ANCHOR_TYPES, VALID_NODE_TYPES
+
+    # Behavioural probe rather than source parsing: a lone node with no edges can only draw a
+    # complaint from _pattern_check if that type is one the gate expects a pattern around.
+    gate_anchors = {
+        node_type
+        for node_type in VALID_NODE_TYPES
+        if _pattern_check([{"id": "probe:x", "type": node_type}], []) is not None
+    }
+
+    assert gate_anchors == PATTERN_ANCHOR_TYPES, (
+        "engineer_gate and group_statements disagree about what anchors a statement; "
+        f"gate={sorted(gate_anchors)} splitter={sorted(PATTERN_ANCHOR_TYPES)}"
+    )
+
+
+def test_a_proposal_with_no_nodes_cannot_pass():
+    """An empty proposal used to sail through: every other check reads `nodes`, so an empty list
+    satisfied them all vacuously, while back_translation could only answer 「本提案沒有可呈現的
+    內容」. The gate said pass, the lens said nothing, and the approve button was live — a reviewer
+    could commit knowledge the system had just told them it could not show.
+    """
+    proposal = {
+        "proposed_nodes": [],
+        "proposed_edges": [
+            {
+                "id": "e:empty",
+                "type": "SECRETED_BY",
+                "source": "hormone:insulin",
+                "target": "structure:pancreas",
+                "source_chunk_id": "c",
+            }
+        ],
+    }
+    result = evaluate(proposal)
+    assert result["result"] == "fail_schema"
+    failed = [c["name"] for c in result["checks"] if not c["passed"]]
+    assert "describable" in failed

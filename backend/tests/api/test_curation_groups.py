@@ -127,7 +127,9 @@ def test_create_group_appears_in_review_and_approves():
             f"/admin/review/groups/{group_id}/approve", json={"reviewer": "tester", "reason": "ok"}
         )
         assert appr.status_code == 200
-        assert appr.json() == {"group_id": group_id, "status": "approved", "nodes": 3, "edges": 3}
+        appr_body = appr.json()
+        assert appr_body["group_id"] == group_id and appr_body["status"] == "approved"
+        assert (appr_body["nodes"], appr_body["edges"]) == (3, 3)
         assert _neo4j_status("hormone:p3_insulin") == "approved"
     finally:
         asyncio.run(_delete_group(group_id))

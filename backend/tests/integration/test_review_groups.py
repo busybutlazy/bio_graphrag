@@ -24,7 +24,17 @@ GROUP_ACT = "group:test_t2_badaction"
 GROUP_GAP = "group:test_t2_gap"
 GROUP_PLAIN = "group:test_t2_plain"
 GROUP_REC = "group:test_gap_record"
-_ALL_GROUPS = [GROUP_OK, GROUP_REJ, GROUP_BAD, GROUP_ACT, GROUP_GAP, GROUP_PLAIN, GROUP_REC]
+GROUP_REF = "group:test_dangling_ref"
+_ALL_GROUPS = [
+    GROUP_OK,
+    GROUP_REJ,
+    GROUP_BAD,
+    GROUP_ACT,
+    GROUP_GAP,
+    GROUP_PLAIN,
+    GROUP_REC,
+    GROUP_REF,
+]
 
 _NODES = [
     {
@@ -72,9 +82,17 @@ _EDGES = [
         "source_chunk_id": "chunk:t2",
     },
 ]
-# The gap-group members too: record-as-gap never writes them, but a *regression* (an approve that
-# should have been refused) would — teardown must be able to clean that up.
-_NODE_IDS = [n["id"] for n in _NODES] + ["hormone:test_rec_a", "hormone:test_rec_b"]
+# The gap-group and reference-group members too: neither should ever reach Neo4j, but a *regression*
+# (an approve that should have been refused) would write them — teardown must be able to clean that
+# up, or the next run inherits a poisoned graph.
+_NODE_IDS = [n["id"] for n in _NODES] + [
+    "hormone:test_rec_a",
+    "hormone:test_rec_b",
+    "interaction:t1c_antag",
+    "physiological_variable:t1c_var",
+    "regulatory_effect:t1c_absent_a",
+    "regulatory_effect:t1c_absent_b",
+]
 
 
 async def _conn() -> asyncpg.Connection:
@@ -192,7 +210,7 @@ def test_approve_group_writes_all_and_audits():
     assert _neo4j_node_status("hormone:t2_insulin") is None
 
     res = asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", "looks correct"))
-    assert res == {"group_id": GROUP_OK, "status": "approved", "nodes": 3, "edges": 3}
+    assert res["status"] == "approved" and (res["nodes"], res["edges"]) == (3, 3)
 
     # invariant: now present + approved
     assert _neo4j_node_status("hormone:t2_insulin") == "approved"
@@ -250,15 +268,142 @@ def _write_approved_node(node_id: str) -> None:
     d.close()
 
 
-def test_approve_refuses_when_a_member_already_exists_approved():
-    """B1: approving must never MERGE-overwrite curated knowledge."""
-    _write_approved_node("hormone:t2_insulin")
+def test_approve_reuses_an_already_approved_member_without_rewriting_it():
+    """Curated wording must survive a later proposal, and a shared concept must not block approval.
+
+    This replaces an earlier guard that refused the whole group. In a graph one node carries many
+    relationships, so a concept every statement in a paragraph mentions appears in several groups —
+    refusing on that basis let a reviewer approve only one statement per paragraph, whichever they
+    picked. The real risk was `write_nodes` following its MERGE with an unconditional SET of
+    label/description; not writing the member at all removes that risk outright.
+    """
+    _write_approved_node("hormone:t2_insulin")  # curated label: 'pre-existing'
+
+    res = asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+
+    assert res["status"] == "approved"
+    assert res["reused_nodes"] == 1
+    assert res["nodes"] == 2  # the other two members were written; the curated one was not
+
+    # the curated version won — the proposal's label did NOT replace it
+    driver = GraphDatabase.driver(
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+    )
+    with driver.session() as session:
+        label = session.run("MATCH (n {id:'hormone:t2_insulin'}) RETURN n.label AS l").single()["l"]
+    driver.close()
+    assert label == "pre-existing"
+
+    # and the reuse is recorded, not implied
+    after = asyncio.run(_latest_after_state(GROUP_OK))
+    after = json.loads(after) if isinstance(after, str) else after
+    assert after["reused_nodes"] == ["hormone:t2_insulin"]
+
+
+def test_approve_refuses_to_resurrect_a_deleted_member():
+    """A curator's deletion must not be undone as a side effect of approving something else.
+
+    `delete_node` is a status change, not a removal, so a deprecated node is invisible to the
+    approved-only lookup that decides what to reuse — and `write_nodes` would MERGE it back to
+    approved with the proposal's wording. Restoring deleted knowledge is a decision.
+    """
+    driver = GraphDatabase.driver(
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+    )
+    with driver.session() as session:
+        session.run(
+            "MERGE (n:Hormone {id:'hormone:t2_insulin'}) "
+            "SET n.label='curated wording', n.status='deprecated'"
+        )
+
     with pytest.raises(service.CurationError) as exc:
         asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
     assert exc.value.status_code == 409
-    assert "already exist" in exc.value.message
-    # and the pre-existing node was left untouched
-    assert _neo4j_node_status("hormone:t2_insulin") == "approved"
+    assert "deleted" in exc.value.message
+
+    with driver.session() as session:
+        row = session.run(
+            "MATCH (n {id:'hormone:t2_insulin'}) RETURN n.label AS l, n.status AS s"
+        ).single()
+    driver.close()
+    assert (row["l"], row["s"]) == ("curated wording", "deprecated")  # decision intact
+
+
+def test_two_groups_sharing_a_concept_can_both_be_approved():
+    """The case the whole reuse change exists for: an ordinary paragraph's statements share a
+    concept, and each must still be approvable on its own terms."""
+    shared = _NODES[0]  # hormone:t2_insulin — proposed by both groups
+    second = "group:test_t2_shared"
+    other_effect = {
+        "id": "regulatory_effect:t2_other",
+        "type": "RegulatoryEffect",
+        "label": "t2 other",
+        "description": "d",
+        "source_chunk_id": "chunk:t2",
+    }
+    other_var = {
+        "id": "physiological_variable:t2_other_v",
+        "type": "PhysiologicalVariable",
+        "label": "t2 other v",
+        "description": "d",
+        "source_chunk_id": "chunk:t2",
+    }
+    try:
+        for item, kind in ((shared, "node"), (other_effect, "node"), (other_var, "node")):
+            asyncio.run(_insert_item(second, item, kind))
+        for edge in (
+            ("e:t2s:has", "HAS_EFFECT", shared["id"], other_effect["id"]),
+            ("e:t2s:on", "ON_VARIABLE", other_effect["id"], other_var["id"]),
+            ("e:t2s:inc", "INCREASES", other_effect["id"], other_var["id"]),
+        ):
+            asyncio.run(
+                _insert_item(
+                    second,
+                    {
+                        "id": edge[0],
+                        "type": edge[1],
+                        "source": edge[2],
+                        "target": edge[3],
+                        "source_chunk_id": "chunk:t2",
+                    },
+                    "edge",
+                )
+            )
+
+        first = asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+        assert first["reused_nodes"] == 0 and first["nodes"] == 3
+
+        again = asyncio.run(service.approve_group(second, "test_reviewer", None))
+        assert again["status"] == "approved"
+        assert again["reused_nodes"] == 1  # the shared concept
+        assert again["nodes"] == 2  # only the statement's own members were written
+
+        # one node in the graph, carrying both statements' relationships
+        driver = GraphDatabase.driver(
+            settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+        )
+        with driver.session() as session:
+            count = session.run(
+                "MATCH (n {id:'hormone:t2_insulin'}) RETURN count(n) AS c"
+            ).single()["c"]
+            rels = session.run(
+                "MATCH (:Hormone {id:'hormone:t2_insulin'})-[r]->() RETURN count(r) AS c"
+            ).single()["c"]
+        driver.close()
+        assert (count, rels) == (1, 2)
+    finally:
+        conn_cleanup = second
+        asyncio.run(_drop_group(conn_cleanup))
+        _drop_nodes([other_effect["id"], other_var["id"]])
+
+
+async def _drop_group(group_id: str) -> None:
+    conn = await _conn()
+    try:
+        await conn.execute("DELETE FROM curation_items WHERE group_id = $1", group_id)
+        await conn.execute("DELETE FROM graph_change_logs WHERE target_id = $1", group_id)
+    finally:
+        await conn.close()
 
 
 def test_approve_refuses_when_schema_gate_fails():
@@ -400,6 +545,116 @@ def test_approve_audit_records_full_payloads():
     assert len(after["nodes"]) == 3 and len(after["edges"]) == 3
     assert after["nodes"][0]["label"]  # full payloads, not bare ids
     assert after["item_ids"]
+
+
+# --- T1c: a group may reference a node it does not propose, but only once that node exists ----
+# (changes/extract-per-group-staging). The extraction path splits an interaction away from the
+# effects it uses, so the interaction group points at nodes another group proposes. Approving it
+# first would write an edge into nothing.
+
+
+_ABSENT_EFFECTS = ["regulatory_effect:t1c_absent_a", "regulatory_effect:t1c_absent_b"]
+
+
+def _seed_reference_group():
+    """An interaction-shaped group exactly as the splitter produces one: it proposes its own anchor
+    (plus the variable it acts on) and *references* the two effects, which are other statements.
+
+    Built to **pass** the Schema gate — two USES_EFFECT plus an ON_VARIABLE satisfy the Interaction
+    pattern — so the run reaches the endpoint guard instead of stopping at the gate.
+    """
+    nodes = [
+        {
+            "id": "interaction:t1c_antag",
+            "type": "Interaction",
+            "label": "t1c antagonism",
+            "description": "d",
+            "source_chunk_id": "chunk:t1c",
+            "properties": {"interaction_type": "antagonism"},
+        },
+        {
+            "id": "physiological_variable:t1c_var",
+            "type": "PhysiologicalVariable",
+            "label": "t1c variable",
+            "description": "d",
+            "source_chunk_id": "chunk:t1c",
+        },
+    ]
+    edges = [
+        {
+            "id": f"e:t1c:uses_{i}",
+            "type": "USES_EFFECT",
+            "source": "interaction:t1c_antag",
+            "target": effect_id,
+            "source_chunk_id": "chunk:t1c",
+        }
+        for i, effect_id in enumerate(_ABSENT_EFFECTS)
+    ] + [
+        {
+            "id": "e:t1c:on_var",
+            "type": "ON_VARIABLE",
+            "source": "interaction:t1c_antag",
+            "target": "physiological_variable:t1c_var",
+            "source_chunk_id": "chunk:t1c",
+        }
+    ]
+    for node in nodes:
+        asyncio.run(_insert_item(GROUP_REF, node, "node"))
+    for edge in edges:
+        asyncio.run(_insert_item(GROUP_REF, edge, "edge"))
+
+
+def _drop_nodes(ids):
+    d = GraphDatabase.driver(
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+    )
+    with d.session() as s:
+        s.run("MATCH (n) WHERE n.id IN $ids DETACH DELETE n", ids=ids)
+    d.close()
+
+
+def test_approve_refuses_an_edge_endpoint_that_exists_nowhere():
+    _seed_reference_group()
+    groups = {g["group_id"]: g for g in asyncio.run(service.list_groups())}
+    assert groups[GROUP_REF]["schema_gate"]["result"] == "pass"  # the gate is not what stops this
+
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.approve_group(GROUP_REF, "test_reviewer", None))
+    assert exc.value.status_code == 409
+    assert all(effect_id in exc.value.message for effect_id in _ABSENT_EFFECTS)
+
+    # nothing written: a refused approval must not leave the anchor behind
+    assert _neo4j_node_status("interaction:t1c_antag") is None
+    assert all(s == "proposed" for s in asyncio.run(_item_statuses(GROUP_REF)))
+
+
+def test_approve_succeeds_once_the_referenced_nodes_are_approved():
+    """The ordering dependency is resolvable, not a dead end — the point of splitting them apart."""
+    _seed_reference_group()
+    d = GraphDatabase.driver(
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+    )
+    try:
+        with d.session() as s:
+            for effect_id in _ABSENT_EFFECTS:
+                s.run(
+                    "MERGE (n:RegulatoryEffect {id:$id}) "
+                    "SET n.label='pre-approved', n.status='approved'",
+                    id=effect_id,
+                )
+        d.close()
+
+        res = asyncio.run(service.approve_group(GROUP_REF, "test_reviewer", None))
+        assert res["status"] == "approved"
+        assert _neo4j_node_status("interaction:t1c_antag") == "approved"
+    finally:
+        _drop_nodes([*_ABSENT_EFFECTS, "interaction:t1c_antag", "physiological_variable:t1c_var"])
+
+
+def test_existing_groups_still_approve_under_the_endpoint_guard():
+    """Regression: the guard must not block groups whose edges stay inside the group."""
+    res = asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+    assert res["status"] == "approved" and (res["nodes"], res["edges"]) == (3, 3)
 
 
 # --- record-as-gap: the third dispose outcome (changes/group-review-gap-outcome) ----------

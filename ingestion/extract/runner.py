@@ -169,6 +169,7 @@ async def ingest_document(
     ``qdrant``; ``neo4j_driver`` is optional (missing → no existing-concept
     hints). ``extract_fn(system, user) -> (dict, tokens)`` defaults to the
     OpenAI client and is injectable for tests.
+
     """
     chunk_params = chunk_params or {}
     extract_fn = extract_fn or llm_client.extract
@@ -227,6 +228,7 @@ async def ingest_document(
     failed_chunks = 0
     proposed_nodes = 0
     proposed_edges = 0
+    proposed_groups = 0
     chunk_rows: list[dict] = []
     status = "success"
     error_message = None
@@ -259,7 +261,8 @@ async def ingest_document(
                     stage_error,
                     staged_nodes,
                     staged_edges,
-                ) = await load_postgres.stage_extraction_output(pg_conn, candidate)
+                    staged_groups,
+                ) = await load_postgres.stage_extraction_output(pg_conn, candidate, chunk_id)
                 if not ok:
                     # Should not happen (already validated), but stay defensive.
                     chunk_report.extraction_failed = True
@@ -275,6 +278,7 @@ async def ingest_document(
                     # ON CONFLICT DO NOTHING and must not inflate the stats.
                     proposed_nodes += staged_nodes
                     proposed_edges += staged_edges
+                    proposed_groups += staged_groups
 
             chunk_rows.append(_chunk_row(doc, chunk_id, content, concept_ids))
             report.chunks.append(chunk_report)
@@ -304,6 +308,7 @@ async def ingest_document(
             "chunks": len(chunk_rows),
             "proposed_nodes": proposed_nodes,
             "proposed_edges": proposed_edges,
+            "proposed_groups": proposed_groups,
             "failed_chunks": failed_chunks,
             "extraction_errors": [
                 {"chunk_id": chunk.chunk_id, "error": chunk.extraction_error}
