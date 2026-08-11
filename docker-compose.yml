@@ -22,9 +22,19 @@ services:
     env_file:
       - .env
     depends_on:
-      - postgres
-      - neo4j
-      - qdrant
+      # Postgres must be *accepting connections*, not merely started: the FastAPI lifespan runs
+      # ensure_schema before serving, so a Postgres that has not finished initialising kills the
+      # app at boot and nginx answers 502 until something restarts it. Plain `depends_on` only
+      # waits for the container, which made this a race the stack won by luck.
+      postgres:
+        condition: service_healthy
+      # Neo4j and Qdrant are not touched at startup — /health reports "degraded" until they answer,
+      # and scripts/wait_for_services.sh waits for "ok", so gating on them here would only add
+      # Neo4j's slow boot to every start.
+      neo4j:
+        condition: service_started
+      qdrant:
+        condition: service_started
     volumes:
       - ./backend/app:/app/app
       - ./scripts:/app/scripts
@@ -43,6 +53,15 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # -h/-p pin the check to the TCP listener: on first boot the entrypoint starts a temporary
+      # unix-socket-only server to run initdb, and a socket-based pg_isready would report ready
+      # while the port the backend dials is still closed.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
   neo4j:
     image: neo4j:5-community
