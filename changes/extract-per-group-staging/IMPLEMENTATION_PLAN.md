@@ -12,20 +12,25 @@
 
 1. `ingestion/pipeline/group_statements.py`（新檔）：**純函式**切分器，把一份
    `{nodes, edges}` 抽取輸出切成數個群組——每個 pattern anchor（`RegulatoryEffect` / `Interaction`）
-   一組，殘餘一組。
-2. `ingestion/pipeline/load_postgres.stage_extraction_output`：改為 group-aware——寫入
+   一組，殘餘一組。**含巢狀 anchor 規則**（revision 3，T1b）：anchor 節點永不成為另一個 anchor
+   群組的成員，只被引用。
+2. `backend/app/curation/service.py::approve_group`：新增**邊端點必須存在**的 guard
+   （revision 3，T1c）——每條邊的兩端必須是本群組提案的節點或既有 approved 節點，否則 `409`。
+3. `ingestion/pipeline/load_postgres.stage_extraction_output`：改為 group-aware——寫入
    `group_id`、item_id 改群組範圍、已 approved 的節點只被引用不重新提案。
-3. `ingestion/extract/runner.py`：呼叫點傳入 `chunk_id` 與 approved-id 集合；統計加上群組數。
-4. 更新既有抽取測試 + 新增切分器單元測試 + `curation_items` 層級的重跑冪等斷言。
-5. 移除 `frontend/app.js` 的「尚未自動組成審閱群組」揭露文字（該限制已解除）；`docs/api_contract.md`
-   記載抽取路徑現在也產生群組。
+4. `ingestion/extract/runner.py`：呼叫點傳入 `chunk_id` 與 approved-id 集合；統計加上群組數。
+5. 更新既有抽取測試 + 新增切分器單元測試 + `curation_items` 層級的重跑冪等斷言。
+6. 移除 `frontend/app.js` 的「尚未自動組成審閱群組」揭露文字（該限制已解除）；`docs/api_contract.md`
+   記載抽取路徑現在也產生群組，並記載 T1c 的新 guard。
 
 ## Out of Scope
 
 - **schema-gap backlog 生命週期**（DF1）與 **gold 改打真實抽取輸出**（DF2）——P5 的另外兩個產出，
   已由 owner 決議拆開。
 - 任何 `schema/` 型別變更、`extraction_output_schema.json` 或 prompt 變更（G1 選 (c) 正是為了避免）。
-- `approve_group` / `reject_group` / `record_group_gap` / `create_group` 的任何邏輯變更。
+- `reject_group` / `record_group_gap` / `create_group` 的任何邏輯變更。
+- `approve_group` 除 **T1c 的邊端點 guard** 以外的任何邏輯變更（revision 3 前此處為全面排除；
+  選定 B 方案後，該 guard 成為 B 的前提，經 owner 明示納入範圍）。
 - 檢索路徑、`status='approved'` 不變式、seed 路徑（`stage_demo_review_group` 不動）。
 - 抽取路徑設定 `possible_schema_gap`（I5：schema 無此欄位）。
 - 既有 `group_id IS NULL` 資料的 backfill（I4：DB 內無此類資料）。
@@ -66,11 +71,35 @@
     ruff + mypy 全清。**無既知失敗**。
   - `curation_items` 現況：`demo` 19 列、`human` 8 列，全部 `group_id NOT NULL`；`llm` **0 列**。
 
+### revision 3 追加證據（T1.5 真實抽取，2026-08-11，11,894 tokens）
+
+- **巢狀 anchor 是真實形態，非假想。** 實際抽出
+  `interaction:insulin_glucagon_blood_glucose ─USES_EFFECT→ regulatory_effect:insulin_decreases_blood_glucose`
+  ——兩端都是 anchor。revision 2 的切分器把每一端收進對方的組，產生互相包含對方 anchor 的兩組。
+- **`back_translation` 已有 P4 拮抗模式**（`back_translation.py:84-103`）：
+  `Interaction{antagonism} ─USES_EFFECT→ RE×2, ─ON_VARIABLE→ Var`，且以 `effect_to_hormone`
+  **查表**解析效果背後的激素，**不要求那些效果出現在提案內**。renderer 本就是為「交互作用引用效果」
+  設計的，這是選 B 的直接證據。
+- **P4 排在 P1 之前**（`:84` vs `:106`）：若採 A 方案（交互作用與其效果同組），該組只會渲染拮抗那一句，
+  兩個調控效果各自的主張不會被描述——正是 F2 淘汰 chunk 級分組的同一個缺陷。
+- **新 guard 對現有資料無回歸風險（實測）**：以 T1c 的規則檢查目前佇列中 7 個群組
+  （5 個 demo + 2 個 human），**全部通過**，無懸空端點。
+- **`approve_group` 目前沒有端點檢查**：五道防線為 404 / 409 無 proposed / 422 非 create /
+  409 gate 未過 / 409 id 已存在（`docs/api_contract.md`），無「邊端點必須存在」。
+  `create_group` 在**建立時**有此檢查（dangling endpoint → 422），核准時沒有。
+
 ## Acceptance Criteria
 
 1. **切分正確性（G1）：** 對一份含兩個完整 RegulatoryEffect 且**共用**一個
    `PhysiologicalVariable` 的抽取輸出，切分器回傳 **2 個 pattern 組**（各含自己的 anchor、三條邊、
    兩個端點節點），共用節點**同時出現在兩組**；無殘餘時不產生殘餘組。
+1b. **巢狀 anchor（T1b）：** 對真實觀察到的 `Interaction ─USES_EFFECT→ RegulatoryEffect` 形態，
+   切分結果為兩個**互不包含**的群組：Interaction 組含該邊但**不含**那個 RE 節點（引用）；
+   RE 組**不含**該 USES_EFFECT 邊、也不含 Interaction 節點。任一 anchor 都不會出現在另一個
+   anchor 的 `nodes` 內。
+1c. **端點 guard（T1c）：** 核准一個含「指向尚未核准且不在本組內之節點」的邊的群組 → `409`，
+   **Neo4j 完全未被寫入**；錯誤訊息指出缺少的端點與應先核准的對象。
+   目前佇列中的 7 個群組（5 demo + 2 human）仍全部可核准（無回歸）。
 2. **殘餘組（I2）：** 不與任何 anchor 相連的節點/邊歸為單一殘餘組；該 chunk 若無殘餘則不產生該組。
 3. **群組可見（主線接通）：** 跑完一次離線 `ingest_document` 後，
    `service.list_groups()` 回傳該次抽取產生的群組，每組帶 `schema_gate` 與 `understanding`；
@@ -90,6 +119,10 @@
 - **Contract：** 無端點簽章變更。`GET /admin/review/groups` 開始回傳 `proposed_by='llm'` 的群組——
   **純資料新增**，回應形狀不變。`POST /admin/ingest/run` 的 `stats` **新增** `proposed_groups` 欄位
   （加欄位，既有欄位不動）；須同步 `docs/api_contract.md`。
+- **Contract 變更（revision 3，需核准點）：** `POST /admin/review/groups/{id}/approve` **新增第六道
+  防線**——邊端點不存在 → `409 conflict`。這是**限縮性**變更（fail-closed）:原本會成功並寫出懸空邊
+  的請求，現在被拒絕。實測現有 7 個待審群組不受影響。須同步 `docs/api_contract.md` 的四道／五道
+  防線表格。
 - **Schema/DB：** **無 migration**。`group_id` 欄位已存在（P1 加入，nullable）；本變更只是開始在
   抽取路徑寫入它。
 - **資料語意變更（需核准點）：** `curation_items.item_id` 在**抽取路徑**由全域
@@ -100,7 +133,9 @@
 
 ## Execution Policy
 
-- **Plan revision:** 2（Draft）
+- **Plan revision:** 3（Draft）——T1.5 觸發 stop condition 後的修訂。相對 revision 2:
+  新增 **T1b**（巢狀 anchor 規則）與 **T1c**（`approve_group` 端點 guard，B 方案的前提,
+  owner 明示納入範圍）；`approve_group` 由「全面排除」改為「僅此一項 guard 可動」。
 - **Risk level:** **medium**——新增寫入語意與 item_id 方案變更；但無 migration、無依賴、
   不碰 Neo4j、不碰 approve/reject/gate 邏輯，且既有 `llm` 資料為 0 列。
 - **Automation mode:** **混合**——T1 為單一任務後停；**T2、T3 為 `supervised-auto`**。
@@ -109,23 +144,27 @@
   完全可機器驗證的(測試綠不綠、欄位對不對),停在那裡只會得到「測試過了,繼續」。
   （revision 1 曾提「單獨授權 T1 走 supervised-auto」——那是思考錯誤:T1 是第一個任務,任何模式下
   跑完都會停,授權它自動化省不到任何東西。已移除。）
-- **Auto-approved task IDs（`supervised-auto`）：** **T2、T3**（且僅在 T1 checkpoint 與 T1.5
-  觀察結果均獲 owner 通過之後才解鎖）
+- **Auto-approved task IDs（`supervised-auto`）：** **T2、T3**。
+  **T1b、T1c 不在自動化清單內**——T1b 是被 stop condition 打回來的修正、T1c 動到寫入知識圖譜的
+  核准路徑，兩者都需要停點。
 - **Approved file/path scope:**
   `ingestion/pipeline/group_statements.py`（新）、`ingestion/pipeline/normalize_concepts.py`、
   `ingestion/pipeline/load_postgres.py`、`ingestion/extract/runner.py`、
   `ingestion/tests/test_group_statements.py`（新）、`ingestion/tests/test_document_ingest.py`、
-  `backend/tests/unit/test_engineer_gate.py`（僅新增漂移守衛測試）、
+  `backend/app/curation/service.py`（**僅** `approve_group` 的端點 guard）、
+  `backend/tests/unit/test_engineer_gate.py`（僅漂移守衛測試）、
+  `backend/tests/integration/test_review_groups.py`（僅新增 guard 測試）、
   `frontend/app.js`、`frontend/index.html`、`docs/api_contract.md`、`changes/extract-per-group-staging/*`
 - **Human checkpoints:**
-  1. **T1 完成後**——切分規則正確性是整個變更的地基。我會把切分結果攤開給 owner 看（真實語料形態），
-     由 owner 判斷陳述邊界是否符合生物學。
-  2. **T1.5 真實抽取觀察之後**——若真實輸出出現計畫未預期的形態，**停止並回到 T1 修改切分器**，
-     不得帶著未預期形態進入 T2。
+  1. **T1 完成後**——切分規則正確性是整個變更的地基。（**已於 2026-08-11 通過**）
+  2. **T1.5 真實抽取觀察之後**——未預期形態即回到 T1。（**已觸發**:巢狀 anchor → T1b）
+  3. **T1b 完成後**——巢狀 anchor 的切分結果需 owner 以領域判斷確認。
+  4. **T1c 完成後**——動到核准路徑（唯一會寫入知識圖譜的地方），需確認現有群組不受影響。
+  通過 4 之後才解鎖 T2／T3 的 supervised-auto。
 - **Mandatory stop conditions:** 需要 migration、需要改 `extraction_output_schema` 或 prompt、
-  需要改 `engineer_gate`/`back_translation`/`approve_group` 任一邏輯、需要新增依賴、
-  切分規則與 grill 定案不符、離線套件出現非本變更造成的失敗、
-  **T1.5 觀察到計畫未預期的抽取形態**、supervised-auto 期間需要新增任務或路徑。
+  需要改 `engineer_gate`/`back_translation` 任一邏輯、需要改 `approve_group` **端點 guard 以外**的
+  任何邏輯、需要新增依賴、切分規則與 grill 定案不符、離線套件出現非本變更造成的失敗、
+  **T1c 的 guard 擋到任何現有待審群組**、supervised-auto 期間需要新增任務或路徑。
 - **Commit/push permission:** **No unless separately approved after review.**
 
 ## Tasks
@@ -174,6 +213,44 @@
 - **判準：** 若觀察到的形態都在 T1 的六個單元測試涵蓋範圍內 → 通過，解鎖 T2／T3 的 supervised-auto。
   **若出現未預期形態 → 停止，回到 T1 修改切分器並補測試**，重新走此 checkpoint。
 - **Stop/handoff:** 觀察結果如實記錄於 `TASK_LOG.md`（含實際 token 花費），交 owner 判定。
+
+### Task 1b — 巢狀 anchor 規則（checkpoint）
+
+被 T1.5 打回來的修正。**問題**：`Interaction ─USES_EFFECT→ RegulatoryEffect` 兩端都是 anchor，
+revision 2 的規則讓兩組互相包含對方的 anchor。
+
+- **Files/symbols:** `ingestion/pipeline/group_statements.py::split_into_statements`；
+  `ingestion/tests/test_group_statements.py`。
+- **Implementation:** 兩條規則:
+  1. **邊的歸屬**——每條邊只屬於一組:恰有一端是 anchor → 歸該 anchor；**兩端都是 anchor → 歸
+     `source` 端**（`USES_EFFECT` 的 source 正是 Interaction，與 gate 檢查
+     `out(nid,"USES_EFFECT")` 的方向一致）；兩端皆非 anchor → 殘餘。
+  2. **節點的歸屬**——一個 anchor 群組含該 anchor 與其邊上**非 anchor** 的端點節點；
+     另一端若也是 anchor 則**只引用不納入**（P4 的 `effect_to_hormone` 查表本就支援引用）。
+- **Tests:** 新增 (g) 巢狀 anchor:Interaction 組含 `USES_EFFECT` 但不含 RE 節點,RE 組不含該邊
+  也不含 Interaction 節點；(h) 以 T1.5 的真實 payload 為 fixture 的回歸測試,斷言切出 5 組且
+  無任何 anchor 出現在別組的 `nodes` 內。
+  ```
+  docker compose run --rm -e OPENAI_API_KEY= backend pytest ingestion/tests/test_group_statements.py -q
+  ```
+- **Stop/handoff:** 把切分結果攤給 owner 判斷後停。
+
+### Task 1c — `approve_group` 邊端點 guard（checkpoint）
+
+B 方案的前提。交互作用群組引用其他組的效果,若先核准交互作用組,會寫出**懸空的邊**。
+
+- **Files/symbols:** `backend/app/curation/service.py::approve_group`（**僅**新增此 guard）；
+  `backend/tests/integration/test_review_groups.py`。
+- **Implementation:** 在既有 gate guard 之後、寫入 Neo4j 之前:蒐集所有提案邊的端點,扣掉本群組
+  提案的節點,剩餘者以既有 `_existing_approved_ids` 查詢；若有任何端點既不在組內也非 approved →
+  `CurationError(409, ...)`,訊息列出缺少的端點。**沿用既有 helper,不新增查詢機制。**
+- **Tests:** (a) 引用尚未核准節點的群組 → 409 且 Neo4j 未被寫入；
+  (b) 該端點先被核准後,同一組即可成功核准（順序依賴可解）；
+  (c) 回歸:現有 demo／human 群組仍可核准（已預先實測 7/7 通過）。
+  ```
+  docker compose run --rm -e OPENAI_API_KEY= backend pytest tests/integration/test_review_groups.py tests/api/test_review.py -q
+  ```
+- **Stop/handoff:** 完成後停,確認無回歸後才解鎖 T2／T3。
 
 ### Task 2 — group-aware staging + approved 引用
 
@@ -248,10 +325,20 @@
 
 ## Risks and Unknowns
 
-- **R1（已知缺口，來自 grill）：未實跑真實 LLM 抽取**——單一 chunk 的真實產出規模與形態未觀察過。
-  切分行為以確定性語意推導。**緩解（revision 2 升級）**：T1 的六個單元測試涵蓋多 pattern／純殘餘／
-  混合／不完整 pattern 四種形態，**且新增 T1.5 為強制 checkpoint**——owner 執行一次真實抽取觀察
-  （<1 美分），未預期形態即回到 T1。此風險由「接受並靠單元測試」升級為「用不到一美分關掉」。
+- **R1 — 已實現並已處置（revision 3）。** T1.5 確實抓到未預期形態（巢狀 anchor），證明這個
+  checkpoint 有價值:0.2 美分買到一個單元測試想不到、但真實 LLM 第一次就產出的形態。
+  處置為 T1b。**殘餘風險**:仍只觀察過兩章／兩次呼叫,更多語料可能有更多形態；T1b 的規則以
+  「邊只屬於一組、anchor 不互相納入」為通則,不針對特定型別,對新形態的耐受度優於 revision 2。
+- **R6（新，revision 3）：審閱順序依賴。** 選 B 之後,交互作用群組必須在它引用的效果群組**之後**
+  核准,否則 T1c 的 guard 會回 409。這是刻意的——「這兩個效果拮抗」在邏輯上預設兩個效果成立。
+  **代價**:專家若不照順序點,會撞到 409。**緩解**:錯誤訊息必須指出缺少哪個端點；
+  審閱佇列的排序讓 pattern 組排在交互作用組之前（T2 的群組順序已依 anchor id 排序,
+  此點在 T3 的瀏覽器確認時觀察是否足夠直覺,不足則記入 backlog,不在本次擴大範圍）。
+- **R7（新，revision 3）：抽取語意品質低。** T1.5 實測 5 組中 4 組 `fail_pattern`——LLM 把
+  `HAS_EFFECT` 用成 `RegulatoryEffect → PhysiologicalVariable`（該位置應為 `ON_VARIABLE`）,
+  且未提案任何 `Hormone`、無方向邊。**本次範圍外**（屬 prompt/profile 議題,見 backlog N2）,
+  但意味著主線接通後**初期通過率會很低**。這不是本變更的缺陷,但驗收時不得把「群組都 fail_pattern」
+  誤判為分組錯誤。
 - **R2：審閱負載**——4-chunk 章節約產生 6–8 個待審群組（I2 的已知後果）。非缺陷，但會改變審閱頁的
   視覺密度；T1.5 可提前得到真實數字，T3 的瀏覽器確認時一併觀察。
   **曾考慮但不採用的緩解**：殘餘組不進審閱佇列（可降到約 4–5 組）——不採用,因為殘餘裡含
@@ -285,8 +372,19 @@ Revert 上列檔案即可：無 migration、無新依賴、不寫 Neo4j。若已
 - **Decisions required（尚待）：** 正式批准 revision 2、risk level **medium**、上述混合執行模式,
   以及 T2／T3 的 auto-approved 清單與路徑範圍。
 - 上游已定案決策見 `changes/phase-p5-run-2026-08-11/DECISION_READINESS_SUMMARY.md`（G1–G4、I1–I5、DF1–DF2）。
+### revision 3 的決定（owner，2026-08-11）
+
+- **巢狀 anchor → 選 B**（三個獨立審閱單位，交互作用只引用效果）。理由:A 會讓一組同時含
+  Interaction 與其 RE,而 P4 排在 P1 之前,該組只渲染拮抗那一句,兩個效果的主張不會被描述——
+  正是本變更存在的理由（F2）在另一處復發。B 另有粒度優勢:可核准正確的效果、單獨退回錯的那個。
+- **T1c 納入範圍**（`approve_group` 端點 guard）。這是 B 的前提,且該防護缺口本來就存在——
+  任何群組核准都不該寫出懸空的邊,與抽取路徑無關。
+- 發現二（抽取語意品質,prompt/profile）與發現三（Structured Outputs + 逐元素失敗）**不納入本次**,
+  排入後續 change（N1／N2）。owner 確認 Structured Outputs 目前**未**使用
+  （`llm_client.py:47` 僅 `response_format={"type":"json_object"}`）。
+
 - **Status:** **Approved**
-- **Approved plan revision:** **2**
+- **Approved plan revision:** **3**（owner，2026-08-11:「同意 開始實作」）
 - **Approved risk level and automation mode:** risk **medium**；**混合模式**——T1 單獨停點 →
   T1.5（owner 執行真實抽取觀察）→ T2、T3 `supervised-auto`。
 - **Approved by/date:** owner，2026-08-11

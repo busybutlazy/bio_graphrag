@@ -139,6 +139,132 @@ def test_empty_output_yields_no_groups():
     assert split_into_statements({}, CHUNK) == []
 
 
+def test_nested_anchors_reference_each_other_instead_of_absorbing():
+    """T1b: an Interaction's USES_EFFECT points at a RegulatoryEffect, so both endpoints anchor a
+    statement. Neither may swallow the other — otherwise two groups propose the same node and the
+    second approval collides with the first."""
+    candidate = {
+        "nodes": [
+            _n("interaction:insulin_glucagon", "Interaction", "胰島素與升糖素的拮抗"),
+            _n("regulatory_effect:lower_bg", "RegulatoryEffect", "降血糖"),
+        ],
+        "edges": [
+            _e(
+                "e:uses",
+                "USES_EFFECT",
+                "interaction:insulin_glucagon",
+                "regulatory_effect:lower_bg",
+            )
+        ],
+    }
+    groups = {g["group_id"].rsplit(":", 1)[-1]: g for g in split_into_statements(candidate, CHUNK)}
+    assert set(groups) == {"insulin_glucagon", "lower_bg"}
+
+    interaction = groups["insulin_glucagon"]
+    effect = groups["lower_bg"]
+
+    # the edge belongs to the source anchor only — never to both
+    assert [e["id"] for e in interaction["edges"]] == ["e:uses"]
+    assert effect["edges"] == []
+    # and neither anchor appears inside the other's membership
+    assert {n["id"] for n in interaction["nodes"]} == {"interaction:insulin_glucagon"}
+    assert {n["id"] for n in effect["nodes"]} == {"regulatory_effect:lower_bg"}
+
+
+# Captured from a real gpt-4o-mini extraction of endocrine_demo_v1.md (Task 1.5, 2026-08-11).
+# Kept verbatim — including the model's misuse of HAS_EFFECT as RegulatoryEffect→Variable, which is
+# what a real chunk actually looks like today. Splitting must behave on the real shape, not an
+# idealised one; the wrong relation type is the Schema gate's problem, not the splitter's.
+_REAL_EXTRACTION = {
+    "nodes": [
+        _n(
+            "regulatory_effect:insulin_decreases_blood_glucose",
+            "RegulatoryEffect",
+            "胰島素降低血糖",
+        ),
+        _n(
+            "regulatory_effect:glucagon_increases_blood_glucose",
+            "RegulatoryEffect",
+            "升糖素提高血糖",
+        ),
+        _n(
+            "interaction:insulin_glucagon_blood_glucose",
+            "Interaction",
+            "胰島素與升糖素的作用於血糖",
+        ),
+        _n(
+            "regulatory_effect:adh_decreases_blood_osmolarity",
+            "RegulatoryEffect",
+            "ADH降低血液滲透壓",
+        ),
+        _n(
+            "misconception:insulin_raises_blood_glucose",
+            "Misconception",
+            "學生誤以為胰島素會提高血糖",
+        ),
+    ],
+    "edges": [
+        _e(
+            "edge:insulin_decreases_blood_glucose",
+            "HAS_EFFECT",
+            "regulatory_effect:insulin_decreases_blood_glucose",
+            "physiological_variable:blood_glucose",
+        ),
+        _e(
+            "edge:glucagon_increases_blood_glucose",
+            "HAS_EFFECT",
+            "regulatory_effect:glucagon_increases_blood_glucose",
+            "physiological_variable:blood_glucose",
+        ),
+        _e(
+            "edge:insulin_glucagon_interaction",
+            "USES_EFFECT",
+            "interaction:insulin_glucagon_blood_glucose",
+            "regulatory_effect:insulin_decreases_blood_glucose",
+        ),
+        _e(
+            "edge:adh_decreases_blood_osmolarity",
+            "HAS_EFFECT",
+            "regulatory_effect:adh_decreases_blood_osmolarity",
+            "physiological_variable:blood_osmolarity",
+        ),
+    ],
+}
+
+
+def test_real_extraction_output_splits_without_anchor_cross_contamination():
+    """Regression on the shape that stopped Task 1.5 and forced this rule."""
+    groups = split_into_statements(_REAL_EXTRACTION, CHUNK)
+    assert len(groups) == 5  # 4 anchors + residual (the misconception)
+
+    anchor_ids = {
+        n["id"]
+        for n in _REAL_EXTRACTION["nodes"]
+        if n["type"] in ("RegulatoryEffect", "Interaction")
+    }
+    for group in groups:
+        own_anchor = group["group_id"].replace(f"group:llm:{CHUNK}:", "")
+        foreign = {n["id"] for n in group["nodes"]} & anchor_ids - {own_anchor}
+        assert not foreign, f"{group['group_id']} absorbed another anchor: {foreign}"
+
+    # every edge landed in exactly one group
+    placed = [e["id"] for g in groups for e in g["edges"]]
+    assert sorted(placed) == sorted(e["id"] for e in _REAL_EXTRACTION["edges"])
+
+    # the interaction keeps its USES_EFFECT; the effect it references keeps only its own edge
+    by_group = {g["group_id"].replace(f"group:llm:{CHUNK}:", ""): g for g in groups}
+    assert [e["id"] for e in by_group["interaction:insulin_glucagon_blood_glucose"]["edges"]] == [
+        "edge:insulin_glucagon_interaction"
+    ]
+    assert [
+        e["id"] for e in by_group["regulatory_effect:insulin_decreases_blood_glucose"]["edges"]
+    ] == ["edge:insulin_decreases_blood_glucose"]
+    # the isolated misconception is the residual group
+    assert [n["id"] for n in by_group["residual"]["nodes"]] == [
+        "misconception:insulin_raises_blood_glucose"
+    ]
+
+
 def test_group_ids_are_deterministic_across_calls():
     """Staging scopes item_id by group_id, so a non-deterministic group id would duplicate the
     entire review queue on a re-ingest of the same chapter."""

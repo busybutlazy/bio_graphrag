@@ -24,7 +24,17 @@ GROUP_ACT = "group:test_t2_badaction"
 GROUP_GAP = "group:test_t2_gap"
 GROUP_PLAIN = "group:test_t2_plain"
 GROUP_REC = "group:test_gap_record"
-_ALL_GROUPS = [GROUP_OK, GROUP_REJ, GROUP_BAD, GROUP_ACT, GROUP_GAP, GROUP_PLAIN, GROUP_REC]
+GROUP_REF = "group:test_dangling_ref"
+_ALL_GROUPS = [
+    GROUP_OK,
+    GROUP_REJ,
+    GROUP_BAD,
+    GROUP_ACT,
+    GROUP_GAP,
+    GROUP_PLAIN,
+    GROUP_REC,
+    GROUP_REF,
+]
 
 _NODES = [
     {
@@ -72,9 +82,17 @@ _EDGES = [
         "source_chunk_id": "chunk:t2",
     },
 ]
-# The gap-group members too: record-as-gap never writes them, but a *regression* (an approve that
-# should have been refused) would — teardown must be able to clean that up.
-_NODE_IDS = [n["id"] for n in _NODES] + ["hormone:test_rec_a", "hormone:test_rec_b"]
+# The gap-group and reference-group members too: neither should ever reach Neo4j, but a *regression*
+# (an approve that should have been refused) would write them — teardown must be able to clean that
+# up, or the next run inherits a poisoned graph.
+_NODE_IDS = [n["id"] for n in _NODES] + [
+    "hormone:test_rec_a",
+    "hormone:test_rec_b",
+    "interaction:t1c_antag",
+    "physiological_variable:t1c_var",
+    "regulatory_effect:t1c_absent_a",
+    "regulatory_effect:t1c_absent_b",
+]
 
 
 async def _conn() -> asyncpg.Connection:
@@ -400,6 +418,116 @@ def test_approve_audit_records_full_payloads():
     assert len(after["nodes"]) == 3 and len(after["edges"]) == 3
     assert after["nodes"][0]["label"]  # full payloads, not bare ids
     assert after["item_ids"]
+
+
+# --- T1c: a group may reference a node it does not propose, but only once that node exists ----
+# (changes/extract-per-group-staging). The extraction path splits an interaction away from the
+# effects it uses, so the interaction group points at nodes another group proposes. Approving it
+# first would write an edge into nothing.
+
+
+_ABSENT_EFFECTS = ["regulatory_effect:t1c_absent_a", "regulatory_effect:t1c_absent_b"]
+
+
+def _seed_reference_group():
+    """An interaction-shaped group exactly as the splitter produces one: it proposes its own anchor
+    (plus the variable it acts on) and *references* the two effects, which are other statements.
+
+    Built to **pass** the Schema gate — two USES_EFFECT plus an ON_VARIABLE satisfy the Interaction
+    pattern — so the run reaches the endpoint guard instead of stopping at the gate.
+    """
+    nodes = [
+        {
+            "id": "interaction:t1c_antag",
+            "type": "Interaction",
+            "label": "t1c antagonism",
+            "description": "d",
+            "source_chunk_id": "chunk:t1c",
+            "properties": {"interaction_type": "antagonism"},
+        },
+        {
+            "id": "physiological_variable:t1c_var",
+            "type": "PhysiologicalVariable",
+            "label": "t1c variable",
+            "description": "d",
+            "source_chunk_id": "chunk:t1c",
+        },
+    ]
+    edges = [
+        {
+            "id": f"e:t1c:uses_{i}",
+            "type": "USES_EFFECT",
+            "source": "interaction:t1c_antag",
+            "target": effect_id,
+            "source_chunk_id": "chunk:t1c",
+        }
+        for i, effect_id in enumerate(_ABSENT_EFFECTS)
+    ] + [
+        {
+            "id": "e:t1c:on_var",
+            "type": "ON_VARIABLE",
+            "source": "interaction:t1c_antag",
+            "target": "physiological_variable:t1c_var",
+            "source_chunk_id": "chunk:t1c",
+        }
+    ]
+    for node in nodes:
+        asyncio.run(_insert_item(GROUP_REF, node, "node"))
+    for edge in edges:
+        asyncio.run(_insert_item(GROUP_REF, edge, "edge"))
+
+
+def _drop_nodes(ids):
+    d = GraphDatabase.driver(
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+    )
+    with d.session() as s:
+        s.run("MATCH (n) WHERE n.id IN $ids DETACH DELETE n", ids=ids)
+    d.close()
+
+
+def test_approve_refuses_an_edge_endpoint_that_exists_nowhere():
+    _seed_reference_group()
+    groups = {g["group_id"]: g for g in asyncio.run(service.list_groups())}
+    assert groups[GROUP_REF]["schema_gate"]["result"] == "pass"  # the gate is not what stops this
+
+    with pytest.raises(service.CurationError) as exc:
+        asyncio.run(service.approve_group(GROUP_REF, "test_reviewer", None))
+    assert exc.value.status_code == 409
+    assert all(effect_id in exc.value.message for effect_id in _ABSENT_EFFECTS)
+
+    # nothing written: a refused approval must not leave the anchor behind
+    assert _neo4j_node_status("interaction:t1c_antag") is None
+    assert all(s == "proposed" for s in asyncio.run(_item_statuses(GROUP_REF)))
+
+
+def test_approve_succeeds_once_the_referenced_nodes_are_approved():
+    """The ordering dependency is resolvable, not a dead end — the point of splitting them apart."""
+    _seed_reference_group()
+    d = GraphDatabase.driver(
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+    )
+    try:
+        with d.session() as s:
+            for effect_id in _ABSENT_EFFECTS:
+                s.run(
+                    "MERGE (n:RegulatoryEffect {id:$id}) "
+                    "SET n.label='pre-approved', n.status='approved'",
+                    id=effect_id,
+                )
+        d.close()
+
+        res = asyncio.run(service.approve_group(GROUP_REF, "test_reviewer", None))
+        assert res["status"] == "approved"
+        assert _neo4j_node_status("interaction:t1c_antag") == "approved"
+    finally:
+        _drop_nodes([*_ABSENT_EFFECTS, "interaction:t1c_antag", "physiological_variable:t1c_var"])
+
+
+def test_existing_groups_still_approve_under_the_endpoint_guard():
+    """Regression: the guard must not block groups whose edges stay inside the group."""
+    res = asyncio.run(service.approve_group(GROUP_OK, "test_reviewer", None))
+    assert res == {"group_id": GROUP_OK, "status": "approved", "nodes": 3, "edges": 3}
 
 
 # --- record-as-gap: the third dispose outcome (changes/group-review-gap-outcome) ----------

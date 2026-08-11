@@ -505,6 +505,35 @@ async def approve_group(group_id: str, reviewer: str, reason: str | None) -> dic
                     "resolve as an explicit update instead",
                 )
 
+            # A group may legitimately reference a node it does not propose — an interaction is a
+            # claim *about* effects that are their own statements, so it points at them rather than
+            # re-proposing them. That reference is only sound once the referenced node exists:
+            # approving out of order would write an edge into nothing. `create_group` makes the same
+            # check at propose time, but a group can be staged (extraction path) or approved in an
+            # order that leaves it unsatisfied, so the graph-writing path has to enforce it too.
+            referenced: set[str] = set()
+            for edge in edge_payloads:
+                source, target = edge.get("source"), edge.get("target")
+                if not source or not target:
+                    # `""` is falsy and would slip a bare filter, then `MATCH (a {id:""})` no-ops —
+                    # the same hole create_group closes at propose time (review R4).
+                    raise CurationError(
+                        422, f"edge {edge.get('id')!r} needs a non-empty source and target"
+                    )
+                referenced.update((source, target))
+
+            external = sorted(referenced - {n["id"] for n in node_payloads})
+            if external:
+                found = await anyio.to_thread.run_sync(_existing_approved_ids, driver, external, [])
+                missing = sorted(set(external) - set(found["nodes"]))
+                if missing:
+                    raise CurationError(
+                        409,
+                        f"group {group_id} has edge endpoint(s) that are neither proposed in this "
+                        f"group nor already approved: {', '.join(missing)}; "
+                        "approve the group that proposes them first",
+                    )
+
             if node_payloads:
                 await anyio.to_thread.run_sync(load_neo4j.write_nodes, driver, node_payloads)
             if edge_payloads:

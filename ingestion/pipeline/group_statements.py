@@ -33,46 +33,74 @@ def anchor_group_id(chunk_id: str, anchor_id: str) -> str:
     return f"group:llm:{chunk_id}:{anchor_id}"
 
 
+def _edge_owner(edge: dict, anchor_ids: set[str]) -> str | None:
+    """Which anchor's statement does this edge belong to? ``None`` means residual.
+
+    An edge can touch **two** anchors: a real extraction produced
+    ``Interaction ─USES_EFFECT→ RegulatoryEffect``. Letting both claim it would put each anchor
+    inside the other's group, so two groups would propose the same node and the second approval
+    would collide with the first. The source wins, which matches how the gate reads these edges —
+    it checks ``USES_EFFECT`` as an *outgoing* edge of the Interaction, and ``HAS_EFFECT`` as an
+    *incoming* edge of the RegulatoryEffect, so in both cases ownership lands where the pattern
+    rule looks.
+    """
+    source, target = edge.get("source"), edge.get("target")
+    if source in anchor_ids:
+        return source
+    if target in anchor_ids:
+        return target
+    return None
+
+
 def split_into_statements(candidate: dict, chunk_id: str) -> list[dict]:
     """Return ``[{group_id, nodes, edges}, ...]`` for one chunk's ``{nodes, edges}`` output.
 
     Groups are ordered by anchor id, residual last, so the result is stable across runs. A node
     shared by two statements (a variable both hormones act on) appears in **both** groups — the
     review unit is the statement, not the concept.
+
+    An anchor is never a *member* of another anchor's group, only referenced by an edge: the claim
+    "these two effects antagonise" presupposes the effects, so the effects are their own statements
+    and get reviewed on their own terms. The expert lens is built for this — its antagonism rule
+    looks the hormone behind each effect up in context rather than requiring the effects in the
+    proposal. The cost is an ordering dependency: the interaction cannot be approved until the
+    effects it references exist, which ``approve_group`` enforces.
     """
     nodes = candidate.get("nodes") or []
     edges = candidate.get("edges") or []
     by_id = {n["id"]: n for n in nodes}
 
-    anchors = sorted(n["id"] for n in nodes if n.get("type") in PATTERN_ANCHOR_TYPES)
+    anchor_ids = {n["id"] for n in nodes if n.get("type") in PATTERN_ANCHOR_TYPES}
+
+    owned: dict[str, list[dict]] = {anchor_id: [] for anchor_id in anchor_ids}
+    residual_edges: list[dict] = []
+    for edge in edges:
+        owner = _edge_owner(edge, anchor_ids)
+        (owned[owner] if owner else residual_edges).append(edge)
 
     groups: list[dict] = []
-    claimed_nodes: set[str] = set()
-    claimed_edges: set[str] = set()
+    claimed_nodes: set[str] = set(anchor_ids)  # every anchor is claimed by its own group
 
-    for anchor_id in anchors:
-        incident = [
-            e for e in edges if e.get("source") == anchor_id or e.get("target") == anchor_id
-        ]
-        # the anchor first, then its neighbours in edge order — reads like the statement itself
+    for anchor_id in sorted(anchor_ids):
+        # the anchor first, then its non-anchor neighbours in edge order — reads like the statement
         member_ids = [anchor_id]
-        for edge in incident:
+        for edge in owned[anchor_id]:
             for endpoint in (edge.get("source"), edge.get("target")):
-                if endpoint != anchor_id and endpoint in by_id and endpoint not in member_ids:
+                if endpoint in anchor_ids or endpoint not in by_id:
+                    continue  # another anchor is referenced, never absorbed; unknown ids are external
+                if endpoint not in member_ids:
                     member_ids.append(endpoint)
 
         groups.append(
             {
                 "group_id": anchor_group_id(chunk_id, anchor_id),
                 "nodes": [by_id[i] for i in member_ids],
-                "edges": incident,
+                "edges": owned[anchor_id],
             }
         )
         claimed_nodes.update(member_ids)
-        claimed_edges.update(e["id"] for e in incident)
 
     residual_nodes = [n for n in nodes if n["id"] not in claimed_nodes]
-    residual_edges = [e for e in edges if e["id"] not in claimed_edges]
     if residual_nodes or residual_edges:
         groups.append(
             {
