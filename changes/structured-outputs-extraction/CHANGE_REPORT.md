@@ -64,6 +64,7 @@ D4 高風險逐 Task 停止。
   - `docs/api_contract.md` —— 新增一節
   - `frontend/app.js` —— `renderRunResult` 揭露丟棄與降級(T6)
   - `frontend/index.html` —— 資產版本號 `20260812-2`(CDN 快取)
+  - `docs/notes.md` —— 由 untracked 改為納入版控(需求來源 N1)
 - **Deleted**:無
 - 程式碼與文件合計 15 檔。`schema/extraction_output_schema.json` **未被修改**(D2 的重點)。
 
@@ -94,12 +95,14 @@ D4 高風險逐 Task 停止。
 
 ## Plan Deviations and Unplanned Changes
 
-1. **路徑偏離(需 reviewer 裁定)**:新增 `backend/tests/unit/test_property_key_coverage.py`,
+1. **路徑偏離(2026-08-12 owner 已追認,計畫 revision 3 納入該路徑)**:
+   新增 `backend/tests/unit/test_property_key_coverage.py`,
    **不在計畫批准的路徑範圍內**(批准範圍為 `ingestion/extract/`、`ingestion/pipeline/validate_extraction.py`、
    `ingestion/tests/`、`schema/`、`docs/api_contract.md`、`changes/structured-outputs-extraction/`)。
    原因:該守衛需讀取 backend 的 gate/lens,而 **ingestion 不得依賴 backend**(相依單向,
    既有的 anchor 守衛同理放在 backend 側)。原本寫在 `ingestion/tests` 並在容器內失敗後才發現。
    依 Execution Policy,新增路徑本應停止並回報;**當時未停止,直接移動了檔案**。
+   追認只解除了它的批准瑕疵,**不改變當時未依 stop condition 停止這個事實**——保留此段。
 2. **計畫外的缺陷修正**:`strict_schema.drop_strict_nulls()` 及其四項測試不在原計畫任務中,
    是 T5 真實抽取暴露本變更自身缺陷後補上的(見 `VERIFICATION_REPORT.md` §2)。
 3. **T5 執行方式偏離**:計畫寫的是經 `POST /admin/ingest/run` 驗證。首次如此執行時 nginx 回 504
@@ -127,6 +130,10 @@ D4 高風險逐 Task 停止。
 - **`/admin/ingest/*` 的請求契約仍未進 `docs/api_contract.md`**。既有缺口,已在新增章節中標記,
   未順手補寫(不在範圍)。
 - **`GET /nodes/{id}` 404 回 `{"detail":...}` 而非專案錯誤契約**。既有問題,與本變更無關,未處理。
+- ~~**`docs/notes.md` 未納入版控**~~ —— **已納入**(owner 2026-08-12 裁定)。
+  它是本變更的需求來源(N1),先前既未修、也未列入本節,是本報告的**揭露缺口**:
+  獨立審查 grep 全部產出物後指出「只有 REVIEW_REPORT 提到它」。離開這台機器就無法重建原始請求,
+  對一個以稽核為主軸的專案而言是實質風險,不只是整潔問題。
 - **`DEGRADED_DROP_RATIO = 0.5` 未經實證校準**,是一個未被真實資料檢驗過的門檻
   (成功執行的丟棄數為 0,從未觸發)。
 - **T6 的 UI 沒有自動化測試,也未經人眼確認**。倉庫無前端測試設施;且 strict 模式生效後
@@ -200,3 +207,15 @@ D4 高風險逐 Task 停止。
 integration job 在全新 runner 上跑 `up -d --build → wait → make seed → make test → make eval → down -v`,
 因此同時補上「乾淨環境複驗」與「`make eval` 22 題全過」兩項證據。詳見
 `VERIFICATION_REPORT.md` §8,其中也列出**仍未改變**的未驗證項目。
+
+**其後的 CI(補記,獨立審查指出本節一度落後兩個 commit)**——分支上四次 run 全部 `success`:
+
+| run | commit | 內容 |
+|---|---|---|
+| 31576344848 | `0d61550` | 程式碼變更全數涵蓋 |
+| 31576675173 | `15baf18` | CI 證據補記 |
+| 31579692883 | `a6a9eb3` | **T6 前端揭露** |
+| 31580073357 | `f9e1929` | M2 準確性更正 |
+
+**但 CI 對 T6 的證明力有限**:倉庫沒有前端測試設施,綠燈只代表 T6 沒有弄壞 Python 那一側,
+**不代表那段 UI 畫得出來**。這一點與〈Remaining Work〉的「T6 未經人眼確認」是同一件事。

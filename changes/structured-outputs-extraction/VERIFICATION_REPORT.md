@@ -149,6 +149,11 @@ mypy .................  Success: no issues found in 83 source files
 
 Run: https://github.com/busybutlazy/bio_graphrag/actions/runs/31576344848
 
+**補記(獨立審查指出本節一度落後兩個 commit)**:分支上共四次 run,全部 `success`——
+`31576344848` (`0d61550`)、`31576675173` (`15baf18`)、`31579692883` (`a6a9eb3`,T6 前端)、
+`31580073357` (`f9e1929`,M2 更正)。**但 CI 對 T6 沒有證明力**:倉庫無前端測試設施,
+綠燈只說明 T6 沒弄壞 Python 那一側,不代表那段 UI 畫得出來(見 §9 的驗證限制)。
+
 這補上兩項先前列為未驗證的證據:
 
 1. **乾淨環境複驗**。integration job 在全新 runner 上跑

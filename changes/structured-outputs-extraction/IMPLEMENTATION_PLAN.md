@@ -90,9 +90,10 @@ Outputs 從源頭約束模型輸出形狀;第二層在驗證仍失敗時**逐元
 - **Auto-approved task IDs**:無(不適用)
 - **Approved file/path scope**:`ingestion/extract/`、`ingestion/pipeline/validate_extraction.py`、
   `ingestion/tests/`、`schema/`(僅 D2 決定的檔案)、`docs/api_contract.md`、`changes/structured-outputs-extraction/`
-  —— revision 3 追加(owner 明示批准):`frontend/app.js`、`frontend/index.html`(僅資產版本號)。
-  **`backend/tests/unit/` 仍在批准範圍外**:revision 2 期間已發生的路徑偏離
-  尚未被追認,列於 `CHANGE_REPORT.md`〈Plan Deviations〉待人類裁定,不得視為已批准。
+  —— revision 3 追加(owner 明示批准):`frontend/app.js`、`frontend/index.html`(僅資產版本號)、
+  `backend/tests/unit/`(**2026-08-12 owner 追認**revision 2 期間已發生的路徑偏離;
+  該偏離的完整經過仍留在 `CHANGE_REPORT.md`〈Plan Deviations〉,追認不等於它沒發生過)、
+  `docs/notes.md`(owner 裁定納入版控)。
 - **Human checkpoints**:每個 Task 完成後回報並等待批准;T1 與 T5 的 token 花費各需獨立批准。
 - **Mandatory stop conditions**:需要改動 `engineer_gate` 或人工提案路徑;需要新增 dependency;
   發現必須修改既有 `extraction_output_schema.json` 的內部語意;真實抽取顯示挽救行為與計畫不符;
@@ -202,12 +203,22 @@ Outputs 從源頭約束模型輸出形狀;第二層在驗證仍失敗時**逐元
     —— 均已裁決,見〈已裁決事項〉。
   - **D3 token 花費**:**仍未批准**。Task 1 的探測(< 1 分美元)與 Task 5 的真實抽取
     (約 0.2 分美元)各需在執行前取得批准;兩者本來就是 human checkpoint。
-- **Status**:Approved(revision 2)
-- **Approved plan revision**:2
-- **Approved risk level and automation mode**:高 / `one-task-at-a-time`
-- **Approved by/date**:owner,2026-08-12。批准依據:於本 session 明示「N1 還是可以先做」,
-  並逐項裁決 D1(a)、D1(b)、D2、D4。D3 不在此批准範圍內。
+- **Status**:Approved(revision 3)
+- **Approved plan revision**:3
+- **Approved risk level and automation mode**:高 / `one-task-at-a-time`(revision 2、3 相同)
+- **Approved by/date**:owner,2026-08-12。
+  - **revision 2**:明示「N1 還是可以先做」,並逐項裁決 D1(a)、D1(b)、D2、D4。
+  - **revision 3**(把 `frontend/` 由 Out of Scope 移入,新增 Task 6):
+    owner 於審查後明示「我認為應該要把 H1 修完 才算是任務完成吧,
+    如果僅完成一堆後端端點 其實沒有太大意義」。**這是 material change**,
+    因此 revision 2 的批准就此失效,本欄位改記 revision 3。
+  - **`backend/tests/unit/` 路徑偏離**:owner 於 2026-08-12 明示追認,
+    改列入批准路徑範圍(見 Execution Policy)。
 - **Approval evidence**:**Not approved until a human explicitly records it here. Material plan changes invalidate approval.**
+  - 記錄過程的一項缺陷(由獨立審查指出):revision 3 的批准原本**只以散文形式**出現在
+    Task 6 與 commit message,本欄位仍停在 revision 2——等於「計畫說自己升版了,
+    批准欄位卻沒有對應證據」,從產出物無法驗證。owner 於同日裁定補記,即本次更新。
+    **教訓**:口頭批准若不落到這三行,對後續審查者而言等同不存在。
 
 ---
 
