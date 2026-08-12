@@ -23,7 +23,9 @@ _WHITELIST_RE = re.compile(r"2\. 只能使用以下 relationship type.*?(?=\n\d+
 def _required_relations(card_text: str) -> set[str]:
     match = _SIGNATURE_RE.search(card_text)
     assert match, "rule card 缺 結構簽章 區塊"
-    return {tok for tok in re.findall(r"[A-Z_]{3,}", match.group(1)) if tok in VALID_RELATIONSHIP_TYPES}
+    return {
+        tok for tok in re.findall(r"[A-Z_]{3,}", match.group(1)) if tok in VALID_RELATIONSHIP_TYPES
+    }
 
 
 def _prompt_without_type_whitelist() -> str:
