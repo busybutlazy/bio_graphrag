@@ -1,6 +1,6 @@
 """Deterministic reverse-translation of a graph proposal into expert-facing 白話.
 
-純函式,以結構簽章 pattern-match(P1–P5),**不呼叫 LLM、不用模板引擎**。
+純函式,以結構簽章 pattern-match(P1–P6),**不呼叫 LLM、不用模板引擎**。
 專家畫面的「系統理解」由此當場計算,確保專家看到的就是 graph 真正表達的內容。
 對應 docs/expert-in-the-loop-plan.md 五.2。
 
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 _DIRECTION_ZH = {"INCREASES": "上升", "DECREASES": "下降"}
 _TRIGGER_ZH = {"increase": "升高", "decrease": "降低"}
+_FEEDBACK_ZH = {"negative": "負", "positive": "正"}
 
 
 def _humanize(node_id: str) -> str:
@@ -101,6 +102,34 @@ def render_understanding(proposal: dict, ctx: dict | None = None) -> dict:
                 "P4",
                 "antagonistic_interaction",
                 f"{a}與{b}透過方向相反的兩個調控效果,在{variable}上呈現拮抗。",
+            )
+
+    # --- P6 feedback_loop -------------------------------------------------
+    # FeedbackLoop{feedback_type, regulated_variable} ─USES_EFFECT→ RE (×1 以上)
+    # 變因取自節點屬性而非 ON_VARIABLE 邊,且只要求一條 USES_EFFECT —— 兩者都是為了
+    # 貼合既有已核准迴路的形狀,理由寫在 schema/rule_cards/feedback_loop.md。
+    loops = [
+        nid
+        for nid, t in types.items()
+        if t == "FeedbackLoop" and props[nid].get("feedback_type") in _FEEDBACK_ZH
+    ]
+    if loops:
+        lid = loops[0]
+        uses = [e for e in edges_of("USES_EFFECT") if e["source"] == lid]
+        if uses:
+            kind = _FEEDBACK_ZH[props[lid]["feedback_type"]]
+            regulated = str(props[lid].get("regulated_variable") or "")
+            # 屬性存的是變因名而非 node id;變因節點若在場就用它的 label,讀起來才像人話。
+            variable = labels.get(f"physiological_variable:{regulated}") or (
+                _humanize(regulated) if regulated else "該變因"
+            )
+            # 具名的是效果背後的激素(與 P4 同一套稱呼),查不到才退回效果本身的名字。
+            actors = [effect_to_hormone.get(e["target"]) or lbl(e["target"]) for e in uses]
+            joined = "與".join(dict.fromkeys(actors))
+            return _ok(
+                "P6",
+                "feedback_loop",
+                f"{joined}的調控效果構成{variable}的{kind}回饋迴路。",
             )
 
     # --- P1 / P3 regulatory-effect three-part ----------------------------

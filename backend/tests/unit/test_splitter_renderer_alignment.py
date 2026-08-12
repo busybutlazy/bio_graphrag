@@ -42,7 +42,12 @@ _DELIBERATELY_UNTEMPLATED = {
 
 # One minimal, complete instance per template. Kept hand-written rather than generated: the point is
 # to state what each shape looks like, so a reader can check it against the renderer.
-_FOCUS = {"P2": "hormone:g_ins", "P4": "interaction:g_antag", "P1": "regulatory_effect:g_low"}
+_FOCUS = {
+    "P2": "hormone:g_ins",
+    "P4": "interaction:g_antag",
+    "P6": "feedback:g_loop",
+    "P1": "regulatory_effect:g_low",
+}
 
 _INSTANCES = {
     "P2": {
@@ -117,6 +122,35 @@ _INSTANCES = {
                 "type": "ON_VARIABLE",
                 "source": "interaction:g_antag",
                 "target": "physiological_variable:g_bg",
+            },
+        ],
+    },
+    "P6": {
+        "nodes": [
+            {
+                "id": "feedback:g_loop",
+                "type": "FeedbackLoop",
+                "label": "血糖負回饋",
+                "description": "d",
+                # 變因寫屬性、只引用一個效果,都是 rule card 記載的刻意選擇
+                "properties": {
+                    "feedback_type": "negative",
+                    "regulated_variable": "g_bg",
+                },
+            },
+            {
+                "id": "regulatory_effect:g_a",
+                "type": "RegulatoryEffect",
+                "label": "降血糖",
+                "description": "d",
+            },
+        ],
+        "edges": [
+            {
+                "id": "e:g9",
+                "type": "USES_EFFECT",
+                "source": "feedback:g_loop",
+                "target": "regulatory_effect:g_a",
             },
         ],
     },

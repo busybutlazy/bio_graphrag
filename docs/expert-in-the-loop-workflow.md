@@ -35,7 +35,7 @@
    - `needs_schema_extension` → 形式沒問題但現行 schema 表達不了(硬 gap),轉 backlog。
    - `pass` → 進反向翻譯。
 3. **反向翻譯(deterministic)** — `back_translation.render_understanding` 以結構簽章
-   pattern-match(P1–P5,無 LLM)產出白話「系統理解」。專家看到的就是 graph 真正表達的內容。
+   pattern-match(P1–P6,無 LLM)產出白話「系統理解」。專家看到的就是 graph 真正表達的內容。
 4. **專家 gate** — 專家只讀:原文、系統理解、概念圖、系統沒理解成什麼、審查選項、備註。
    - 同意 → 可固化成 gold。
    - 有疑慮 → 記備註,退回調整。
