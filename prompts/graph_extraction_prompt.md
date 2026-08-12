@@ -18,12 +18,51 @@ Ingestion pipeline 的 extraction step 呼叫 LLM 時使用的 prompt 模板。�
    TARGETS, HAS_EFFECT, ON_VARIABLE, INCREASES, DECREASES,
    REGULATES_SECRETION_OF, PARTICIPATES_IN, USES_EFFECT, CATALYZES,
    PREREQUISITE_OF, CAUSES, EVIDENCED_BY, COMMONLY_CONFUSED_WITH。
-3. 何時建立 RegulatoryEffect / Interaction / FeedbackLoop,嚴格依照
-   extraction_guidelines.md 的判斷準則,不要自行放寬。
+3. 何時建立 RegulatoryEffect / Interaction 見下方規則 7、8,不要自行放寬。
+   FeedbackLoop 只在文本描述「某效果會回頭影響觸發它自己的變因」的閉環時才建立;
+   只有單向效果就建 RegulatoryEffect 即可。
 4. 每個節點與關係都必須帶 source_chunk_id,對應到輸入文字的 chunk id。
 5. 不確定的內容不要生成,寧缺勿濫。
-6. 輸出必須是單一 JSON 物件,完全符合 extraction_output_schema.json,
-   不要輸出 JSON 以外的文字、不要加註解、不要用 markdown code fence 包裹。
+6. 輸出必須是單一 JSON 物件,不要輸出 JSON 以外的文字、不要加註解、
+   不要用 markdown code fence 包裹。形狀固定如下,**每個** node 與 edge 都必須
+   帶齊全部欄位(少一個欄位,整段抽取都會被丟棄):
+
+   {"nodes": [
+      {"id": "hormone:insulin", "type": "Hormone", "label": "胰島素 / insulin",
+       "description": "一到兩句說明", "source_chunk_id": "<本次 chunk_id>"}
+    ],
+    "edges": [
+      {"id": "e:<chunk_id>:1", "type": "HAS_EFFECT",
+       "source": "hormone:insulin", "target": "regulatory_effect:insulin_decreases_blood_glucose",
+       "source_chunk_id": "<本次 chunk_id>"}
+    ]}
+
+   關係型別放在 edge 的 "type" 欄位(不是 "relationship");除上列欄位外,
+   node 可選 "properties"、"possible_duplicate_of",edge 可選 "properties",
+   不要自行新增其他欄位。
+7. 關係有固定方向,不可自行調換。調控類一律走三段式,不可壓縮:
+
+   Hormone ─HAS_EFFECT→ RegulatoryEffect ─ON_VARIABLE→ PhysiologicalVariable
+                        RegulatoryEffect ─INCREASES|DECREASES→ PhysiologicalVariable
+
+   正例(「胰島素會降低血糖濃度」):
+     nodes: hormone:insulin, regulatory_effect:insulin_decreases_blood_glucose,
+            physiological_variable:blood_glucose
+     edges: hormone:insulin ─HAS_EFFECT→ regulatory_effect:insulin_decreases_blood_glucose
+            regulatory_effect:insulin_decreases_blood_glucose ─ON_VARIABLE→ physiological_variable:blood_glucose
+            regulatory_effect:insulin_decreases_blood_glucose ─DECREASES→ physiological_variable:blood_glucose
+
+   常見錯誤,不要這樣寫:
+     ✗ RegulatoryEffect ─HAS_EFFECT→ PhysiologicalVariable  (該位置用 ON_VARIABLE)
+     ✗ Hormone ─DECREASES→ PhysiologicalVariable            (跳過 RegulatoryEffect)
+     ✗ 只建立 RegulatoryEffect 而不建立造成它的 Hormone 節點
+
+8. Interaction 必須引用**至少兩個**既有的 RegulatoryEffect:
+   Interaction ─USES_EFFECT→ RegulatoryEffect (×2 以上)
+   Interaction ─ON_VARIABLE→ PhysiologicalVariable
+   還沒有兩個對應的 RegulatoryEffect 之前,不要建立 Interaction。
+
+9. 節點 id 一律 <type_prefix>:<snake_case_name>,例如 hormone:insulin。
 ```
 
 ## User Prompt 模板
@@ -39,6 +78,10 @@ chunk_id: {chunk_id}
 """
 
 請依照 system prompt 的規則,輸出這段文字中可抽取的候選節點與候選關係。
+
+輸出前逐條檢查:每個 node 與**每一條** edge 都要有 id、type、source_chunk_id
+(edge 另需 source 與 target);關係型別寫在 edge 的 type 欄位,不可寫成 relationship。
+任何一條邊少欄位,整段抽取都會被丟棄。
 ```
 
 ## 佔位符說明
@@ -56,5 +99,6 @@ chunk_id: {chunk_id}
 Ingestion pipeline 收到 LLM 輸出後:
 
 1. 用 `extraction_output_schema.json` 驗證,失敗直接丟棄並記錄到 `ingestion_jobs.error_message`,不寫入 `curation_items`。
-2. 驗證通過的每個 node/edge,各自寫入一筆 `curation_items`(`status = proposed`,`proposed_by = "llm"`)。
-3. 後續審核走 `POST /admin/curation/items/{item_id}/approve|reject`(見 `docs/api_contract.md` 第 3 節)。
+2. 驗證通過的輸出由 `ingestion/pipeline/group_statements.py` 切成**一個生物陳述一組**(P1 單一調控效果 / P2 分泌觸發 / P4 拮抗;剩餘的併成一組 residual)。每個 node/edge 寫入一筆 `curation_items`(`status = proposed`,`proposed_by = "llm"`),並帶上所屬的 `group_id`——群組才是人審核的單位。
+3. 每組先過 Schema gate(`app/graph/engineer_gate.py`,只驗形式:型別白名單、id 慣例、三段式與 Interaction 完整性、back_translation 可讀性),再由專家審閱。
+4. 後續審核走 `POST /admin/review/groups/{group_id}/approve|reject|gap`(見 `docs/api_contract.md` 與 `docs/expert-in-the-loop-workflow.md`)。
