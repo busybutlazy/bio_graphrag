@@ -65,8 +65,9 @@ D4 高風險逐 Task 停止。
   - `frontend/app.js` —— `renderRunResult` 揭露丟棄與降級(T6)
   - `frontend/index.html` —— 資產版本號 `20260812-2`(CDN 快取)
   - `docs/notes.md` —— 由 untracked 改為納入版控(需求來源 N1),並新增 N8(見〈Plan Deviations〉第 4 點)
-  - `changes/*/PR_DRAFT.md` —— 兩個變更的 PR 內文草稿納入版控(理由見〈Remaining Work〉)
-- **Deleted**:無
+- **Deleted**:`changes/extraction-prompt-inline-pattern-rules/PR_DRAFT.md`、
+  `changes/structured-outputs-extraction/PR_DRAFT.md`(owner 裁定不再維護 PR 草稿;
+  兩者皆先提交後刪除,內容存於 git 歷史)
 - 程式碼與文件合計 15 檔。`schema/extraction_output_schema.json` **未被修改**(D2 的重點)。
 
 ## Observable Behavior
@@ -137,10 +138,13 @@ D4 高風險逐 Task 停止。
 - **`/admin/ingest/*` 的請求契約仍未進 `docs/api_contract.md`**。既有缺口,已在新增章節中標記,
   未順手補寫(不在範圍)。
 - **`GET /nodes/{id}` 404 回 `{"detail":...}` 而非專案錯誤契約**。既有問題,與本變更無關,未處理。
-- ~~**兩份 `PR_DRAFT.md` 未納入版控**~~ —— **已納入**。原本打算刪除(PR 內文已存在 GitHub),
-  但核對後發現 **PR #19 的內文只有 1922 字元、本機草稿有 5009**——owner 當時是自己撰寫 PR 內文,
-  草稿內容並未被保存到任何地方。刪除會造成實際遺失,故改為納管。
-  本變更的草稿已同步更新至目前狀態,並以 `gh pr edit` 更新 PR #20 內文,避免兩處分歧。
+- **兩份 `PR_DRAFT.md` 已刪除**(owner 2026-08-12 裁定:PR 草稿不再維護)。
+  過程值得記錄,因為結論翻過兩次:原本要刪(理由是 PR 內文已在 GitHub);核對後發現
+  **PR #19 的內文只有 1922 字元、本機草稿有 5009**——owner 當時自己撰寫 PR 內文,
+  草稿內容不在任何地方,故改為納管;owner 隨後裁定不再維護草稿,兩份皆刪。
+  **刪除此時已無損失**:兩份都先被 commit(`8b94c3b`)才刪除,內容留在 git 歷史中可還原;
+  且本變更的草稿在刪除前已以 `gh pr edit` 同步進 PR #20 的內文。
+  作法上的結論:**PR 內文以 GitHub 為準,repo 內不留副本**,避免兩處分歧。
 - ~~**`docs/notes.md` 未納入版控**~~ —— **已納入**(owner 2026-08-12 裁定)。
   它是本變更的需求來源(N1),先前既未修、也未列入本節,是本報告的**揭露缺口**:
   獨立審查 grep 全部產出物後指出「只有 REVIEW_REPORT 提到它」。離開這台機器就無法重建原始請求,
