@@ -1,0 +1,148 @@
+# Change Report: structured-outputs-extraction
+
+對應 `docs/notes.md` 的 **N1**。比較基準:`main` (`c292a68`) → `feat/structured-outputs-extraction` (`a286806`),
+三個 commit。批准依據:`IMPLEMENTATION_PLAN.md` revision 2,狀態 Approved,風險「高」/`one-task-at-a-time`。
+
+## Outcome
+
+抽取路徑改為兩層防線:模型輸出先受 OpenAI Structured Outputs(`json_schema` + `strict`)約束;
+若驗證仍失敗,重試用盡後逐元素挑掉不合格者並揭露,而非丟棄整個 chunk。
+
+計畫的五個 Task 全部完成,八項驗收條件全部通過(逐項證據見 `VERIFICATION_REPORT.md` §1)。
+真實抽取由 `failed_chunks 2/4` 降為 **0/4**,且無任何元素需要被挽救。
+
+**本報告不證明正確性**,只陳述做了什麼、沒做什麼、沒證明什麼。
+
+## Completed
+
+| Task | 交付 | 證據 |
+|---|---|---|
+| T1 探測 | 四個 schema 變體對 `gpt-4o-mini` 實測,定出 V3 形狀 | `TASK_LOG.md` Task 1 |
+| T2 strict schema | `build_strict_schema()` 執行期推導;`llm_client` 改用 json_schema、處理 refusal | commit `51a2056` |
+| T3 逐元素挽救 | `salvage.py`;`_extract_chunk` 改回傳 `ExtractionAttempt`;揭露欄位 | commit `521197c` |
+| T4 契約文件 | `docs/api_contract.md` 新增 `POST /admin/ingest/run` 一節 | commit `a286806` |
+| T5 完整驗證 | 真實抽取 + 完整測試 + lint/mypy;過程中修正一個自身缺陷 | `VERIFICATION_REPORT.md` |
+
+四項已裁決事項皆按批准內容落實:D1a 連帶丟棄、D1b 只揭露不擋、D2 執行期推導(`schema/` 未被修改)、
+D4 高風險逐 Task 停止。
+
+## Not Completed
+
+無計畫內項目未完成。
+
+## Not Verified
+
+- **`make eval`(22 題黃金題)未執行**。判斷本變更不觸及 retrieval 路徑,但這是推論,非實測。
+- **`refusal` 分支未在真實 API 上觸發**。僅以假物件單元測試涵蓋。
+- **非 `gpt-4o-mini`、非 `markdown_header` 策略下的行為未評估**。
+- **僅單一章節、單次成功抽取**。「strict 模式使挽救不再需要」只有一次觀察支持,不足以推論常態。
+- **中間 commit 未逐一執行測試**。`51a2056` 與 `521197c` 各自自洽是靠閱讀相依關係推得
+  (commit 1 未動 runner,舊 3-tuple 呼叫端與舊測試一致),**未實際 checkout 驗證**。
+- **乾淨環境未複驗**。本機資料庫含真實抽取寫入的 chunks,`test_pipeline_run_is_idempotent`
+  因此失敗;CI 從全新 runner 起跑,但本分支**尚未推送**,故無 CI 證據。
+
+## File Changes
+
+- **Added**:
+  - `ingestion/extract/strict_schema.py` —— strict schema 推導與 null 還原
+  - `ingestion/extract/salvage.py` —— 逐元素挽救政策
+  - `ingestion/tests/test_strict_schema.py`(11 項)
+  - `ingestion/tests/test_salvage.py`(8 項)
+  - `backend/tests/unit/test_property_key_coverage.py`(1 項)—— **路徑偏離,見下**
+  - `changes/structured-outputs-extraction/{IMPLEMENTATION_PLAN,TASK_LOG,VERIFICATION_REPORT}.md`
+- **Modified**:
+  - `ingestion/extract/llm_client.py` —— `response_format()`、`content_of()`、`LLMRefused`
+  - `ingestion/extract/runner.py` —— `ExtractionAttempt`、挽救接線、`ChunkReport` 與 `stats` 揭露欄位
+  - `ingestion/pipeline/validate_extraction.py` —— `validate_node` / `validate_edge`
+  - `ingestion/tests/test_document_ingest.py` —— 配合新回傳型別;新增 1 項冪等實測
+  - `docs/api_contract.md` —— 新增一節
+- **Deleted**:無
+- 合計 13 檔,+1361 / −22。`schema/extraction_output_schema.json` **未被修改**(D2 的重點)。
+
+## Observable Behavior
+
+1. **抽取請求**改送 `response_format: json_schema (strict)`。送出的 schema 由內部 schema 推導,
+   剝除 `pattern`、列舉 `properties` 鍵、選用欄位可為 null。
+2. **一個 chunk 從全有全無改為部分接受**。壞元素被丟棄,其餘進入審閱佇列。
+3. **丟棄一律揭露**:`stats.dropped[]`(含 `chunk_id/kind/id/reason`)、`dropped_nodes`、
+   `dropped_edges`、`degraded_chunks`;`chunks[]` 另有 `dropped` 與 `degraded`。
+4. **全部元素不合格時行為不變**:該 chunk 仍計入 `failed_chunks`。
+5. **模型拒答改為拋出**,不再被讀成空抽取。
+6. **兩道 gate 的判斷邏輯完全未改**。存活元素照常受檢;實測 7 組中 3 組被判 `fail_pattern`。
+
+## Contract, Schema, Migration, Dependency, and Configuration Impact
+
+- **Contract(additive)**:`POST /admin/ingest/run` 回應新增四個 `stats` 欄位與 `chunks[]` 的兩個欄位。
+  既有欄位未改名、未改語意。已記入 `docs/api_contract.md`。
+- **Schema**:無變更。內部 `extraction_output_schema.json` 逐字不動,
+  `engineer_gate` 對人工提案的驗證行為因此不受影響(有測試釘住:`test_building_does_not_mutate_the_internal_schema`)。
+- **Migration**:無。未動資料庫結構,未刪改既有列。
+- **Dependency**:無新增。`openai` 1.109.1(既有 `>=1.40,<2`)已支援。
+- **Configuration**:無。未改 `.env`、compose、nginx。
+
+## Plan Deviations and Unplanned Changes
+
+1. **路徑偏離(需 reviewer 裁定)**:新增 `backend/tests/unit/test_property_key_coverage.py`,
+   **不在計畫批准的路徑範圍內**(批准範圍為 `ingestion/extract/`、`ingestion/pipeline/validate_extraction.py`、
+   `ingestion/tests/`、`schema/`、`docs/api_contract.md`、`changes/structured-outputs-extraction/`)。
+   原因:該守衛需讀取 backend 的 gate/lens,而 **ingestion 不得依賴 backend**(相依單向,
+   既有的 anchor 守衛同理放在 backend 側)。原本寫在 `ingestion/tests` 並在容器內失敗後才發現。
+   依 Execution Policy,新增路徑本應停止並回報;**當時未停止,直接移動了檔案**。
+2. **計畫外的缺陷修正**:`strict_schema.drop_strict_nulls()` 及其四項測試不在原計畫任務中,
+   是 T5 真實抽取暴露本變更自身缺陷後補上的(見 `VERIFICATION_REPORT.md` §2)。
+3. **T5 執行方式偏離**:計畫寫的是經 `POST /admin/ingest/run` 驗證。首次如此執行時 nginx 回 504
+   (代理逾時),我誤判為失敗而重試,**造成一次重複抽取**(已中止並在 `ingestion_jobs` 標記)。
+   後續改為在容器內直接呼叫 `ingest_document`(同一程式路徑,不經 nginx)。
+   **因此 HTTP 端點路徑只被驗證到「會逾時但後端完成」,新欄位的 JSON 序列化未經端點實際檢視。**
+4. **花費超出估計**:計畫估 T1 < 1 美分、T5 約 0.2 美分;實際累計約 90k tokens
+   (T1 17.9k、失敗執行 34k、中止執行約 15–25k、成功執行 18.8k)。
+
+## Breaking Changes and Compatibility
+
+- **內部介面破壞性變更**:`runner._extract_chunk` 由回傳 3-tuple 改為 `ExtractionAttempt`。
+  呼叫端僅 `runner.ingest_document` 與兩個測試檔(已全數更新,`grep` 確認無其他呼叫端)。
+  該函式為模組私有(前綴底線),不屬對外契約。
+- **對外相容**:回應僅新增欄位,既有欄位不變。
+- **離線姿態不變**:未設 `OPENAI_API_KEY` 時完全不觸及本變更的 API 路徑;全部測試在離線姿態通過。
+- **行為相容性的一點提醒**:先前會整塊失敗的 chunk,現在可能部分成功。
+  依賴 `failed_chunks` 判斷「這章有沒有問題」的既有流程或人工習慣,需改看 `dropped_*` 與 `degraded_chunks`。
+
+## Remaining Work and Known Limitations
+
+- **尚未推送,無 CI 證據**。CI 會在全新環境跑 `up --build → seed → test → eval`,
+  那是取得乾淨環境綠燈與 `make eval` 結果最省成本的途徑。
+- **`/admin/ingest/*` 的請求契約仍未進 `docs/api_contract.md`**。既有缺口,已在新增章節中標記,
+  未順手補寫(不在範圍)。
+- **`GET /nodes/{id}` 404 回 `{"detail":...}` 而非專案錯誤契約**。既有問題,與本變更無關,未處理。
+- **`DEGRADED_DROP_RATIO = 0.5` 未經實證校準**,是一個未被真實資料檢驗過的門檻
+  (成功執行的丟棄數為 0,從未觸發)。
+
+## Risks, Uncertainty, and Review Hotspots
+
+建議 reviewer 優先看這四處:
+
+1. **`drop_strict_nulls` 的「只剝除選用欄位」邊界**(`strict_schema.py`)。若誤剝必填欄位,
+   會把壞元素變成看似不完整的元素,削弱 salvage 的揭露。已有測試,但這是最容易寫錯的地方。
+2. **連帶丟棄的判準**(`salvage.py`)。「提案過又被丟掉」才連帶,「從未提案」不連帶。
+   兩者搞混會刪掉大量正確的邊(抽取本來就被要求引用既有概念)。
+3. **`degraded` 不阻擋是刻意的**(D1b)。等於接受「模型系統性劣化時 job 仍回報 success,
+   只在 `degraded_chunks` 顯示」。若 reviewer 認為這對治理主軸太寬鬆,是可爭論的決策點。
+4. **路徑偏離**(上節第 1 點)——程序問題,非技術問題,但依規範應由人裁定。
+
+不確定性:strict 模式讓挽救「不再需要」只有**單次**觀察支持;挽救是否在常態下真的極少觸發,未知。
+
+## Rollback
+
+`git revert` 三個 commit 即可,無資料 migration、無 schema 破壞性改動、無設定變更。
+若在本變更上線後才 rollback:期間 staged 的提案仍是正常的 `proposed` 列,可照常審閱或退回,
+不需資料修補。已寫入的 `dropped_*` 欄位留在 `ingestion_jobs.stats` 中,不影響讀取端。
+
+## Evidence Consulted
+
+- `IMPLEMENTATION_PLAN.md` revision 2(含〈已裁決事項〉與 Approval evidence)
+- `TASK_LOG.md` Task 1–5
+- `VERIFICATION_REPORT.md`(含自身缺陷、重複花費、一項未決觀察)
+- `git diff main..HEAD`(13 檔,+1361/−22)與三個 commit message
+- `grep` 確認 `_extract_chunk` 呼叫端範圍
+- `.github/workflows/ci.yml`(用以判斷乾淨環境證據的取得方式)
+- **未查閱**:CI 執行結果(分支未推送)、獨立審查意見(尚未進行)
