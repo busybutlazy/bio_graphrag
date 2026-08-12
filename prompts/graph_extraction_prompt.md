@@ -49,12 +49,18 @@ Ingestion pipeline 的 extraction step 呼叫 LLM 時使用的 prompt 模板。�
    效果」時建立;文本只說某構造分泌某激素、或某變因觸發分泌,那是規則 8 的
    分泌觸發,**不要**建 RegulatoryEffect。
 
-   要建的時候,關係有固定方向,不可自行調換,並一律走三段式,不可壓縮:
+   要建的時候,關係有固定方向,不可自行調換。每一個 RegulatoryEffect 都必須配
+   **恰好三條**邊,缺一條就會被退回,不可壓縮成兩條:
 
-   Hormone ─HAS_EFFECT→ RegulatoryEffect ─ON_VARIABLE→ PhysiologicalVariable
-                        RegulatoryEffect ─INCREASES|DECREASES→ PhysiologicalVariable
+     (1) Hormone ─HAS_EFFECT→ RegulatoryEffect
+     (2) RegulatoryEffect ─ON_VARIABLE→ PhysiologicalVariable
+     (3) RegulatoryEffect ─INCREASES 或 DECREASES→ PhysiologicalVariable
 
-   正例(「胰島素會降低血糖濃度」):
+   注意 (2) 與 (3) 的起點和終點完全相同,只有 type 不同——這**不是**重複,
+   兩條都要輸出。(2) 說明「這個效果作用在哪個變因」,(3) 說明「往哪個方向」。
+   方向只寫在節點 id 或 label 裡不算數,一定要有 (3) 這條邊。
+
+   正例(「胰島素會降低血糖濃度」,注意 edges 有三條):
      nodes: hormone:insulin, regulatory_effect:insulin_decreases_blood_glucose,
             physiological_variable:blood_glucose
      edges: hormone:insulin ─HAS_EFFECT→ regulatory_effect:insulin_decreases_blood_glucose
@@ -65,6 +71,7 @@ Ingestion pipeline 的 extraction step 呼叫 LLM 時使用的 prompt 模板。�
      ✗ RegulatoryEffect ─HAS_EFFECT→ PhysiologicalVariable  (該位置用 ON_VARIABLE)
      ✗ Hormone ─DECREASES→ PhysiologicalVariable            (跳過 RegulatoryEffect)
      ✗ 只建立 RegulatoryEffect 而不建立造成它的 Hormone 節點
+     ✗ 只出 HAS_EFFECT 與 ON_VARIABLE 兩條,把方向留在 id 字串裡(缺第 (3) 條)
 
 8. 分泌觸發是**另一種**結構,沒有 RegulatoryEffect。文本描述「某變因變化時,
    某構造分泌某激素」時,只出這兩條邊:
