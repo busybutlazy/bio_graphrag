@@ -1,6 +1,7 @@
 # Task Log: structured-outputs-extraction
 
-Plan revision 2,`one-task-at-a-time`。每個 Task 完成後停止並等待批准。
+Plan revision 3(Task 1–5 於 revision 2 下執行;Task 6 為審查 H1 後 owner 追加),
+`one-task-at-a-time`。每個 Task 完成後停止並等待批准。
 
 ## Task 1 — strict schema 探測(2026-08-12)
 
@@ -181,3 +182,42 @@ mypy .................  Success: no issues found in 83 source files
 
 **狀態**:完成。五個 Task 全部結束,交由獨立審查。未 commit(依 Execution Policy,
 commit/push 需另行批准)。
+
+## Task 6 — 前端揭露(2026-08-12,revision 3 追加,對應審查 H1)
+
+**為什麼有這個 Task**:審查 H1 指出——本變更把失敗模式從「大聲」改成「安靜」,
+而唯一的人類介面 `renderRunResult` 對新欄位**零渲染**(`grep -rn "dropped\|degraded" frontend/` 零命中)。
+owner 裁定「只完成後端端點不算完成」,前端因此由 Out of Scope 改為納入,計畫升為 revision 3。
+
+**檔案**:`frontend/app.js::renderRunResult`、`frontend/index.html`(資產版本號 `20260812-2`)。
+
+**實作**:
+
+1. 新增「丟棄(節點/關係)」統計磚,**即使為 0 也顯示**——「什麼都沒丟」本身就是這個問題的答案;
+   非零時標紅。`degraded_chunks` 非零時另加「降級塊」磚。
+2. 有丟棄時,於成功通知下方加一段說明:候選數已扣除被丟棄者、逐筆原因在下方、
+   以及「修正後重新匯入會補進同一個審閱群組」(降級時改為提醒先確認抽取品質)。
+3. 逐塊卡片:標頭 meta 加上「丟棄 N」與「降級」;卡片內列出每一筆 `kind / id / reason`。
+   `id` 為 null 時顯示「(無 id)」而非隱藏——元素連 id 都沒有,正是它被丟棄的原因。
+   **目的是讓被挽救的塊與乾淨的塊在視覺上不可能混淆。**
+
+**驗證**(零 token):
+
+- `docker run --rm -v $PWD/frontend:/w:ro node:20-alpine node --check /w/app.js` → 通過。
+- 以假造 extractor 產生**真的含丟棄的報告**,逐一核對前端讀取的每個欄位:
+
+```
+dropped: [{"kind":"node","id":"hormone:bad","reason":"'label' is a required property"},
+          {"kind":"node","id":"hormone:bad2","reason":"..."},
+          {"kind":"edge","id":null,"reason":"'id' is a required property"}]
+degraded: True
+dropped[].kind / .id / .reason 皆存在;degraded 為 bool
+```
+
+- 完整離線測試 **232 passed**(唯一失敗為既有 volume flake,見驗證報告 §4/§8)。
+
+**驗證限制(如實記錄)**:倉庫沒有前端測試設施(零建置 vanilla SPA),故**無自動化測試可加**,
+未假裝有覆蓋。且 strict 模式生效後丟棄極罕見(T5 實測為 0),
+這段 UI 在正常操作下不會自然出現,**目視確認需要刻意製造一次含壞元素的抽取**。
+
+**狀態**:完成,停止等待人類確認。

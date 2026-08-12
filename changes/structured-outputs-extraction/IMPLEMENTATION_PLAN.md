@@ -82,13 +82,17 @@ Outputs 從源頭約束模型輸出形狀;第二層在驗證仍失敗時**逐元
 
 ## Execution Policy
 
-- **Plan revision**:2(revision 1 的四個待決事項已由 owner 裁決,記於本節末與 Human Decisions)
+- **Plan revision**:3(revision 2 之後,owner 依審查 H1 要求把前端揭露納入本變更;
+  範圍擴大內容見〈Task 6〉與下方路徑範圍)
 - **Risk level**:**高**。理由:(a) 變更公開記載的 API 回應契約;(b) 改變「什麼知識會進入審閱佇列」
   ——從全有全無改為部分接受,揭露若不完整就是靜默資料遺失;(c) D2 選項 (c) 會迴歸影響人工提案驗證。
 - **Automation mode**:`one-task-at-a-time`(依 `docs/agent-guideline.md` 風險分級,高風險不得使用 `supervised-auto`)
 - **Auto-approved task IDs**:無(不適用)
 - **Approved file/path scope**:`ingestion/extract/`、`ingestion/pipeline/validate_extraction.py`、
   `ingestion/tests/`、`schema/`(僅 D2 決定的檔案)、`docs/api_contract.md`、`changes/structured-outputs-extraction/`
+  —— revision 3 追加(owner 明示批准):`frontend/app.js`、`frontend/index.html`(僅資產版本號)。
+  **`backend/tests/unit/` 仍在批准範圍外**:revision 2 期間已發生的路徑偏離
+  尚未被追認,列於 `CHANGE_REPORT.md`〈Plan Deviations〉待人類裁定,不得視為已批准。
 - **Human checkpoints**:每個 Task 完成後回報並等待批准;T1 與 T5 的 token 花費各需獨立批准。
 - **Mandatory stop conditions**:需要改動 `engineer_gate` 或人工提案路徑;需要新增 dependency;
   發現必須修改既有 `extraction_output_schema.json` 的內部語意;真實抽取顯示挽救行為與計畫不符;
@@ -204,3 +208,27 @@ Outputs 從源頭約束模型輸出形狀;第二層在驗證仍失敗時**逐元
 - **Approved by/date**:owner,2026-08-12。批准依據:於本 session 明示「N1 還是可以先做」,
   並逐項裁決 D1(a)、D1(b)、D2、D4。D3 不在此批准範圍內。
 - **Approval evidence**:**Not approved until a human explicitly records it here. Material plan changes invalidate approval.**
+
+---
+
+## Task 6 —— 前端揭露(revision 3 追加,對應審查 H1)
+
+**為什麼加進本變更而非另立 change**:owner 判定「只完成後端端點不算完成」。
+本變更把失敗模式從「大聲」(整塊失敗,UI 有紅色警告)改成「安靜」(逐元素丟棄,UI 完全無感),
+而唯一的人類介面沒有跟上——揭露只到機器看得到的地方,等於沒有揭露。
+`runner.py` 的註解自述「揭露就是全部的重點」,若不補,這句話在成品上不成立。
+
+- **Files/symbols**:`frontend/app.js::renderRunResult`;`frontend/index.html`(資產版本號)
+- **Implementation**:
+  1. 統計磚新增「丟棄(節點/關係)」,非零時標紅;`degraded_chunks` 非零時另加一磚。
+  2. 有任何丟棄時,於成功通知下方加一句說明「部分接受」的實際後果。
+  3. 逐塊卡片:有丟棄時列出每一筆(kind、id、reason),沿用既有 `.chunk-fail` 樣式;
+     `degraded` 的塊在標頭標示,**使被挽救的塊與乾淨的塊在視覺上不可能混淆**。
+- **Tests and container command**:前端為零建置 vanilla SPA,倉庫**沒有前端測試設施**,
+  故無自動化測試可加(如實記錄,不假裝有覆蓋)。驗證方式:
+  `docker run --rm -v $PWD/frontend:/w:ro node:20-alpine node --check /w/app.js`
+  + 與 `runner.py` 的 stats/ChunkReport 欄位名逐一對照。
+- **Stop/handoff**:不改後端、不改欄位語意;若發現需要新欄位才畫得出來,停止回報。
+
+**已知的驗證限制**:strict 模式生效後丟棄極為罕見(T5 實測為 0),
+因此這段 UI 在正常操作下不易自然觸發。目視確認需要刻意製造一次含壞元素的抽取。

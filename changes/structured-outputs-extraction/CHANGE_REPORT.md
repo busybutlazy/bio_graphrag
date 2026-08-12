@@ -1,14 +1,19 @@
 # Change Report: structured-outputs-extraction
 
-對應 `docs/notes.md` 的 **N1**。比較基準:`main` (`c292a68`) → `feat/structured-outputs-extraction` (`a286806`),
-三個 commit。批准依據:`IMPLEMENTATION_PLAN.md` revision 2,狀態 Approved,風險「高」/`one-task-at-a-time`。
+對應 `docs/notes.md` 的 **N1**。比較基準:`main` (`c292a68`) → 分支頭(見 git log)。批准依據:`IMPLEMENTATION_PLAN.md`
+**revision 3**,狀態 Approved,風險「高」/`one-task-at-a-time`。
+
+> 本報告初版寫於 `a286806`(程式碼三個 commit)。其後追加:CI 補記、以及**審查 H1 後由 owner
+> 追加的 Task 6 前端揭露**(計畫由 revision 2 升為 3,`frontend/` 由 Out of Scope 改為納入)。
+> 各節已就地更新,標頭不再釘死於單一 commit。
 
 ## Outcome
 
 抽取路徑改為兩層防線:模型輸出先受 OpenAI Structured Outputs(`json_schema` + `strict`)約束;
 若驗證仍失敗,重試用盡後逐元素挑掉不合格者並揭露,而非丟棄整個 chunk。
 
-計畫的五個 Task 全部完成,八項驗收條件全部通過(逐項證據見 `VERIFICATION_REPORT.md` §1)。
+計畫的六個 Task 全部完成(T6 為審查後追加),八項驗收條件全部通過。
+其中驗收條件 2「丟棄一律揭露」原本只在 API 層成立,經 T6 後在人類介面亦成立(見 §9)。
 真實抽取由 `failed_chunks 2/4` 降為 **0/4**,且無任何元素需要被挽救。
 
 **本報告不證明正確性**,只陳述做了什麼、沒做什麼、沒證明什麼。
@@ -22,6 +27,7 @@
 | T3 逐元素挽救 | `salvage.py`;`_extract_chunk` 改回傳 `ExtractionAttempt`;揭露欄位 | commit `521197c` |
 | T4 契約文件 | `docs/api_contract.md` 新增 `POST /admin/ingest/run` 一節 | commit `a286806` |
 | T5 完整驗證 | 真實抽取 + 完整測試 + lint/mypy;過程中修正一個自身缺陷 | `VERIFICATION_REPORT.md` |
+| T6 前端揭露 | 審查 H1 後 owner 追加:統計磚、部分接受說明、逐塊丟棄清單 | `TASK_LOG.md` Task 6、`VERIFICATION_REPORT.md` §9 |
 
 四項已裁決事項皆按批准內容落實:D1a 連帶丟棄、D1b 只揭露不擋、D2 執行期推導(`schema/` 未被修改)、
 D4 高風險逐 Task 停止。
@@ -49,15 +55,17 @@ D4 高風險逐 Task 停止。
   - `ingestion/tests/test_strict_schema.py`(11 項)
   - `ingestion/tests/test_salvage.py`(8 項)
   - `backend/tests/unit/test_property_key_coverage.py`(1 項)—— **路徑偏離,見下**
-  - `changes/structured-outputs-extraction/{IMPLEMENTATION_PLAN,TASK_LOG,VERIFICATION_REPORT}.md`
+  - `changes/structured-outputs-extraction/{IMPLEMENTATION_PLAN,TASK_LOG,VERIFICATION_REPORT,CHANGE_REPORT}.md`
 - **Modified**:
   - `ingestion/extract/llm_client.py` —— `response_format()`、`content_of()`、`LLMRefused`
   - `ingestion/extract/runner.py` —— `ExtractionAttempt`、挽救接線、`ChunkReport` 與 `stats` 揭露欄位
   - `ingestion/pipeline/validate_extraction.py` —— `validate_node` / `validate_edge`
   - `ingestion/tests/test_document_ingest.py` —— 配合新回傳型別;新增 1 項冪等實測
   - `docs/api_contract.md` —— 新增一節
+  - `frontend/app.js` —— `renderRunResult` 揭露丟棄與降級(T6)
+  - `frontend/index.html` —— 資產版本號 `20260812-2`(CDN 快取)
 - **Deleted**:無
-- 合計 13 檔,+1361 / −22。`schema/extraction_output_schema.json` **未被修改**(D2 的重點)。
+- 程式碼與文件合計 15 檔。`schema/extraction_output_schema.json` **未被修改**(D2 的重點)。
 
 ## Observable Behavior
 
@@ -69,6 +77,9 @@ D4 高風險逐 Task 停止。
 4. **全部元素不合格時行為不變**:該 chunk 仍計入 `failed_chunks`。
 5. **模型拒答改為拋出**,不再被讀成空抽取。
 6. **兩道 gate 的判斷邏輯完全未改**。存活元素照常受檢;實測 7 組中 3 組被判 `fail_pattern`。
+7. **匯入頁顯示丟棄**:「丟棄(節點/關係)」磚(即使為 0 也顯示)、丟棄時的說明段落、
+   逐塊標頭的「丟棄 N / 降級」與卡片內的逐筆 `kind / id / reason`。
+   目的是讓被挽救的塊與乾淨的塊在視覺上不可能混淆。
 
 ## Contract, Schema, Migration, Dependency, and Configuration Impact
 
@@ -117,6 +128,12 @@ D4 高風險逐 Task 停止。
 - **`GET /nodes/{id}` 404 回 `{"detail":...}` 而非專案錯誤契約**。既有問題,與本變更無關,未處理。
 - **`DEGRADED_DROP_RATIO = 0.5` 未經實證校準**,是一個未被真實資料檢驗過的門檻
   (成功執行的丟棄數為 0,從未觸發)。
+- **T6 的 UI 沒有自動化測試,也未經人眼確認**。倉庫無前端測試設施;且 strict 模式生效後
+  丟棄極罕見,這段畫面在正常操作下不會自然出現。目前證據只有欄位對照與語法檢查。
+- **審查 M1 / M2 / M3、L1 / L2 / L3 / L4、S1 / S2 未處理**,待人類決定「現在修 / 開後續 change /
+  記入已知限制」。其中 **M2** 是本報告與程式碼註解的**準確性缺陷**:送出的 schema 另外剝除了
+  所有 `description`,而註解宣稱理由是成本、T1 卻從未測過 `description` 的成本——
+  「我們送給模型的是什麼」目前在文件上是不完整的。
 
 ## Risks, Uncertainty, and Review Hotspots
 
@@ -143,11 +160,12 @@ D4 高風險逐 Task 停止。
 - `IMPLEMENTATION_PLAN.md` revision 2(含〈已裁決事項〉與 Approval evidence)
 - `TASK_LOG.md` Task 1–5
 - `VERIFICATION_REPORT.md`(含自身缺陷、重複花費、一項未決觀察)
-- `git diff main..HEAD`(13 檔,+1361/−22)與三個 commit message
+- `git diff main..HEAD` 與各 commit message
 - `grep` 確認 `_extract_chunk` 呼叫端範圍
 - `.github/workflows/ci.yml`(用以判斷乾淨環境證據的取得方式)
 - CI run [31576344848](https://github.com/busybutlazy/bio_graphrag/actions/runs/31576344848)(PR #20)
-- **未查閱**:獨立審查意見(尚未進行)
+- `REVIEW_REPORT.md`(獨立 session 審查;其 H1 促成 T6,L5 促成本報告標頭更正)
+- **未查閱**:T6 之後的獨立複審(尚未進行)
 
 ## CI 補記(2026-08-12,PR #20)
 
