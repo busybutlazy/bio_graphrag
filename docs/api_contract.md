@@ -259,6 +259,10 @@ class DeleteEdgeRequest(BaseModel):
 > ingest 三個端點(`options` / `preview` / `run`)的請求契約與雙重 gate(`X-API-Key` + `X-Ingest-Owner-Token`)
 > 目前仍只寫在 `CLAUDE.md` 與程式碼中,尚未納入本文件——既有缺口,不在該變更範圍內。
 
+送給模型的 schema 由 `schema/extraction_output_schema.json` 在執行期推導,**不是同一份**:
+所有屬性列入 `required`、選用欄位改為可為 null、`properties` 的鍵完整列舉,並剝除 `pattern`
+與所有 `description` 註解。內部驗證仍以原檔為準,故 node id 慣例等規則並未放寬。
+
 **行為改變:一個 chunk 的抽取結果從「全有全無」改為「部分接受」。** 過去只要有一個元素不符
 `extraction_output_schema.json`,整個 chunk 連同其中完全正確的陳述一起被丟棄。現在模型輸出先受
 Structured Outputs(`json_schema` + `strict`)約束;若驗證仍失敗,重試用盡後**逐元素**挑掉不合格者,

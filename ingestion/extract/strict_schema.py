@@ -6,8 +6,9 @@ proposal is judged against. Structured Outputs needs a *different* shape of the 
 this module derives it at request time rather than forking the file (plan D2). Nothing here may
 mutate the loaded schema; ``validate_extraction`` caches it at module level.
 
-Two deviations from a naive conversion, both established by the Task 1 probe against
-``gpt-4o-mini`` (see ``changes/structured-outputs-extraction/TASK_LOG.md``):
+Three deviations from a naive conversion. The first two were established by the Task 1 probe
+against ``gpt-4o-mini`` (see ``changes/structured-outputs-extraction/TASK_LOG.md``); the third
+was not, and says so.
 
 1. ``pattern`` is **dropped**, though strict mode accepts it. Constrained decoding walks the
    regex's character class and will not come out: the probe's one request produced a node id of
@@ -19,6 +20,14 @@ Two deviations from a naive conversion, both established by the Task 1 probe aga
    so the keys the gate and the lens actually read have to be spelled out. Adding a new node
    property therefore means adding it here too, or the model cannot emit it —
    ``test_strict_schema.py`` fails the build if the two drift apart.
+3. ``description`` annotations are **dropped**, and this one rests on no measurement. The probe
+   stripped them to isolate the variables it was actually testing, and keeping the request
+   identical to the shape that was verified seemed safer than deviating from it. But no variant
+   ever measured what descriptions cost, and Structured Outputs treats them as field-level
+   instructions the model reads — so dropping them gives up a free lever on exactly the quality
+   problem this project keeps hitting (edge direction: "來源節點 id" / "目標節點 id"). Restoring
+   them is a candidate follow-up, and needs one paid extraction to judge, not an opinion.
+   Recorded as review finding M2.
 """
 
 from __future__ import annotations
@@ -34,7 +43,8 @@ from ingestion.pipeline.validate_extraction import SCHEMA_PATH
 NODE_PROPERTY_KEYS = ("interaction_type", "feedback_type", "regulated_variable")
 EDGE_PROPERTY_KEYS = ("trigger_direction",)
 
-# Dropped for cost, not for support — see the module docstring.
+# Both are accepted by strict mode; both are dropped anyway, for different and unequal reasons —
+# `pattern` on measured cost, `description` on an untested assumption. See the module docstring.
 _DROPPED_KEYWORDS = ("pattern", "description")
 
 

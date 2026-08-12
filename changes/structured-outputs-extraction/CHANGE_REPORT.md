@@ -70,7 +70,8 @@ D4 高風險逐 Task 停止。
 ## Observable Behavior
 
 1. **抽取請求**改送 `response_format: json_schema (strict)`。送出的 schema 由內部 schema 推導,
-   剝除 `pattern`、列舉 `properties` 鍵、選用欄位可為 null。
+   剝除 `pattern`(有成本實測)**與所有 `description` 註解(無實測,審查 M2)**、
+   列舉 `properties` 鍵、選用欄位可為 null。
 2. **一個 chunk 從全有全無改為部分接受**。壞元素被丟棄,其餘進入審閱佇列。
 3. **丟棄一律揭露**:`stats.dropped[]`(含 `chunk_id/kind/id/reason`)、`dropped_nodes`、
    `dropped_edges`、`degraded_chunks`;`chunks[]` 另有 `dropped` 與 `degraded`。
@@ -130,10 +131,30 @@ D4 高風險逐 Task 停止。
   (成功執行的丟棄數為 0,從未觸發)。
 - **T6 的 UI 沒有自動化測試,也未經人眼確認**。倉庫無前端測試設施;且 strict 模式生效後
   丟棄極罕見,這段畫面在正常操作下不會自然出現。目前證據只有欄位對照與語法檢查。
-- **審查 M1 / M2 / M3、L1 / L2 / L3 / L4、S1 / S2 未處理**,待人類決定「現在修 / 開後續 change /
-  記入已知限制」。其中 **M2** 是本報告與程式碼註解的**準確性缺陷**:送出的 schema 另外剝除了
-  所有 `description`,而註解宣稱理由是成本、T1 卻從未測過 `description` 的成本——
-  「我們送給模型的是什麼」目前在文件上是不完整的。
+### 審查發現的處置(owner 裁定:M2 現在修,其餘記入已知限制)
+
+- **M2 已處理**(準確性,非行為):送出的 schema 另外剝除了所有 `description`,而程式碼註解
+  宣稱理由是成本、T1 卻從未測過它。已更正 `strict_schema.py` 的模組 docstring(改列**三項**
+  偏離,並註明第三項無實測支持)、`TASK_LOG.md` Task 1/2、本報告、`docs/api_contract.md`。
+  **行為未改**——`description` 仍被剝除;是否恢復需一次付費抽取判斷,列為後續。
+- **M1 跨 chunk 懸空邊**(未修):連帶丟棄的作用域是單一 chunk。同一次執行中,chunk 1 丟棄的
+  節點若在 chunk 3 被邊引用,該邊會存活。影響有界——`approve_group` 會在核准時擋下,
+  結果是該組無法核准、浪費專家時間,不是圖譜被污染。跨 chunk 路徑無測試。
+- **M3 屬性守衛的比對方式脆弱**(未修):以正則掃描原始碼,`.get("x", default)` 與下標存取
+  (`props[lid]["feedback_type"]`)抓不到。一次無辜的重構就會讓守衛靜靜失效而測試仍綠。
+  建議改 AST 走訪或把鍵集中為 backend 側常數。
+- **L1 頂層未知鍵被靜默丟棄**(未修):`salvage` 只讀 `nodes`/`edges` 重組,多餘的頂層鍵
+  不會進 `dropped`。strict 模式下實務上到不了,但與本模組的揭露原則不一致。
+- **L2 `dropped[].reason` 無長度上限**(未修):直接放 `jsonschema` 的訊息,會整包寫進
+  `ingestion_jobs.stats`。大量丟棄的 job 會產生異常肥大的列。
+- **L3 strict schema 每次呼叫重讀磁碟**(未修):與 `validate_extraction` 的 import 時快取
+  不同步;機率極低但診斷會痛。
+- **L4 `degraded_chunks` 非零路徑無測試**(未修):只有 `salvage()` 回傳值的單元測試,
+  端到端那條路徑唯一的斷言是 `== 0`。
+- **S1 被挽救的 chunk 丟失了觸發挽救的整包錯誤**(未修):挽救成功時 `error=None`,
+  `stats.extraction_errors` 因此沒有該 chunk。診斷「模型為什麼一直送壞東西」時,
+  那個錯誤原文比逐元素理由更有訊息量。
+- **S2 `_drop` 未約束 `id` 型別**(未修,防禦性)。
 
 ## Risks, Uncertainty, and Review Hotspots
 

@@ -52,6 +52,11 @@ node 的 `interaction_type`、`feedback_type`、`regulated_variable`;edge 的 `t
 
 **結論**:採 **V3** 形狀 —— strict、剝除 `pattern`、`properties` 完整列舉。
 
+**補記(審查 M2)**:實作時另外剝除了所有 `description` 註解,**這一項沒有任何探測支持**。
+當時的考量是「盡量貼近被驗證過的 V3 形狀」(V3 探測本身就把 description 拿掉以隔離變因),
+但四個變體從未測過 description 的成本,也沒有評估過它作為模型可讀的欄位級指示的價值。
+本段原本沒有記錄這件事,現補上。
+
 **成本**:合計約 17.9k tokens(`gpt-4o-mini`),其中 16.8k 來自 V2 的暴衝。
 略高於計畫估計的「< 1 美分」,實際約 1 美分出頭。
 
@@ -63,7 +68,8 @@ node 的 `interaction_type`、`feedback_type`、`regulated_variable`;edge 的 `t
 
 - 新增 `ingestion/extract/strict_schema.py`:`build_strict_schema()` 由
   `schema/extraction_output_schema.json` **執行期推導**(D2),內部 schema 不動。
-  剝除 `pattern`(T1 的成本理由)、列舉 `properties` 鍵、選用欄位改為可為 null、
+  剝除 `pattern`(T1 的成本理由)**與所有 `description` 註解(無探測支持,見 Task 1 補記)**、
+  列舉 `properties` 鍵、選用欄位改為可為 null、
   每個物件補 `required` 全欄位與 `additionalProperties: false`。
 - 修改 `ingestion/extract/llm_client.py`:新增 `response_format()` 與 `content_of()` 兩個
   可離線斷言的函式,以及 `LLMRefused`;`extract` 改送 strict json_schema,並在 `refusal`
