@@ -133,7 +133,31 @@ mypy .................  Success: no issues found in 83 source files
 
 ## 7. 未執行
 
-- `make eval`(22 題黃金題):本變更不觸及 retrieval 路徑,未執行。
+- ~~`make eval`(22 題黃金題)~~:**補記——已由 CI 執行並通過**,見 §8。
 - 非 `gpt-4o-mini` 模型、非 `markdown_header` 策略下的行為未評估。
 - `refusal` 分支未在真實 API 上觸發過(以假物件單元測試涵蓋);要真的觸發需刻意誘導拒答,
   判斷不值得花費。
+
+## 8. 補記:CI 證據(2026-08-12,PR #20)
+
+本報告 §4、§7 撰寫時分支尚未推送,故無 CI 證據。PR #20 開啟後 CI 已執行,兩個 job 皆通過:
+
+| Job | 結果 | 時間 |
+|---|---|---|
+| Lint & type-check | pass | 14s |
+| Tests & eval (integration) | pass | 1m23s |
+
+Run: https://github.com/busybutlazy/bio_graphrag/actions/runs/31576344848
+
+這補上兩項先前列為未驗證的證據:
+
+1. **乾淨環境複驗**。integration job 在全新 runner 上跑
+   `docker compose up -d --build → wait_for_services → make seed → make test → make eval → down -v`。
+   §4 提到的 `test_pipeline_run_is_idempotent` **未出現**,證實它確實只是本機 volume 被真實抽取
+   寫入所致,非迴歸——先前這是推論,現在是實測。
+2. **`make eval` 已執行,22 題黃金題全數通過**(q001–q022,`✅`)。
+   §7 原本以「本變更不觸及 retrieval 路徑」為由未執行,那是推論;現在有實測支持。
+
+仍未改變的未驗證項目:`refusal` 分支未在真實 API 觸發、非 `gpt-4o-mini` 與非 `markdown_header`
+的行為未評估、單次成功抽取不足以推論常態、中間 commit 未逐一 checkout 測試、
+新欄位經由 HTTP 端點的序列化未被實際檢視、`DEGRADED_DROP_RATIO` 未被真實資料觸發過。

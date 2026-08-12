@@ -32,14 +32,14 @@ D4 高風險逐 Task 停止。
 
 ## Not Verified
 
-- **`make eval`(22 題黃金題)未執行**。判斷本變更不觸及 retrieval 路徑,但這是推論,非實測。
+- ~~**`make eval`(22 題黃金題)未執行**~~ —— **已由 CI 執行並通過**(22/22),見下方 CI 補記。
 - **`refusal` 分支未在真實 API 上觸發**。僅以假物件單元測試涵蓋。
 - **非 `gpt-4o-mini`、非 `markdown_header` 策略下的行為未評估**。
 - **僅單一章節、單次成功抽取**。「strict 模式使挽救不再需要」只有一次觀察支持,不足以推論常態。
 - **中間 commit 未逐一執行測試**。`51a2056` 與 `521197c` 各自自洽是靠閱讀相依關係推得
   (commit 1 未動 runner,舊 3-tuple 呼叫端與舊測試一致),**未實際 checkout 驗證**。
-- **乾淨環境未複驗**。本機資料庫含真實抽取寫入的 chunks,`test_pipeline_run_is_idempotent`
-  因此失敗;CI 從全新 runner 起跑,但本分支**尚未推送**,故無 CI 證據。
+- ~~**乾淨環境未複驗**~~ —— **已由 CI 複驗**。本機那個 `test_pipeline_run_is_idempotent` 失敗
+  在全新 runner 上未出現,證實只是本機 volume 被真實抽取寫入所致,非迴歸。見下方 CI 補記。
 
 ## File Changes
 
@@ -109,8 +109,9 @@ D4 高風險逐 Task 停止。
 
 ## Remaining Work and Known Limitations
 
-- **尚未推送,無 CI 證據**。CI 會在全新環境跑 `up --build → seed → test → eval`,
-  那是取得乾淨環境綠燈與 `make eval` 結果最省成本的途徑。
+- ~~**尚未推送,無 CI 證據**~~ —— 已推送並開 PR #20,CI 兩個 job 皆綠(見下方補記)。
+  一併修正本報告先前的一句誤述:推功能分支**不會**觸發 CI(`ci.yml` 的 `on:` 為
+  `push: branches: [main]` 加 `pull_request`),要開 PR 才會跑。
 - **`/admin/ingest/*` 的請求契約仍未進 `docs/api_contract.md`**。既有缺口,已在新增章節中標記,
   未順手補寫(不在範圍)。
 - **`GET /nodes/{id}` 404 回 `{"detail":...}` 而非專案錯誤契約**。既有問題,與本變更無關,未處理。
@@ -145,4 +146,18 @@ D4 高風險逐 Task 停止。
 - `git diff main..HEAD`(13 檔,+1361/−22)與三個 commit message
 - `grep` 確認 `_extract_chunk` 呼叫端範圍
 - `.github/workflows/ci.yml`(用以判斷乾淨環境證據的取得方式)
-- **未查閱**:CI 執行結果(分支未推送)、獨立審查意見(尚未進行)
+- CI run [31576344848](https://github.com/busybutlazy/bio_graphrag/actions/runs/31576344848)(PR #20)
+- **未查閱**:獨立審查意見(尚未進行)
+
+## CI 補記(2026-08-12,PR #20)
+
+本報告初版撰寫時分支尚未推送。PR #20 開啟後 CI 執行完畢,兩個 job 皆通過:
+
+| Job | 結果 | 時間 |
+|---|---|---|
+| Lint & type-check | pass | 14s |
+| Tests & eval (integration) | pass | 1m23s |
+
+integration job 在全新 runner 上跑 `up -d --build → wait → make seed → make test → make eval → down -v`,
+因此同時補上「乾淨環境複驗」與「`make eval` 22 題全過」兩項證據。詳見
+`VERIFICATION_REPORT.md` §8,其中也列出**仍未改變**的未驗證項目。
