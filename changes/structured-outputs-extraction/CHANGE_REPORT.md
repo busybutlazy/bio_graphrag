@@ -64,7 +64,8 @@ D4 高風險逐 Task 停止。
   - `docs/api_contract.md` —— 新增一節
   - `frontend/app.js` —— `renderRunResult` 揭露丟棄與降級(T6)
   - `frontend/index.html` —— 資產版本號 `20260812-2`(CDN 快取)
-  - `docs/notes.md` —— 由 untracked 改為納入版控(需求來源 N1)
+  - `docs/notes.md` —— 由 untracked 改為納入版控(需求來源 N1),並新增 N8(見〈Plan Deviations〉第 4 點)
+  - `changes/*/PR_DRAFT.md` —— 兩個變更的 PR 內文草稿納入版控(理由見〈Remaining Work〉)
 - **Deleted**:無
 - 程式碼與文件合計 15 檔。`schema/extraction_output_schema.json` **未被修改**(D2 的重點)。
 
@@ -112,6 +113,12 @@ D4 高風險逐 Task 停止。
 4. **花費超出估計**:計畫估 T1 < 1 美分、T5 約 0.2 美分;實際累計約 90k tokens
    (T1 17.9k、失敗執行 34k、中止執行約 15–25k、成功執行 18.8k)。
 
+   **處置(owner 2026-08-12 裁定一併處理)**:已中止該次執行、job 標記 `failed` 並在
+   `error_message` 記明原因;根因記入 `docs/notes.md` 的 **N8**。根因不是一次判讀失誤,
+   而是介面形態——一個會花錢、耗時數分鐘的操作,用「同步等待、逾時就沒有回應」的方式暴露,
+   任何人(或 agent)在 504 之後都會傾向重試。N8 列了三個方向,並指出**後端併發防護**最有效,
+   因為它不依賴操作者判讀正確。本變更不做此修補(基礎設施/契約變更,不在範圍)。
+
 ## Breaking Changes and Compatibility
 
 - **內部介面破壞性變更**:`runner._extract_chunk` 由回傳 3-tuple 改為 `ExtractionAttempt`。
@@ -130,6 +137,10 @@ D4 高風險逐 Task 停止。
 - **`/admin/ingest/*` 的請求契約仍未進 `docs/api_contract.md`**。既有缺口,已在新增章節中標記,
   未順手補寫(不在範圍)。
 - **`GET /nodes/{id}` 404 回 `{"detail":...}` 而非專案錯誤契約**。既有問題,與本變更無關,未處理。
+- ~~**兩份 `PR_DRAFT.md` 未納入版控**~~ —— **已納入**。原本打算刪除(PR 內文已存在 GitHub),
+  但核對後發現 **PR #19 的內文只有 1922 字元、本機草稿有 5009**——owner 當時是自己撰寫 PR 內文,
+  草稿內容並未被保存到任何地方。刪除會造成實際遺失,故改為納管。
+  本變更的草稿已同步更新至目前狀態,並以 `gh pr edit` 更新 PR #20 內文,避免兩處分歧。
 - ~~**`docs/notes.md` 未納入版控**~~ —— **已納入**(owner 2026-08-12 裁定)。
   它是本變更的需求來源(N1),先前既未修、也未列入本節,是本報告的**揭露缺口**:
   獨立審查 grep 全部產出物後指出「只有 REVIEW_REPORT 提到它」。離開這台機器就無法重建原始請求,

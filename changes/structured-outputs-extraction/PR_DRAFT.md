@@ -35,6 +35,28 @@ strict 模式從源頭解決了問題，本次沒有任何元素需要被挽救�
 
 離線測試 **232 passed**（唯一失敗是跑真實抽取觸發的既有 volume flake，CI 從乾淨環境起跑不會出現）；`ruff check` / `ruff format --check` / `mypy` 全過。
 
+## 審查後的追加(2026-08-12)
+
+獨立審查(`changes/structured-outputs-extraction/REVIEW_REPORT.md`,原封不動提交)提出 H1 一項 High、
+三項 Medium、五項 Low。owner 裁定後的處置:
+
+- **H1 前端揭露已補上(commit `a6a9eb3`)**。原本的落差是:本變更把失敗模式從「大聲」(整塊失敗、
+  UI 紅字)改成「安靜」(逐元素丟棄、UI 完全無感),而唯一的人類介面對新欄位零渲染——
+  `grep -rn "dropped\|degraded" frontend/` 零命中。匯入頁上,被挽救的塊與乾淨的塊看起來一模一樣。
+  **揭露只到 API 層等於揭露給機器看。** 現在有丟棄統計磚(即使為 0 也顯示)、部分接受說明、
+  逐塊的 `kind / id / reason`,null id 顯示為「(無 id)」而非隱藏。
+- **M2 準確性缺陷已更正(commit `f9e1929`)**。送出的 schema 另外剝除了所有 `description`,
+  而程式碼註解宣稱理由是成本——但 T1 的四個探測變體**從未測過** `description`。
+  已改為明列三項偏離,第三項註明無實測支持。行為未改;是否恢復需一次付費抽取判斷。
+- **三項人類裁定已記錄(commit `0459592`)**:`docs/notes.md` 納入版控(它是需求來源 N1,
+  先前未追蹤且沒有任何產出物記錄這件事)、補上 revision 3 的批准欄位
+  (原本批准只以散文形式存在,批准欄位卻停在 revision 2)、追認 `backend/tests/unit/` 路徑偏離
+  (追認不改變當時未依 stop condition 停止的事實,該段保留)。
+- **其餘 M1 / M3 / L1–L4 / S1–S2 記入已知限制**,每項寫明實際代價,見 `CHANGE_REPORT.md`。
+
+CI 在分支上四次執行全綠(最新 `31580073357` 對應 HEAD)。**但 CI 對前端沒有證明力**:
+倉庫沒有前端測試設施,綠燈只代表沒弄壞 Python 那側;那段 UI 至今**沒有任何人眼看過真實渲染**。
+
 ## 需要 reviewer 知道的三件事
 
 **1. 我引入了一個缺陷，第一次真實抽取 4/4 全失敗。** strict 模式沒有「欄位不存在」，選用欄位回傳 `null`，而內部 schema 說那是 `object`。我把送出去的 schema 改成 nullable 卻沒處理回來的 null。修正是 `drop_strict_nulls()`。值得記的是**為什麼既有測試抓不到**:T2/T3 的測試全用手寫的乾淨 candidate，結構上不可能含 null——補的測試因此改照真實 API 回傳的形狀寫。
