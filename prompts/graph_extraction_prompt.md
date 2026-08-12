@@ -18,9 +18,9 @@ Ingestion pipeline 的 extraction step 呼叫 LLM 時使用的 prompt 模板。�
    TARGETS, HAS_EFFECT, ON_VARIABLE, INCREASES, DECREASES,
    REGULATES_SECRETION_OF, PARTICIPATES_IN, USES_EFFECT, CATALYZES,
    PREREQUISITE_OF, CAUSES, EVIDENCED_BY, COMMONLY_CONFUSED_WITH。
-3. 何時建立 RegulatoryEffect / Interaction 見下方規則 7、8,不要自行放寬。
-   FeedbackLoop 只在文本描述「某效果會回頭影響觸發它自己的變因」的閉環時才建立;
-   只有單向效果就建 RegulatoryEffect 即可。
+3. 何時建立 RegulatoryEffect / 分泌觸發 / Interaction 見下方規則 7、8、9,
+   不要自行放寬。FeedbackLoop 只在文本描述「某效果會回頭影響觸發它自己的變因」
+   的閉環時才建立;只有單向效果就建 RegulatoryEffect 即可。
 4. 每個節點與關係都必須帶 source_chunk_id,對應到輸入文字的 chunk id。
 5. 不確定的內容不要生成,寧缺勿濫。
 6. 輸出必須是單一 JSON 物件,不要輸出 JSON 以外的文字、不要加註解、
@@ -29,18 +29,27 @@ Ingestion pipeline 的 extraction step 呼叫 LLM 時使用的 prompt 模板。�
 
    {"nodes": [
       {"id": "hormone:insulin", "type": "Hormone", "label": "胰島素 / insulin",
-       "description": "一到兩句說明", "source_chunk_id": "<本次 chunk_id>"}
+       "description": "一到兩句說明", "source_chunk_id": "填入 user prompt 給的 chunk_id"},
+      {"id": "interaction:insulin_glucagon_blood_glucose", "type": "Interaction",
+       "label": "胰島素與升糖素的拮抗", "description": "一到兩句說明",
+       "properties": {"interaction_type": "antagonism"},
+       "source_chunk_id": "填入 user prompt 給的 chunk_id"}
     ],
     "edges": [
-      {"id": "e:<chunk_id>:1", "type": "HAS_EFFECT",
+      {"id": "e1", "type": "HAS_EFFECT",
        "source": "hormone:insulin", "target": "regulatory_effect:insulin_decreases_blood_glucose",
-       "source_chunk_id": "<本次 chunk_id>"}
+       "source_chunk_id": "填入 user prompt 給的 chunk_id"}
     ]}
 
-   關係型別放在 edge 的 "type" 欄位(不是 "relationship");除上列欄位外,
-   node 可選 "properties"、"possible_duplicate_of",edge 可選 "properties",
-   不要自行新增其他欄位。
-7. 關係有固定方向,不可自行調換。調控類一律走三段式,不可壓縮:
+   關係型別放在 edge 的 "type" 欄位(不是 "relationship")。edge 的 "id" 只要在
+   本次輸出內不重複即可,例如 e1、e2。上面每個 "填入…" 都是佔位說明,實際輸出
+   必須換成真值,不可原樣照抄。除上列欄位外,node 可選 "properties"、
+   "possible_duplicate_of",edge 可選 "properties",不要自行新增其他欄位。
+7. RegulatoryEffect 只在文本明確描述「某個調控者對某個生理變因造成什麼方向的
+   效果」時建立;文本只說某構造分泌某激素、或某變因觸發分泌,那是規則 8 的
+   分泌觸發,**不要**建 RegulatoryEffect。
+
+   要建的時候,關係有固定方向,不可自行調換,並一律走三段式,不可壓縮:
 
    Hormone ─HAS_EFFECT→ RegulatoryEffect ─ON_VARIABLE→ PhysiologicalVariable
                         RegulatoryEffect ─INCREASES|DECREASES→ PhysiologicalVariable
@@ -57,12 +66,31 @@ Ingestion pipeline 的 extraction step 呼叫 LLM 時使用的 prompt 模板。�
      ✗ Hormone ─DECREASES→ PhysiologicalVariable            (跳過 RegulatoryEffect)
      ✗ 只建立 RegulatoryEffect 而不建立造成它的 Hormone 節點
 
-8. Interaction 必須引用**至少兩個**既有的 RegulatoryEffect:
+8. 分泌觸發是**另一種**結構,沒有 RegulatoryEffect。文本描述「某變因變化時,
+   某構造分泌某激素」時,只出這兩條邊:
+
+   Structure ─SECRETES→ Hormone
+   PhysiologicalVariable ─REGULATES_SECRETION_OF→ Hormone
+     (properties: {"trigger_direction": "increase" 或 "decrease"})
+
+   正例(「當血糖濃度上升時,胰島 β 細胞會分泌胰島素」):
+     edges: structure:pancreatic_beta_cell ─SECRETES→ hormone:insulin
+            physiological_variable:blood_glucose ─REGULATES_SECRETION_OF→ hormone:insulin
+              {"trigger_direction": "increase"}
+
+   常見錯誤,不要這樣寫:
+     ✗ 把「血糖升高」寫成胰島素造成的效果(那是觸發條件,因果剛好相反)
+     ✗ 為分泌觸發硬造一個 RegulatoryEffect 三段式
+
+9. Interaction 必須引用**至少兩個**既有的 RegulatoryEffect,並帶 interaction_type:
    Interaction ─USES_EFFECT→ RegulatoryEffect (×2 以上)
    Interaction ─ON_VARIABLE→ PhysiologicalVariable
+   節點 properties 必須有 {"interaction_type": "antagonism"} (方向相反)
+   或 {"interaction_type": "synergism"} (方向相同、共同增強);缺這個屬性,
+   審閱者看不到這是拮抗還是協同。
    還沒有兩個對應的 RegulatoryEffect 之前,不要建立 Interaction。
 
-9. 節點 id 一律 <type_prefix>:<snake_case_name>,例如 hormone:insulin。
+10. 節點 id 一律 <type_prefix>:<snake_case_name>,例如 hormone:insulin。
 ```
 
 ## User Prompt 模板
