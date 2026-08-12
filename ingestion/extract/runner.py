@@ -24,7 +24,7 @@ import asyncio
 import uuid
 from dataclasses import asdict, dataclass, field
 
-from ingestion.extract import chunkers, llm_client
+from ingestion.extract import chunkers, llm_client, salvage
 from ingestion.extract.parse_document import ParsedDocument, parse_document
 from ingestion.pipeline import (
     build_extraction_prompt,
@@ -46,6 +46,10 @@ class ChunkReport:
     proposed_edge_ids: list[str] = field(default_factory=list)
     extraction_failed: bool = False
     extraction_error: str | None = None
+    # elements dropped by salvage: [{kind, id, reason}]. Disclosure is the whole point — a
+    # partially accepted chunk that does not say what it lost is silent data loss.
+    dropped: list[dict] = field(default_factory=list)
+    degraded: bool = False
     tokens: int = 0
     # populated in dry-run previews only
     user_prompt: str | None = None
@@ -106,22 +110,37 @@ def _fetch_existing_concepts(neo4j_driver, limit: int) -> str:
     return "\n".join(f"- {r['id']}: {r['label']}" for r in rows)
 
 
+@dataclass
+class ExtractionAttempt:
+    """Outcome of extracting one chunk, retries and salvage included."""
+
+    candidate: dict | None
+    tokens: int
+    error: str | None
+    dropped: list[dict] = field(default_factory=list)
+    degraded: bool = False
+
+
 async def _extract_chunk(
     *,
     extract_fn,
     system_prompt: str,
     user_prompt: str,
     retries: int,
-) -> tuple[dict | None, int, str | None]:
-    """Run extraction with schema validation and a bounded retry.
+) -> ExtractionAttempt:
+    """Run extraction with schema validation, a bounded retry, and per-element salvage.
 
-    Returns ``(candidate, tokens, error)`` where ``candidate`` is a schema-valid
-    dict, or ``(None, tokens, error)`` when every attempt failed. The final
-    error is surfaced in the per-chunk report so paid extraction failures are
-    diagnosable instead of being silently reduced to a counter.
+    ``candidate`` is a schema-valid dict, or ``None`` when nothing usable survived. The final
+    error is surfaced in the per-chunk report so paid extraction failures are diagnosable
+    instead of being silently reduced to a counter.
+
+    Salvage runs only after the retry budget is spent. Retrying first is worth the token: a
+    corrected full answer beats a pruned one, because the element salvage would drop is often the
+    one the chunk was really about.
     """
     tokens = 0
     last_error: str | None = None
+    last_raw = None
     attempt_prompt = user_prompt
     for attempt in range(retries + 1):
         try:
@@ -131,15 +150,16 @@ async def _extract_chunk(
                 extract_fn, system_prompt, attempt_prompt
             )
             tokens += call_tokens
+            last_raw = candidate
             validate_extraction.validate_extraction_output(candidate)
-            return candidate, tokens, None
+            return ExtractionAttempt(candidate, tokens, None)
         except llm_client.LLMNotConfigured:
             # A config error, not a per-chunk data problem: fail the whole job
             # fast rather than silently flagging every chunk as failed.
             raise
         except Exception as exc:
             # JSON decode error, schema violation, or transient API error: retry
-            # until the budget is exhausted, then flag the chunk (job continues).
+            # until the budget is exhausted, then salvage what is valid (job continues).
             last_error = f"{type(exc).__name__}: {exc}"
             if attempt < retries:
                 attempt_prompt = (
@@ -147,7 +167,13 @@ async def _extract_chunk(
                     "仍然只能輸出 schema 允許的 nodes 與 edges：\n" + last_error
                 )
             continue
-    return None, tokens, last_error
+
+    rescued = salvage.salvage(last_raw)
+    if rescued.candidate is None:
+        # Nothing usable: keep the pre-existing "chunk failed" behaviour rather than reporting an
+        # empty success. The per-element reasons still ride along for diagnosis.
+        return ExtractionAttempt(None, tokens, last_error, rescued.dropped)
+    return ExtractionAttempt(rescued.candidate, tokens, None, rescued.dropped, rescued.degraded)
 
 
 async def ingest_document(
@@ -226,6 +252,9 @@ async def ingest_document(
 
     total_tokens = 0
     failed_chunks = 0
+    dropped_nodes = 0
+    dropped_edges = 0
+    degraded_chunks = 0
     proposed_nodes = 0
     proposed_edges = 0
     proposed_groups = 0
@@ -241,19 +270,29 @@ async def ingest_document(
                 existing_concepts=existing_concepts,
                 chunk_text=content,
             )
-            candidate, tokens, extraction_error = await _extract_chunk(
+            attempt = await _extract_chunk(
                 extract_fn=extract_fn,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 retries=retries,
             )
-            total_tokens += tokens
+            candidate = attempt.candidate
+            total_tokens += attempt.tokens
 
-            chunk_report = ChunkReport(chunk_id=chunk_id, content=content, tokens=tokens)
+            chunk_report = ChunkReport(
+                chunk_id=chunk_id,
+                content=content,
+                tokens=attempt.tokens,
+                dropped=attempt.dropped,
+                degraded=attempt.degraded,
+            )
+            dropped_nodes += sum(1 for d in attempt.dropped if d["kind"] == "node")
+            dropped_edges += sum(1 for d in attempt.dropped if d["kind"] == "edge")
+            degraded_chunks += int(attempt.degraded)
             concept_ids: list[str] = []
             if candidate is None:
                 chunk_report.extraction_failed = True
-                chunk_report.extraction_error = extraction_error
+                chunk_report.extraction_error = attempt.error
                 failed_chunks += 1
             else:
                 (
@@ -310,6 +349,17 @@ async def ingest_document(
             "proposed_edges": proposed_edges,
             "proposed_groups": proposed_groups,
             "failed_chunks": failed_chunks,
+            # Salvage disclosure. `degraded_chunks` counts chunks that lost more than
+            # DEGRADED_DROP_RATIO of their elements: still staged, but worth a look before the
+            # reviewer spends time on them.
+            "dropped_nodes": dropped_nodes,
+            "dropped_edges": dropped_edges,
+            "degraded_chunks": degraded_chunks,
+            "dropped": [
+                {"chunk_id": chunk.chunk_id, **dropped}
+                for chunk in report.chunks
+                for dropped in chunk.dropped
+            ],
             "extraction_errors": [
                 {"chunk_id": chunk.chunk_id, "error": chunk.extraction_error}
                 for chunk in report.chunks
