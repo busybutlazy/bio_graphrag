@@ -1171,30 +1171,73 @@ function renderRunResult(host, rep) {
   const s = rep.stats || {};
   const tile = (k, v, cls) => E('div', { class: 'tile ' + (cls || '') },
     E('div', { class: 'k' }, k), E('div', { class: 'v' }, String(v)));
-  host.append(E('div', { class: 'tiles' },
+  // A chunk can now be partly accepted, so `失敗塊` alone under-reports what was lost: the
+  // elements dropped to save the rest are invisible in it. Disclosure that only reaches the API
+  // response is disclosure to a machine, so the counts and the reasons are shown here too.
+  const droppedNodes = s.dropped_nodes ?? 0;
+  const droppedEdges = s.dropped_edges ?? 0;
+  const dropped = droppedNodes + droppedEdges;
+  const degradedChunks = s.degraded_chunks ?? 0;
+
+  const tiles = E('div', { class: 'tiles' },
     tile('CHUNKS', s.chunks ?? 0),
     tile('候選節點', s.proposed_nodes ?? 0, 'pass'),
     tile('候選關係', s.proposed_edges ?? 0, 'pass'),
     tile('失敗塊', s.failed_chunks ?? 0, s.failed_chunks ? 'fail' : ''),
-    tile('TOKENS', s.tokens ?? 0)));
+    // shown even at zero: "nothing was lost" is itself the answer to the question this asks
+    tile('丟棄(節點/關係)', `${droppedNodes} / ${droppedEdges}`, dropped ? 'fail' : ''),
+    tile('TOKENS', s.tokens ?? 0));
+  if (degradedChunks) tiles.append(tile('降級塊', degradedChunks, 'fail'));
+  host.append(tiles);
 
   host.append(E('div', { class: 'notice ok' },
     `已將 ${s.proposed_nodes ?? 0} 個節點、${s.proposed_edges ?? 0} 個關係寫入審訂佇列(proposed)。` +
     '前往「審訂」分頁批准後才會進入 approved 知識圖譜。'));
 
+  if (dropped) {
+    host.append(E('div', { class: 'notice' },
+      `有 ${dropped} 個元素格式不合格而被丟棄,該塊其餘內容照常入列——` +
+      '上方的候選數已扣除它們。逐筆原因列在下方對應的塊裡;' +
+      (degradedChunks
+        ? `其中 ${degradedChunks} 個塊丟失過半(標為「降級」),建議先確認抽取品質再審。`
+        : '修正後重新匯入會把它們補進同一個審閱群組。')));
+  }
+
   rep.chunks.forEach((ch, i) => {
     const ids = E('div', { class: 'pid-chips' });
     (ch.proposed_node_ids || []).forEach((id) => ids.append(E('span', { class: 'pid' }, shortId(id))));
     (ch.proposed_edge_ids || []).forEach((id) => ids.append(E('span', { class: 'pid edge' }, shortId(id))));
-    host.append(E('div', { class: 'chunk-card' },
+
+    // A salvaged chunk must never look like a clean one. Without this the card shows the same
+    // chips either way, and the elements that were thrown away leave no trace on screen.
+    const lost = ch.dropped || [];
+    const meta = ch.extraction_failed
+      ? '抽取失敗'
+      : `${ch.tokens} tok${lost.length ? ` · 丟棄 ${lost.length}` : ''}${ch.degraded ? ' · 降級' : ''}`;
+
+    const card = E('div', { class: 'chunk-card' },
       E('div', { class: 'chunk-head' },
         E('span', { class: 'cid' }, String(i + 1).padStart(2, '0')),
         E('span', { class: 'mono', style: 'font-size:10px;color:var(--muted)' }, ch.chunk_id),
-        E('span', { class: 'meta' }, ch.extraction_failed ? '抽取失敗' : `${ch.tokens} tok`)),
+        E('span', { class: 'meta' }, meta)),
       E('div', { class: 'chunk-text' }, ch.content),
       ch.extraction_failed
         ? E('div', { class: 'chunk-fail' }, '⚠ 此塊抽取失敗(已跳過,不影響其他塊)')
-        : ids));
+        : ids);
+
+    if (lost.length) {
+      const detail = E('div', { class: 'chunk-fail' });
+      detail.append(E('div', {},
+        ch.degraded
+          ? `⚠ 丟棄 ${lost.length} 個元素(超過半數,此塊標為降級):`
+          : `⚠ 丟棄 ${lost.length} 個元素,其餘已入列:`));
+      // id may legitimately be null — that is the case where the element had no id to begin with,
+      // which is exactly why it was dropped, so it is shown rather than hidden
+      lost.forEach((d) => detail.append(E('div', { class: 'mono', style: 'padding-left:12px' },
+        `${d.kind} ${d.id ?? '(無 id)'} — ${d.reason}`)));
+      card.append(detail);
+    }
+    host.append(card);
   });
 }
 

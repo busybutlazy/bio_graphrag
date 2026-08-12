@@ -54,16 +54,18 @@ async def test_extract_retry_includes_validation_error():
         prompts.append(user_prompt)
         return {"nodes": [{"type": "Hormone"}], "edges": []}, 5
 
-    candidate, tokens, error = await runner._extract_chunk(
+    attempt = await runner._extract_chunk(
         extract_fn=invalid_extract,
         system_prompt="system",
         user_prompt="original",
         retries=1,
     )
 
-    assert candidate is None
-    assert tokens == 10
-    assert error and "ValidationError" in error
+    # nothing valid survives salvage either, so this stays a failed chunk
+    assert attempt.candidate is None
+    assert attempt.tokens == 10
+    assert attempt.error and "ValidationError" in attempt.error
+    assert [d["kind"] for d in attempt.dropped] == ["node"]
     assert len(prompts) == 2
     assert prompts[0] == "original"
     assert "上一次輸出未通過驗證" in prompts[1]
@@ -442,3 +444,64 @@ async def _cleanup(pg_conn, qdrant_client):
         "DELETE FROM curation_items WHERE starts_with(group_id, 'group:llm:' || $1)", DOC_ID
     )
     load_qdrant.delete_chunks_for_doc(qdrant_client, DOC_ID)
+
+
+def _statement_missing_direction(chunk_id: str) -> dict:
+    """The observed failure: the triple arrives with its direction edge malformed (no ``id``)."""
+    candidate = _statement_candidate(chunk_id)
+    candidate["edges"] = [e for e in candidate["edges"] if not e["id"].endswith(":decreases")] + [
+        {
+            "type": "DECREASES",
+            "source": "regulatory_effect:test_stmt_lower",
+            "target": "physiological_variable:test_stmt_bg",
+            "source_chunk_id": chunk_id,
+        }
+    ]
+    return candidate
+
+
+@pytest.mark.asyncio
+async def test_a_re_run_supplies_what_salvage_had_to_drop(tmp_path, pg_conn, qdrant_client):
+    """Salvage must not be a one-way loss: fixing the extraction and re-running has to complete
+    the statement in place.
+
+    Group ids are derived from chunk + anchor, so the repaired edge joins the group the first run
+    already created rather than opening a second one. Without that, a dropped element would be
+    unrecoverable short of purging the queue by hand.
+    """
+    from app.curation import service
+
+    path = _write_chapter(tmp_path)
+    prefix = f"group:llm:{DOC_ID}"
+    try:
+        broken = await runner.ingest_document(
+            source_path=path,
+            strategy="fixed",
+            chunk_params={"chunk_size": 10_000, "chunk_overlap": 0},
+            extract_fn=_one_chunk_extractor(_statement_missing_direction),
+            pg_conn=pg_conn,
+            qdrant=qdrant_client,
+            neo4j_driver=None,
+        )
+        # the chunk survived: only the malformed edge was dropped, and it said so
+        assert broken.stats["failed_chunks"] == 0
+        assert broken.stats["dropped_edges"] == 1
+        assert broken.stats["degraded_chunks"] == 0
+        assert broken.stats["dropped"][0]["kind"] == "edge"
+
+        groups = {g["group_id"]: g for g in await service.list_groups()}
+        anchor = next(g for k, g in groups.items() if k.startswith(prefix) and k.endswith("lower"))
+        assert anchor["schema_gate"]["result"] == "fail_pattern", (
+            "少了方向邊的陳述必須被 gate 擋下,而不是悄悄通過"
+        )
+
+        # re-run with the corrected extraction
+        repaired = await _ingest(path, pg_conn, qdrant_client)
+        assert repaired.stats["dropped_edges"] == 0
+
+        groups = {g["group_id"]: g for g in await service.list_groups()}
+        same_anchor = groups[anchor["group_id"]]
+        assert any(e["type"] == "DECREASES" for e in same_anchor["proposal"]["proposed_edges"])
+        assert same_anchor["schema_gate"]["result"] == "pass"
+    finally:
+        await _cleanup(pg_conn, qdrant_client)
