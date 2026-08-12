@@ -253,6 +253,43 @@ class DeleteEdgeRequest(BaseModel):
 
 專家 lens 的 **P3(含機制的調控效果)在抽取路徑不會被觸發**:機制(`CAUSES`)與調控效果依設計分屬不同的審閱單位。P3 仍適用於手工提案。
 
+### `POST /admin/ingest/run` —— 部分接受與丟棄揭露
+
+> 本節只記載 `changes/structured-outputs-extraction` 帶來的回應欄位與行為改變。
+> ingest 三個端點(`options` / `preview` / `run`)的請求契約與雙重 gate(`X-API-Key` + `X-Ingest-Owner-Token`)
+> 目前仍只寫在 `CLAUDE.md` 與程式碼中,尚未納入本文件——既有缺口,不在該變更範圍內。
+
+**行為改變:一個 chunk 的抽取結果從「全有全無」改為「部分接受」。** 過去只要有一個元素不符
+`extraction_output_schema.json`,整個 chunk 連同其中完全正確的陳述一起被丟棄。現在模型輸出先受
+Structured Outputs(`json_schema` + `strict`)約束;若驗證仍失敗,重試用盡後**逐元素**挑掉不合格者,
+其餘照常進入審閱佇列。**挽救只丟棄、不修補**:系統不會替模型補上缺少的 `id` 或猜測關係型別。
+
+存活的元素**不因此免除任何檢查**——照樣經過 Schema gate 與專家審閱。少了方向邊的三段式仍會被判
+`fail_pattern`,而不是被當成完整陳述放行。
+
+`stats` 因此新增:
+
+| 欄位 | 型別 | 語意 |
+|---|---|---|
+| `dropped_nodes` | int | 被丟棄的節點數 |
+| `dropped_edges` | int | 被丟棄的關係數(含連帶丟棄) |
+| `degraded_chunks` | int | 丟棄比例超過一半、仍照常進佇列的 chunk 數 |
+| `dropped` | array | 逐項清單:`{chunk_id, kind: "node"\|"edge", id, reason}`;`id` 可能為 `null`(該元素連 id 都沒有) |
+
+`chunks[]` 每一項另有 `dropped`(同上,不含 `chunk_id`)與 `degraded`(bool)。
+
+三點語意需要說清楚:
+
+1. **連帶丟棄**:端點指向「本次被提案、但已被丟棄」的節點時,該邊一併丟棄——否則會產生
+   `approve_group` 本來就會拒絕的懸空邊,群組將無法核准。端點若**從未被提案**則不受影響:
+   抽取被要求引用既有已核准概念而非重新提案,那是正常情形。
+2. **`degraded` 只揭露、不阻擋**。阻擋等於退回「整塊丟掉」的舊行為;不揭露則模型系統性劣化時
+   job 仍回報 success 而無人察覺。
+3. **全部元素都不合格時,該 chunk 仍計入 `failed_chunks`**,不會回報成空的成功。
+
+丟棄不是永久損失:`group_id` 由 chunk 與收斂節點推導,修正抽取後重跑會把先前丟棄的元素**補進同一組**,
+該組的 Schema gate 結果隨之更新。
+
 ### `POST /admin/review/groups/{group_id}/approve`
 
 三個群組端點(`approve` / `reject` / `gap`)的 `reviewer` 上限 100 字元、`reason` 上限 2000 字元(超過回 `422`);兩者都會原樣寫入 `graph_change_logs`,所以與其他請求欄位一樣需要邊界。
