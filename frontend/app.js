@@ -572,9 +572,29 @@ async function renderReview(host) {
   catch (err) { host.append(E('div', { class: 'notice err', style: 'margin:24px 48px' }, err.message)); return; }
   if (!groups.length) { host.append(E('div', { class: 'muted', style: 'margin:24px 48px' }, '目前沒有待審的提案群組。')); return; }
 
+  // Label index for the concept maps. The queue is only half of it: an extraction reuses concepts
+  // that are already curated instead of re-proposing them, so a statement's edges routinely point
+  // at approved nodes that appear in no group. Those used to render as an unnamed 「（相關概念）」
+  // blob — the expert was shown "insulin ←secretes— (something)" and asked to approve it, when the
+  // graph knew perfectly well it was the pancreas. So resolve the strangers against the graph.
   const globalNodes = {};
   groups.forEach((g) => (g.proposal.proposed_nodes || []).forEach((n) => {
     globalNodes[n.id] = { id: n.id, label: n.label, type: n.type };
+  }));
+
+  const strangers = new Set();
+  groups.forEach((g) => (g.proposal.proposed_edges || []).forEach((e) => {
+    [e.source, e.target].forEach((id) => { if (id && !globalNodes[id]) strangers.add(id); });
+  }));
+  // One request each: a queue references a handful of curated concepts, and /concept-map would
+  // pull whole neighbourhoods and truncate at 30 nodes, which could drop the very seed we asked
+  // about. A 404 is meaningful (the edge points at nothing in the approved graph) — leave it
+  // unresolved so the map can say so.
+  await Promise.all([...strangers].map(async (id) => {
+    try {
+      const d = await api.get('/nodes/' + encodeURIComponent(id));
+      globalNodes[id] = { id: d.id, label: d.label, type: d.type, resolved: true };
+    } catch (_) { /* stays unresolved on purpose */ }
   }));
 
   // Result banner lives OUTSIDE the repainted list/panel, so a decision's outcome
@@ -678,7 +698,10 @@ async function renderReview(host) {
     const used = {};
     (proposal.proposed_nodes || []).forEach((n) => { used[n.id] = { id: n.id, label: n.label, type: n.type }; });
     (proposal.proposed_edges || []).forEach((e) => [e.source, e.target].forEach((id) => {
-      if (!used[id]) used[id] = globalNodes[id] || { id, label: '（相關概念）', type: 'Concept' };
+      // Unresolvable means the edge points at something neither queued nor curated. Show the raw
+      // id rather than a soothing 「（相關概念）」: a dangling endpoint is a defect the reviewer
+      // should see and turn away, not a detail to smooth over.
+      if (!used[id]) used[id] = globalNodes[id] || { id, label: `${id}(查無此節點)`, type: 'Concept' };
     }));
     const nodes = Object.values(used);
     const edges = (proposal.proposed_edges || []).map((e) => ({ source: e.source, target: e.target, relation: phraseRelation(e.type) }));
