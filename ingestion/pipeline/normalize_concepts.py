@@ -39,14 +39,18 @@ VALID_RELATIONSHIP_TYPES = {
 REQUIRED_NODE_FIELDS = {"id", "type", "label", "status", "description"}
 REQUIRED_EDGE_FIELDS = {"id", "type", "source", "target", "status"}
 
-# Node types that anchor a reviewable *statement*: a RegulatoryEffect or an Interaction is the hub
-# a whole biological claim hangs off. Used by ``group_statements`` to split one extraction output
-# into one review group per statement, and mirrored by the Schema gate, which special-cases exactly
-# these two types when checking pattern completeness
+# Node types that anchor a reviewable *statement*: a RegulatoryEffect, an Interaction or a
+# FeedbackLoop is the hub a whole biological claim hangs off. Used by ``group_statements`` to split
+# one extraction output into one review group per statement, and mirrored by the Schema gate, which
+# special-cases exactly these types when checking pattern completeness
 # (``backend/app/graph/engineer_gate.py::_pattern_check``). A drift guard in
 # ``backend/tests/unit/test_engineer_gate.py`` pins the two sets in agreement — backend may import
 # ingestion, never the reverse, so this constant lives here.
-PATTERN_ANCHOR_TYPES = {"RegulatoryEffect", "Interaction"}
+#
+# FeedbackLoop was added late: while it was absent, a proposed loop was folded into whichever
+# statement group happened to own its neighbours, so the expert read a sentence about an insulin
+# effect while a whole loop rode along unexamined into the approved graph.
+PATTERN_ANCHOR_TYPES = {"RegulatoryEffect", "Interaction", "FeedbackLoop"}
 
 
 class ValidationError(ValueError):

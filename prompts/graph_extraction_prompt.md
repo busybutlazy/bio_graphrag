@@ -18,9 +18,8 @@ Ingestion pipeline 的 extraction step 呼叫 LLM 時使用的 prompt 模板。�
    TARGETS, HAS_EFFECT, ON_VARIABLE, INCREASES, DECREASES,
    REGULATES_SECRETION_OF, PARTICIPATES_IN, USES_EFFECT, CATALYZES,
    PREREQUISITE_OF, CAUSES, EVIDENCED_BY, COMMONLY_CONFUSED_WITH。
-3. 何時建立 RegulatoryEffect / 分泌觸發 / Interaction 見下方規則 7、8、9,
-   不要自行放寬。FeedbackLoop 只在文本描述「某效果會回頭影響觸發它自己的變因」
-   的閉環時才建立;只有單向效果就建 RegulatoryEffect 即可。
+3. 何時建立 RegulatoryEffect / 分泌觸發 / Interaction / FeedbackLoop
+   見下方規則 7、8、9、10,不要自行放寬。
 4. 每個節點與關係都必須帶 source_chunk_id,對應到輸入文字的 chunk id。
 5. 不確定的內容不要生成,寧缺勿濫。
 6. 輸出必須是單一 JSON 物件,不要輸出 JSON 以外的文字、不要加註解、
@@ -97,7 +96,27 @@ Ingestion pipeline 的 extraction step 呼叫 LLM 時使用的 prompt 模板。�
    審閱者看不到這是拮抗還是協同。
    還沒有兩個對應的 RegulatoryEffect 之前,不要建立 Interaction。
 
-10. 節點 id 一律 <type_prefix>:<snake_case_name>,例如 hormone:insulin。
+10. FeedbackLoop 只在文本描述閉環時建立——某個效果最終會回頭影響觸發它自己的
+    變因。只描述單向效果、沒有「回頭影響」,就只建 RegulatoryEffect,不要建迴路。
+
+    要建的時候:
+      FeedbackLoop ─USES_EFFECT→ RegulatoryEffect (一條以上,引用既有效果)
+      節點 properties 必須有兩個欄位:
+        "feedback_type": "negative" (效果抵銷原刺激) 或 "positive" (效果放大原刺激)
+        "regulated_variable": 被調控的變因名,例如 "blood_glucose"
+
+    正例(「胰島素與升糖素共同把血糖維持在穩定範圍,是負回饋調節的典型例子」):
+      node: feedback:blood_glucose_negative_feedback (FeedbackLoop,
+            properties: {"feedback_type": "negative", "regulated_variable": "blood_glucose"})
+      edges: feedback:blood_glucose_negative_feedback ─USES_EFFECT→ regulatory_effect:insulin_decreases_blood_glucose
+             feedback:blood_glucose_negative_feedback ─USES_EFFECT→ regulatory_effect:glucagon_increases_blood_glucose
+
+    常見錯誤,不要這樣寫:
+      ✗ 看到「維持穩定」就建迴路(那是結果,不是原文描述的閉環結構)
+      ✗ 缺 feedback_type 或 regulated_variable(審閱者看不出這是負回饋還是正回饋)
+      ✗ 把 positive 當成「有益」——正回饋指放大原刺激,與好壞無關
+
+11. 節點 id 一律 <type_prefix>:<snake_case_name>,例如 hormone:insulin。
 ```
 
 ## User Prompt 模板

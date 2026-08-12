@@ -32,6 +32,7 @@ def _pattern_check(nodes: list[dict], edges: list[dict]) -> str | None:
     pattern(如 Case 5)不算 pattern 失敗 —— 那由 back_translation 判為 gap。
     """
     types = {n["id"]: n["type"] for n in nodes}
+    props = {n["id"]: (n.get("properties") or {}) for n in nodes}
 
     def out(nid: str, rel: str) -> list[dict]:
         return [e for e in edges if e.get("source") == nid and e.get("type") == rel]
@@ -56,6 +57,20 @@ def _pattern_check(nodes: list[dict], edges: list[dict]) -> str | None:
                 return f"Interaction {nid} 需至少兩條 USES_EFFECT"
             if not out(nid, "ON_VARIABLE"):
                 return f"Interaction {nid} 缺 ON_VARIABLE"
+            # 沒有 interaction_type,back_translation 的 P4 分支就進不去,專家讀到的會是
+            # 「不屬於任何已知的調控模式」這句保底文字 —— gate 亮綠燈、lens 卻描述不出
+            # 這是拮抗還是協同。屬性缺失在這裡就是形式不完整。
+            if props[nid].get("interaction_type") not in ("antagonism", "synergism"):
+                return f"Interaction {nid} 缺 interaction_type(antagonism/synergism)"
+        if t == "FeedbackLoop":
+            # 只要求一條 USES_EFFECT,且變因讀節點屬性 —— 與 Interaction 不同,理由見
+            # schema/rule_cards/feedback_loop.md(既有四個已核准迴路有三個只引用單一效果)。
+            if not out(nid, "USES_EFFECT"):
+                return f"FeedbackLoop {nid} 缺 USES_EFFECT 出邊"
+            if props[nid].get("feedback_type") not in ("negative", "positive"):
+                return f"FeedbackLoop {nid} 缺 feedback_type(negative/positive)"
+            if not props[nid].get("regulated_variable"):
+                return f"FeedbackLoop {nid} 缺 regulated_variable"
     return None
 
 

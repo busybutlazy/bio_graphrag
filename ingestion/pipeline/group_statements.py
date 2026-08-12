@@ -29,9 +29,15 @@ from ingestion.pipeline.normalize_concepts import PATTERN_ANCHOR_TYPES
 
 IN, OUT = "in", "out"
 
+# "how many" sentinel: at least one, and claim every edge of that role rather than a fixed count.
+# Use it wherever the renderer reads *all* edges of a role — P6 names every effect the loop cites,
+# so leaving the surplus behind would split one loop across two groups and let the residual bag
+# render a pattern sentence of its own.
+ALL = -1
+
 # (focus node type, [(direction relative to focus, relation types, how many)])
-# Order mirrors back_translation's return order (P2 → P4 → P1/P3): the renderer answers with the
-# first shape it finds, so the splitter must claim them in the same priority or the two disagree.
+# Order mirrors back_translation's return order (P2 → P4 → P6 → P1/P3): the renderer answers with
+# the first shape it finds, so the splitter must claim them in the same priority or the two disagree.
 _TEMPLATES: tuple[tuple[str, str, tuple[tuple[str, frozenset[str], int], ...]], ...] = (
     (
         "P2",
@@ -48,6 +54,14 @@ _TEMPLATES: tuple[tuple[str, str, tuple[tuple[str, frozenset[str], int], ...]], 
             (OUT, frozenset({"USES_EFFECT"}), 2),
             (OUT, frozenset({"ON_VARIABLE"}), 1),
         ),
+    ),
+    (
+        "P6",
+        "FeedbackLoop",
+        # One USES_EFFECT is enough on purpose: three of the four curated loops reference a single
+        # effect. See schema/rule_cards/feedback_loop.md for why this differs from P4. ALL, not 1:
+        # the loop's sentence names every effect it cites.
+        ((OUT, frozenset({"USES_EFFECT"}), ALL),),
     ),
     (
         "P1",
@@ -103,14 +117,16 @@ def _match_template(
             (e for e in available if e.get(end) == focus_id and e.get("type") in relations),
             key=lambda e: str(e["id"]),
         )
-        if len(found) < needed:
+        if len(found) < (1 if needed == ALL else needed):
             return None
         # Exactly what the renderer will read, never more. The renderer describes `edges[0]` of each
         # role, so sweeping surplus edges of the same role into the group would put a second claim
         # (a second hormone acting on the same effect) beside a sentence that only mentions the
         # first — the reviewer would approve something the lens never showed them. The surplus falls
         # through to the residual group, where a plain summary names it honestly.
-        picked.extend(found[:needed])
+        # ALL inverts that for roles the renderer reads in full: there the surplus *is* part of the
+        # sentence, so leaving it behind would under-describe the statement instead of over-describing.
+        picked.extend(found if needed == ALL else found[:needed])
     # dedupe while keeping order: one edge can satisfy two requirements only if relations overlap
     seen: set[str] = set()
     deduped: list[dict] = []

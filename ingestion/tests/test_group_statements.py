@@ -394,3 +394,35 @@ def test_anchor_to_anchor_edge_lands_where_the_gate_reads_it():
 
     assert [e["id"] for e in groups["regulatory_effect:downstream"]["edges"]] == ["e:chain"]
     assert groups["regulatory_effect:upstream"]["edges"] == []
+
+
+def test_a_feedback_loop_claims_every_effect_it_cites():
+    """The loop's sentence names every effect it references, so its template claims them all.
+
+    Claiming a fixed one (which is what the other templates do, because their renderer rules read a
+    fixed number of edges) split a two-effect loop across two groups: the anchor group named one
+    hormone and the leftover USES_EFFECT landed in the residual bag, which then rendered a second
+    loop sentence of its own. The reviewer would have seen the same loop twice, each time missing
+    half of what it claims.
+    """
+    candidate = {
+        "nodes": [
+            _n("feedback:bg_negative", "FeedbackLoop", "血糖負回饋"),
+            _n("regulatory_effect:lower_bg", "RegulatoryEffect", "降血糖"),
+            _n("regulatory_effect:raise_bg", "RegulatoryEffect", "升血糖"),
+        ],
+        "edges": [
+            _e("e:u1", "USES_EFFECT", "feedback:bg_negative", "regulatory_effect:lower_bg"),
+            _e("e:u2", "USES_EFFECT", "feedback:bg_negative", "regulatory_effect:raise_bg"),
+        ],
+    }
+    groups = {
+        g["group_id"].replace(f"group:llm:{CHUNK}:", ""): g
+        for g in split_into_statements(candidate, CHUNK)
+    }
+
+    assert "residual" not in groups, "a leftover USES_EFFECT would render as a second loop"
+    assert sorted(e["id"] for e in groups["feedback:bg_negative"]["edges"]) == ["e:u1", "e:u2"]
+    # the cited effects stay their own statements — referenced, never absorbed
+    assert [n["id"] for n in groups["feedback:bg_negative"]["nodes"]] == ["feedback:bg_negative"]
+    assert groups["regulatory_effect:lower_bg"]["edges"] == []
