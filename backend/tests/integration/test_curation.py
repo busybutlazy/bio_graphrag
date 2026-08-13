@@ -147,27 +147,33 @@ def test_the_single_item_write_path_is_gone(client):
     Schema gate, no back-translation, no deprecated-resurrection or dangling-edge guard. Anyone
     re-adding these routes for convenience has to make this test fail first.
 
-    This asserts on the **route table**, not on a status code. The first version of this test
-    checked `status_code in (404, 405)`, which proved nothing for two of the three paths: the
-    removed `approve_item`/`reject_item` raised 404 for an unknown item_id, so the assertion held
-    just as well in a world where the routes were back (review finding M1). A test that passes
-    whether or not the defect is present is worse than no test — it reports a guard that is not
-    there, which for a project whose subject *is* governance is exactly the wrong lie to tell.
+    This asserts on the **route table**, not on a status code. The first version checked
+    `status_code in (404, 405)`, which proved nothing for two of the three paths: the removed
+    `approve_item`/`reject_item` raised 404 for an unknown item_id, so the assertion held just as
+    well in a world where the routes were back (review finding M1). A test that passes whether or
+    not the defect is present is worse than no test — it reports a guard that is not there, which
+    for a project whose subject *is* governance is exactly the wrong lie to tell.
+
+    The second version listed exact path strings including `{item_id}`, which left the same
+    weakness one level down: re-adding the route as `{id}` would have slipped through (L-A). So
+    the assertion is a **prefix sweep** — no POST under `/admin/curation/items` at all, whatever
+    the handler decides to call its parameter.
     """
     registered = {
         (route.path, method) for route in app.routes for method in getattr(route, "methods", set())
     }
-    for path in (
-        "/admin/curation/items",
-        "/admin/curation/items/{item_id}/approve",
-        "/admin/curation/items/{item_id}/reject",
-    ):
-        assert (path, "POST") not in registered, (
-            f"POST {path} 又被註冊回來了 → 單項寫入路徑復活,提案可繞過兩道 gate"
-        )
 
-    # the read-only listing survives on purpose: it writes nothing, and it is the only way to
-    # see legacy rows that predate grouping
+    offenders = {
+        (path, method)
+        for path, method in registered
+        if method == "POST" and path.startswith("/admin/curation/items")
+    }
+    assert not offenders, f"單項寫入路徑復活:{offenders} → 提案可繞過兩道 gate"
+
+    # Positive control. Without this the sweep above could pass for the wrong reason — a typo in
+    # the prefix, or a route table shaped differently than assumed — and report a guard that is
+    # not guarding. The read-only listing also survives on purpose: it writes nothing, and it is
+    # the only way to see legacy rows that predate grouping.
     assert ("/admin/curation/items", "GET") in registered
     assert client.get("/admin/curation/items").status_code == 200
 

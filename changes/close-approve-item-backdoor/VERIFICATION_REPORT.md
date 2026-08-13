@@ -1,7 +1,8 @@
 # Verification Report: close-approve-item-backdoor
 
-- **Plan revision**: 1(Approved / jett / 2026-08-13,medium / `supervised-auto`)
-- **分支**:`feat/close-approve-item-backdoor`,自 `main` @ `8112fda`。**未 commit、未 push。**
+- **Plan revision**: **2**(Approved / jett / 2026-08-13,medium / `supervised-auto`)
+- **分支**:`feat/close-approve-item-backdoor`,自 `main` @ `8112fda`。
+  **已 commit `99e34d5`(rev 2 授權),未 push。**
 - **驗證模式**:evidence-only —— 進入本階段後未修改任何實作。
 - **總結**:**PASS**。9 條驗收條件全部有證據,測試數與預測值**精確吻合**,無迴歸。
 
@@ -11,9 +12,9 @@
 
 | AC | 內容 | 實作 | 證據 | 結果 |
 |---|---|---|---|---|
-| AC1 | `.../{id}/approve` 不存在;`approve_item` 無程式碼參照 | 移除路由 + service 函式 | HTTP **404**(§3);`grep` 僅命中說明性註解 | ✅ |
-| AC2 | `POST /admin/curation/items` 不存在 | 同上 | HTTP **405**(該路徑仍有 `GET`,故非 404) | ✅ |
-| AC3 | `.../{id}/reject` 不存在 | 同上 | HTTP **404** | ✅ |
+| AC1 | `.../{id}/approve` 不存在;`approve_item` 無程式碼參照 | 移除路由 + service 函式 | **路由表對照(§5 #11)**——`/admin/curation/items` 下無任何 POST;`grep` 僅命中說明性註解。**(原本引用的 HTTP 404 不具鑑別力,見 §5)** | ✅ |
+| AC2 | `POST /admin/curation/items` 不存在 | 同上 | 路由表對照 + HTTP **405**(該路徑仍有 `GET`,故非 404;405 只可能來自路徑僅註冊 GET,是三者中唯一有鑑別力的狀態碼) | ✅ |
+| AC3 | `.../{id}/reject` 不存在 | 同上 | **路由表對照(§5 #11)**;原本引用的 HTTP 404 同樣不具鑑別力 | ✅ |
 | AC4 | `GET /admin/curation/items` 仍可用 | 未動 | HTTP **200** | ✅ |
 | AC5 | 群組路徑不受影響,測試**一行未改** | 未動 | `test_review_groups.py` + `test_curation_groups.py` → **36 passed** | ✅ |
 | AC6 | 「提案不直接進圖譜」的不變式仍有測試守著 | 改以群組端點表達 | `test_proposed_statement_reaches_the_graph_only_after_approval` | ✅ |
@@ -100,4 +101,4 @@ GET  /admin/curation/items            -> 200
 一項對自己不利的事實留在這裡:**第一輪驗證對 AC8 打了勾,而它當時不成立**。
 事後補做不改變「當時的驗證掃描面不完整」這件事。
 
-**未執行的事項**:commit、push、複審、人類驗收。
+**未執行的事項**:push、人類驗收。(commit 已於 `99e34d5` 完成;複審已進行三輪。)

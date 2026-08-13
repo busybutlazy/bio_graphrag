@@ -114,7 +114,9 @@ curl -X POST http://localhost:8080/check-answer -H "Content-Type: application/js
 Retrieval only ever reads `status = 'approved'` nodes/edges. Everything else is a *proposal*, and the unit of proposal is a **statement** — the nodes and edges that together say one biological thing — never a loose element. A proposal passes two gates before it reaches the graph: a Schema gate that checks form, then a human expert who reads it back in plain language and decides on the biology.
 
 ```bash
-# propose one statement (nodes + edges sharing a group_id) → the review queue
+# propose one statement (nodes + edges sharing a group_id) → the review queue.
+# Minimal example; a real statement is usually a triple — e.g. Hormone -HAS_EFFECT->
+# RegulatoryEffect -ON_VARIABLE-> PhysiologicalVariable — proposed as one group.
 curl -X POST http://localhost:8080/admin/curation/groups \
   -H "Content-Type: application/json" \
   -d '{"proposed_nodes":[{"id":"hormone:example","type":"Hormone","label":"Example","description":"..."}],"proposed_edges":[],"reason":"why"}'

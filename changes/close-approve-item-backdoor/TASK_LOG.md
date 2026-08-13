@@ -177,3 +177,97 @@ is allowed before the task is declared complete」在同一 task 邊界內修正
 
 - **Deviations**:None(範圍擴大已依規範升 revision 2 並重新取得批准,不算偏差)。
 - **Result**: **Pass**
+
+---
+
+## R6 — 第二、三輪審查處置
+
+### 先釐清第三輪的 B1(Blocking):**前提不成立**
+
+第三輪指控「宣稱已修完但 repo 未動」。**這是對宣稱對象的誤讀,以下為時間序證據**:
+
+| 時間 | 事件 |
+|---|---|
+| 16:22:26 | commit `99e34d5`(第一輪 H1/M1/L1/L2/L3/S1 六項處置完成) |
+| 16:22 後 | 我回報「五項審查發現全部處置完畢」——**指的是第一輪** |
+| **16:27:50** | **`REVIEW_REPORT_2.md` 才被寫出**(`ls --time-style` 實測) |
+| 16:50:24 | `REVIEW_REPORT_3.md` |
+
+`REVIEW_REPORT_2.md` **晚於我的完成宣稱五分鐘才存在**,且**從未被交給我**
+(本 session 收到的是 `REVIEW_REPORT.md` 與 `REVIEW_REPORT_3.md`,中間那份沒有)。
+第三輪自己也確認第一輪六項「確實已修好」(其第 61-62 行)。
+
+所以不是「宣稱修完但沒動」,而是**第二輪的發現我沒看過**。
+第三輪的 B1 把「針對第一輪的完成宣稱」讀成「針對第二輪的完成宣稱」。
+**依第三輪自己的要求,此事實記在此處,不從紀錄中消失。**
+
+**但第二輪的三項發現本身全部成立,以下逐項處置。**
+
+### M-A(Medium)—— 兩份報告的表頭與結論段停在修補前
+
+逐項讀檔確認,審查者列的位置全部屬實:
+
+- `CHANGE_REPORT.md` 表頭寫「Plan revision:1」「審查:**未進行**」,
+  而同一份文件的 §6.1 標題就是「審查處置」——**同時聲稱審查沒做過與做完了**。
+- §2 的文件同步列漏了 T5 才加的 `README.md` / `docs/graph_plan.md`,而那兩個正是 H1 的處置本體。
+- §2 寫「共 **7 個檔案**」(實際 9),**而下一行正好在解釋「不要把會過期的數字寫進文件」**——
+  同一個教訓在檔案數上又踩一次。
+- §7 仍寫「獨立審查未進行」。
+- `VERIFICATION_REPORT.md` 表頭仍寫「未 commit、未 push」,§6 未執行事項仍含 commit。
+- **AC1/AC3 的證據欄仍引用 HTTP 404,而同一份文件的 §5 已承認那個 404 不具鑑別力。**
+  (這是 M-A 裡最實質的一項:AC 表是驗收者最先看的地方,卻引著已被自己否定的證據。)
+
+**處置**:表頭改 rev 2 並記載已 commit / 已審查三輪;§2 補上兩個檔案並**改為不寫檔案數**
+(理由與行數相同,一併寫進去);§7 改為「已審查三輪、人類驗收未取得」並揭露
+**三輪為同一位審查者**的獨立性限制;AC1/AC3 證據欄改引路由表對照,
+並註明原本的 404 不具鑑別力、405 是三者中唯一有鑑別力的狀態碼。
+
+### L-A(Low)—— 守衛的參數名未被釘住
+
+成立,而且**是同一個失效模式的第三次殘留**:M1 是「斷言依賴狀態碼」,
+L-A 是「斷言依賴路徑參數名」——都是**鑑別力依賴一個未被驗證的格式假設**。
+若有人以 `@router.post("/curation/items/{id}/approve")` 加回,精確字串比對會放行。
+
+**處置**:改為**前綴掃描**——`/admin/curation/items` 底下不得有任何 POST,不論參數叫什麼。
+並補做**負向對照**(這是本輪最重要的一件事,直接回應審查 S-B 的流程建議:
+「每個宣稱守門的斷言,都要能說出它在缺陷存在時如何失敗」):
+
+```
+docker compose run --rm -e OPENAI_API_KEY= backend python -c "...動態 include_router 一條 {id} 版路由..."
+→ 現況 offenders            : none  → 守衛通過
+→ 加回 {id} 版之後 offenders: {('/admin/curation/items/{id}/approve', 'POST')} → 守衛失敗(正確)
+```
+
+**守衛在缺陷存在時確實會失敗,已實測,非推論。**
+
+### L-B(Low)—— plan 的 commit 授權欄未更新
+
+成立。`IMPLEMENTATION_PLAN.md` 的 Execution Policy 仍寫
+「Commit/push permission: No unless separately approved after review」,而 `99e34d5` 已存在。
+**授權確實取得**:rev 2 的 T5 第 6 項(S1)明文「本變更在人類批准後 commit」,
+T5 在 rev 2 的自動核准清單內,jett 於 2026-08-13 批准 rev 2。
+問題純在**記錄**:稽核者會先看那一欄並得到錯誤結論。
+**處置**:該欄改為分列 rev 1 / rev 2,明寫 commit 已授權、**push 仍未授權**。
+
+### S-A(Suggestion)—— README 範例與文案的張力
+
+文案寫「the unit of proposal is a statement … never a loose element」,
+而範例是一個沒有邊的單節點群組。實作上合法(審查者已確認),但讀者會問「這不就是 loose element」。
+**處置**:範例上方加一行註解,說明這是最小示例,真實提案通常是
+`Hormone -HAS_EFFECT-> RegulatoryEffect -ON_VARIABLE-> PhysiologicalVariable` 三件套。
+
+### 驗證
+
+```
+docker compose build backend                                                     # exit 0
+docker compose run --rm -e OPENAI_API_KEY= backend pytest tests ingestion/tests -q
+→ 1 failed, 241 passed in 99.65s      # 數量不變(只改既有測試的斷言方式)
+ruff check / ruff format --check / mypy(拋棄式容器)
+→ All checks passed! / 107 files already formatted / no issues found in 83 source files   # exit 0
+負向對照(見 L-A)                                                                # 守衛在缺陷存在時失敗
+```
+
+`make eval` 未執行(D4 不變;本輪只動測試斷言與文件)。
+
+- **Deviations**:None。全部在 rev 2 已批准的路徑內,未升 revision。
+- **Result**: **Pass**

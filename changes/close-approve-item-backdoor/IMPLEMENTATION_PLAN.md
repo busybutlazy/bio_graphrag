@@ -146,7 +146,14 @@ notes 明載那需要一輪 grill 定義邊界。
   - 需要改動群組路徑的任何語意,或需要資料遷移。
   - 必要測試無法執行,或基準測試數對不上且無法具名說明。
   - 需要新增 production dependency。
-- **Commit/push permission**: **No unless separately approved after review.**
+- **Commit/push permission**:
+  - **rev 1**:No unless separately approved after review.
+  - **rev 2(現行)**:**commit 已授權** —— jett 於 2026-08-13 批准 rev 2,
+    而 rev 2 的 T5 第 6 項(S1)明文為「本變更在人類批准後 commit,讓後續審查有 SHA 可釘」,
+    且 T5 在自動核准清單內。據此完成 `99e34d5`。
+    **push 仍未授權**,需另行取得。
+  (審查 L-B 指出此欄在 rev 2 未更新,與實際狀態矛盾——正規欄位說「否」而實際已 commit。
+   稽核者會先看這一欄,故此處補正。)
 
 ## Tasks
 
