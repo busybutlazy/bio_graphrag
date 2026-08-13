@@ -126,3 +126,50 @@
 
   同時揭露一項對自己不利的偏差,見 `VERIFICATION_REPORT.md` §5:
   **`make eval` 實際跑在 openai 模式,花了真實 token**,與 Plan 宣稱的「本變更 token 預算為 0」牴觸。
+
+---
+
+## R1 — 審查發現處置(review-finding repair,非 Plan 的 Task)
+
+- **觸發**:`REVIEW_REPORT.md`(2026-08-13,獨立 session)。Blocking / High **皆無**。
+- **人類處置決定**:jett,2026-08-13 —— 「修 M-1 + S-1,其餘記 notes」。
+- **Boundary and allowed paths**:`backend/app/api/routes_ingest.py`、
+  `ingestion/pipeline/load_postgres.py`、`ingestion/tests/test_document_ingest.py`、
+  `docs/api_contract.md`、`docs/notes.md`(全部在 Plan 原本批准的路徑清單內)。
+
+### 處置內容
+
+- **M-1(Medium,已修)** —— 409 訊息在孤兒鎖情境給出反向指示。
+  審查者的前提我獨立驗證過:`make up` = `docker compose up -d --build`,
+  `docker-compose.yml` 未設 `stop_grace_period` → docker 預設 10 秒,
+  一次 4 分鐘的抽取必定被 SIGKILL。**孤兒的最可能成因是 `make up`,不是 OOM**;
+  我原本的註解「Only a hard kill (container OOM/SIGKILL)」字面沒錯但誤導性地窄,
+  而訊息無條件斷言「不代表後端失敗」在該情境下是**假的**,且未給脫困路徑。
+  改動:409 訊息改為條件式(兩種情境分別指示 + 分辨方法 + 指向手動關閉);
+  `load_postgres.STALE_AFTER` 註解改寫成因;`docs/api_contract.md` 的孤兒段同步修正。
+  **純文案與註解,未動任何防護邏輯。**
+- **S-1(Suggestion,已修)** —— 前綴耦合無守衛。
+  新增 `test_the_index_predicate_and_the_job_prefix_stay_in_sync`,
+  同時釘住常數值與「migration SQL 必須含由該常數推出的字面值」,
+  所以改常數而不改 migration 會立刻紅。
+- **記入 `docs/notes.md` N9 作為後續項目**:L-1(防護鍵 `source_path` vs 寫入鍵 `doc_id`)、
+  L-2(claim 查詢窗口導致訊息退化)、L-3(HTTP 測試在真實 demo 路徑留 running 列)、
+  S-2(測試連線參數複製)、S-3(全表 UPDATE 成長後再收斂),
+  外加一項**我自己發現、審查者未提**的既有觀察:`except Exception` 抓不到 `CancelledError`,
+  優雅取消時 job 會被記成 `success`(先於本變更,方向安全但稽核紀錄會說謊)。
+
+### 驗證
+
+```
+docker compose build backend                                                     # exit 0
+docker compose run --rm -e OPENAI_API_KEY= backend pytest tests ingestion/tests -q
+→ 1 failed, 242 passed in 87.93s        # 241 + S-1 守衛;失敗仍是同一個已知 flake
+ruff check / ruff format --check / mypy(拋棄式容器)
+→ All checks passed! / 107 files already formatted / no issues found in 83 source files   # exit 0
+```
+
+`make eval` **未重跑**:本輪只改文案、註解與一個純斷言測試,不可能影響檢索或作答,
+而重跑要再花一次真實 token。
+
+- **Deviations**:None。未動防護邏輯,未擴大路徑範圍。
+- **Result**: **Pass**

@@ -199,13 +199,25 @@ async def ingest_run(body: IngestRequest) -> dict:
         # This endpoint blocks for minutes and outlives nginx's proxy timeout, so a 504 here
         # means "no answer", not "no run". The message says so explicitly, because the
         # expensive mistake is not the retry itself — it is reading the 504 as a failure.
+        #
+        # But the blocking row is not always alive. Restarting the backend mid-ingest — which
+        # `make up` does, and a 4-minute run cannot survive docker's 10s stop grace — kills the
+        # process before the job can close itself, and that row then holds the source for
+        # STALE_AFTER. Telling the operator "the backend did not fail" would be false there, so
+        # the message names both cases and gives the way out of the second one. Review finding
+        # M-1: this endpoint's whole argument is that the guard must not depend on the operator
+        # reading a timeout correctly, and the first draft asked them to do exactly that.
         started = exc.started_at.isoformat(timespec="seconds") if exc.started_at else "未知時間"
         raise APIError(
             409,
             "ingest_already_running",
             f"這個來源已經有一個匯入正在進行中(job_id={exc.job_id},開始於 {started}),"
-            "本次請求未執行、未花費任何 token。**請不要重試**:先前的 504 只代表 nginx 等不到回應,"
-            "不代表後端失敗。請查 ingestion_jobs 表確認該 job 的最終狀態。",
+            "本次請求未執行、未花費任何 token。"
+            "**若那個 job 還在跑,請不要重試**:先前的 504 只代表 nginx 等不到回應,不代表後端失敗。"
+            "**若你剛重啟過 backend(例如 make up),這一列很可能是中斷殘留**——"
+            "行程被殺時 job 來不及收尾。殘留列會在 2 小時後自動失效,"
+            "要立刻解除請依 docs/api_contract.md 手動關閉該列。"
+            "分辨方法:查 ingestion_jobs 表,對照 started_at 與你最後一次重啟的時間。",
         ) from exc
     finally:
         await pg_conn.close()

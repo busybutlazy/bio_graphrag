@@ -5,7 +5,9 @@
 - **Plan revision**:1(Approved / jett / 2026-08-13,medium / `supervised-auto`)
 - **分支**:`feat/ingest-concurrency-guard`,自 `main` @ `57d721e`
 - **驗證**:`VERIFICATION_REPORT.md` —— **PASS**(第一輪停在 lint,批准後重跑通過)
-- **審查**:**未進行**。本報告不構成完成宣稱的自我核可。
+- **審查**:`REVIEW_REPORT.md`(2026-08-13,獨立 session)—— **Blocking / High 皆無**。
+  M-1(Medium)與 S-1(Suggestion)已依 jett 的處置決定修掉(見 §9),
+  其餘記入 `docs/notes.md` N9。本報告不構成完成宣稱的自我核可。
 
 ## 1. 解決了什麼
 
@@ -69,20 +71,43 @@ Plan 同時把 `make eval` 列為必要驗證、又宣稱零花費,**這兩條�
 
 ## 6. 已知限制(逐項含實際代價)
 
-- **L1 — 沒有真正的競態驗證**。測試以「先造出一列 running,再提交第二次」模擬,
-  而非兩個真的同時起跑的 job。原子性由 Postgres 的唯一索引保證,
-  但**這條路徑沒有被真實競態打過**。代價:若索引述詞哪天寫錯,測試仍會綠。
-- **L2 — 索引述詞的 `'ingest:%'` 與 `EXTRACT_JOB_PREFIX` 是兩份副本**。
-  索引述詞是已存下的 SQL 字面值,改常數不會跟著改,**也沒有守衛擋這件事**。
-  代價:改前綴會讓防護靜靜失效而測試仍綠。已在 `schema/graph_schema.md` 與程式碼註解點名。
+- **~~L1 — 沒有真正的競態驗證~~ → 審查已推翻。** 審查者以 6 條各自獨立的連線
+  `asyncio.gather` 打真實競態:1 個贏家、5 個乾淨的 `IngestAlreadyRunning`、表中只有一列,
+  五個被拒者皆正確回報同一個擋住它們的 job_id。**原子性不再只是推論。**
+- **~~L2 — 前綴耦合無守衛~~ → 已修(S-1)。**
+  `test_the_index_predicate_and_the_job_prefix_stay_in_sync` 同時釘住常數值,
+  與「migration SQL 必須含由該常數推出的字面值」。改一邊會立刻紅。
 - **L3 — 前端揭露沒有人眼看過**(與 N1 遺留的 T6 同一個缺口)。倉庫沒有前端測試設施,
   且 409 極罕見,那段 UI 不會自然出現。要目視確認得刻意造一列 `running`。
 - **L4 — 孤兒 2 小時門檻沒有端到端驗證**,只有以 `started_at` 回推時間的單元測試。
   代價:真實的容器 kill → 2 小時後接手,這條路徑沒被實地走過。
 - **L5 — 未在乾淨 volume 上驗證**。既有 flake 與 eval 延遲抖動都源於此。
-- **L6 — 「其他機器已有重複 running 列」的情境未驗證**。正規化 UPDATE 在非 0 列時的行為
-  只由 SQL 邏輯保證,**沒有測試覆蓋**。
+- **~~L6 — 「其他機器已有重複 running 列」未驗證~~ → 審查已推翻。**
+  審查者在 `BEGIN … ROLLBACK` 內以 temp table 造出同一 source 三列 running、
+  另一 source 一列、外加兩列 `job:` seed 列,跑正規化 UPDATE:`UPDATE 2`,
+  保留最新、關掉兩列舊的、**seed 列未被動到**。
+  **Plan R5 點名的「後端起不來」自傷風險不成立。**
 - **L7 — 504 本身還在**。操作者仍會看到逾時,只是重試不再扣款。
+- **L8(審查新增,已記入 notes N9)— 防護鍵是 `source_path`,破壞性寫入鍵是 `doc_id`。**
+  兩個不同來源檔可以有相同 `doc_id`,此時防護放行、兩次抽取各自
+  `delete_chunks_for_doc(doc_id)`,後到的 delete 可能清掉先到者剛寫好的 chunks。
+  是資料一致性缺口,非重複扣款;觸發條件窄,且 Plan 已把跨來源互斥列為 Out of Scope。
+
+## 6.1 審查後的處置(2026-08-13,jett 決定「修 M-1 + S-1,其餘記 notes」)
+
+- **M-1(Medium)已修** —— 409 訊息在孤兒鎖情境給出反向指示。
+  **審查者是對的,而且指出了我一個實質錯誤**:我把孤兒成因寫成
+  「Only a hard kill (container OOM/SIGKILL)」,但最容易製造孤兒的是
+  **`make up`**(`docker compose up -d --build`,本專案標準指令)——
+  未設 `stop_grace_period`,docker 預設 10 秒,一次 4 分鐘的抽取必定被 SIGKILL。
+  該情境下後端**確實**失敗了,訊息卻無條件斷言它沒有,且未給脫困路徑。
+  已改為條件式訊息(兩種情境分別指示 + 分辨方法 + 指向手動關閉),
+  並同步修正 `load_postgres` 註解與 `docs/api_contract.md`。**未動防護邏輯。**
+- **S-1 已修** —— 見 §6 的 L2。
+- **L-1 / L-2 / L-3 / S-2 / S-3 記入 `docs/notes.md` N9**,外加一項我自己發現、
+  審查者未提的既有觀察:`runner.py` 的 `except Exception` 抓不到 `CancelledError`,
+  優雅取消時 job 會被記成 `success`——先於本變更,方向安全(錯誤地釋放鎖而非洩漏鎖),
+  但稽核紀錄會說謊。
 
 ## 7. 未完成 / 未驗證
 

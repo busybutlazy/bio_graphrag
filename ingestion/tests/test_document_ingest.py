@@ -719,3 +719,21 @@ async def test_preview_is_never_blocked(tmp_path, pg_conn, qdrant_client):
         ), "dry run 不得建立 job 列"
     finally:
         await _clear_jobs(pg_conn, str(path))
+
+
+def test_the_index_predicate_and_the_job_prefix_stay_in_sync():
+    """The prefix lives twice: as a constant, and as a literal inside the index predicate.
+
+    An index predicate is stored SQL, so changing the constant alone leaves the guard pointing
+    at a prefix nothing uses any more — every claim would then succeed and the protection would
+    disappear with all other tests still green. That is the most expensive way for this to fail,
+    so it gets the cheapest possible guard. (Review finding S-1.)
+
+    Changing the prefix means editing `_MIGRATION_INGEST_CONCURRENCY_GUARD` *and* re-creating
+    the index on every deployed database — the old one survives `CREATE ... IF NOT EXISTS`.
+    """
+    assert load_postgres.EXTRACT_JOB_PREFIX == "ingest:"
+    assert (
+        f"'{load_postgres.EXTRACT_JOB_PREFIX}%'"
+        in load_postgres._MIGRATION_INGEST_CONCURRENCY_GUARD
+    )

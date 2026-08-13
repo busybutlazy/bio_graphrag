@@ -16,8 +16,11 @@ SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
 EXTRACT_JOB_PREFIX = "ingest:"
 
 # How long a 'running' extraction row may sit before a new run treats it as an orphan and
-# takes the source over. Only a hard kill (container OOM/SIGKILL) can leave one behind —
-# runner's finally-block closes the job on both the success and the exception path.
+# takes the source over. It takes a hard kill to leave one behind — runner's finally-block
+# closes the job on both the success and the exception path — but do not read that as rare:
+# `make up` (docker compose up -d --build) restarts the backend, and a 4-minute extraction
+# cannot finish inside docker's 10s stop grace, so it is SIGKILLed mid-run. Restarting the
+# backend while an ingest is going is the *likeliest* way to produce one of these.
 #
 # The value is deliberately generous. Too short is the dangerous direction: it would let a
 # still-running extraction be mistaken for an orphan and start a *second* one, which is the
