@@ -272,3 +272,46 @@ N-1 ~ N-3 皆為一行級處置，是否在合併前處理由人類決定；**N-
 因為它守的是剛剛才修好的東西。
 
 The reviewer does not approve, fix, merge, or release this change.
+
+---
+
+# 第三輪複驗（2026-08-13）
+
+**範圍**：`4c0ff2b test(ingest): hold the orphan half of the 409 message in place`。
+**N-2 / N-3 / N-4 已修並複驗通過；N-1 只修好一半。防護邏輯連續三個 commit 未被觸碰。**
+
+| 發現 | 狀態 | 複驗 |
+|---|---|---|
+| **N-2** | ✅ 已修 | `"重啟"` / `"2 小時"` / `"手動關閉"` 三項斷言逐一對得上現行訊息；`assert "**" not in message` 一併擋住 N-4 回歸。**M-1 的修復現在有測試守住了。** |
+| **N-3** | ✅ 已修 | N9 該條改為「兩種結果皆可能、未實測、不要假設方向是安全的」，兩個方向都寫出來了 |
+| **N-4** | ✅ 已修 | 前提我獨立查證：`frontend/app.js:4-20` 的 `E()` 只有 `html` 這個 prop 走 `innerHTML`；`:177` 以字串 kid 傳入，DOM `append()` 一律建立 text node。**操作者確實會看到字面星號**，實作者的分析正確 |
+| **N-1** | ⚠️ **半修** | 測試數已更正為 10（正確）。但 diffstat **又過期了**：報告寫 `git diff main..HEAD --stat …`:**+527 / −3**，今天實跑該命令得到 **+538 / −3**——`4c0ff2b` 自己又加了 11 行 |
+
+**獨立複跑**：`pytest ingestion/tests/test_document_ingest.py tests/integration/test_ingest.py -q`
+→ **31 passed**（與前一輪相同，符合「N-2 是加斷言、非新增測試」的說法，總數仍為 242）；
+`ruff check` / `ruff format --check` / `mypy` → **三者 exit 0**。
+`git show 4c0ff2b` 逐行確認：只動了訊息字串、一段註解、測試斷言與文件，
+**`load_postgres.py` 與 `runner.py` 完全未出現在這個 commit 裡**。
+
+## N-1 的殘留：修 N-1 的那個 commit 又製造了一次 N-1
+
+報告的括號註明「數字含 `8be0e86` 的審查處置」，就那個 commit 而言 **+527 是準確的**
+（我當時實測正是 527），所以這不是不誠實，是**結構性問題**：
+`main..HEAD` 是一個會隨每次 commit 移動的目標，把它的輸出寫進文件，
+下一個 commit 就會讓「命令」與「輸出」對不上。**再修一次數字，下次 commit 仍會重演。**
+
+**處置方向（擇一，皆為一行）**：
+把標籤從 `git diff main..HEaD` 改成固定端點 `git diff main..8be0e86`；
+或直接刪掉這個累計數字——`CHANGE_REPORT` 的價值在「改了什麼、為什麼」，
+不在一個注定過期的行數。**建議後者。**
+
+## 第三輪結論
+
+三輪下來，**Blocking / High 始終為零**；M-1（唯一的 Medium）已修且現在有測試守住；
+S-1、N-2、N-3、N-4 皆已處置並經獨立複驗；L-1 / L-2 / L-3 / S-2 / S-3 完整保留在 `docs/notes.md` N9。
+唯一殘留是 N-1 的一個過期行數，**不影響任何行為**，是否處理由人類決定。
+
+從審查角度值得記下的一點：實作者在 N-3 主動承認自己原本的結論「寫錯了一半」，
+並把錯誤留在文件裡而非抹去——這比修掉一個 bug 更難，也更值得信任。
+
+The reviewer does not approve, fix, merge, or release this change.

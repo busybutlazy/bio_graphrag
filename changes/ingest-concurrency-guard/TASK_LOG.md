@@ -217,3 +217,29 @@ ruff check / ruff format --check / mypy(拋棄式容器)
 
 - **Deviations**:None。未動防護邏輯,未擴大路徑範圍。
 - **Result**: **Pass**
+
+---
+
+## R3 — 第三輪審查處置(N-1 殘留)
+
+- **觸發**:第三輪複驗指出**修 N-1 的那個 commit 自己又製造了一次 N-1**:
+  `CHANGE_REPORT` §2 寫的 `git diff main..HEAD --stat` 輸出 `+527 / −3`,
+  在 `4c0ff2b` 之後變成 `+538 / −3`。
+- **獨立驗證**:實跑兩條命令確認,審查者的數字**完全正確**:
+  ```
+  git diff main..HEAD    --stat -- . ':(exclude)changes/'  → 8 files, 538 insertions(+), 3 deletions(-)
+  git diff main..8be0e86 --stat -- . ':(exclude)changes/'  → 8 files, 527 insertions(+), 3 deletions(-)
+  ```
+- **根因**:這不是誠實度問題(括號已註明數字對應哪個 commit,而就 `8be0e86` 而言 527 是準確的),
+  是**結構性問題**:`main..HEAD` 是會移動的目標,把它的輸出寫進文件,
+  下一個 commit 就讓「命令」與「輸出」對不上。**再改一次數字必然重演。**
+- **處置**:採納審查建議,**刪掉累計行數**而非再更正一次。
+  `CHANGE_REPORT` §2 改為只宣稱「8 個檔案、全部落在批准路徑內」(這兩項不會隨 commit 漂移),
+  並留下一段說明為什麼這裡刻意不寫行數。§6.2 的 N-1 條目也改寫成完整經過,
+  **保留「第一次修法本身又犯了一次」這個事實**,不抹掉。
+- **Files changed**:`changes/ingest-concurrency-guard/CHANGE_REPORT.md`、
+  `changes/ingest-concurrency-guard/TASK_LOG.md`(本檔)。**無程式碼改動。**
+- **Tests / lint**:未重跑。本輪只改 `changes/` 底下的報告文字,
+  不觸及任何被測試或 lint 涵蓋的路徑。
+- **Deviations**:None
+- **Result**: **Pass**
