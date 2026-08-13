@@ -1,4 +1,8 @@
+import asyncio
+
+import asyncpg
 import pytest
+from app.api import routes_ingest
 from app.core.config import settings
 from app.main import app
 from fastapi.testclient import TestClient
@@ -157,3 +161,57 @@ def test_run_unlocked_but_llm_not_configured(client, monkeypatch):
     )
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "llm_not_configured"
+
+
+# --- run (same-source concurrency guard) --------------------------------------
+#
+# The expensive failure this guards against: `/run` blocks past nginx's proxy timeout, the
+# operator reads the 504 as a failure and retries, and two extractions of the same chapter
+# run side by side, paying twice.
+
+
+async def _job_row(sql: str, *args) -> None:
+    conn = await asyncpg.connect(
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        database=settings.postgres_db,
+        user=settings.postgres_user,
+        password=settings.postgres_password,
+    )
+    try:
+        await conn.execute(sql, *args)
+    finally:
+        await conn.close()
+
+
+def test_run_refuses_a_second_ingest_of_the_same_source(client, monkeypatch):
+    monkeypatch.setattr(settings, "ingest_owner_secret", "s3cret")
+    # Get past the config gate on purpose: the guard has to bite *before* the run starts.
+    # Leaving the key unset would make this pass for the wrong reason (llm_not_configured).
+    monkeypatch.setattr(routes_ingest.llm_client, "is_configured", lambda: True)
+
+    job_id = "ingest:test-in-flight"
+    source_path = str(routes_ingest._resolve_source(DEMO_SOURCE))
+    # stand in for a run that is still going, without actually running one
+    asyncio.run(
+        _job_row(
+            "INSERT INTO ingestion_jobs (job_id, status, source_path) VALUES ($1, 'running', $2)",
+            job_id,
+            source_path,
+        )
+    )
+    try:
+        resp = client.post(
+            "/admin/ingest/run",
+            json={"source": DEMO_SOURCE},
+            headers={"X-Ingest-Owner-Token": "s3cret"},
+        )
+    finally:
+        asyncio.run(_job_row("DELETE FROM ingestion_jobs WHERE job_id = $1", job_id))
+
+    assert resp.status_code == 409
+    error = resp.json()["error"]
+    assert error["code"] == "ingest_already_running"
+    # the operator must be able to find the job, and be told the 504 was not a failure
+    assert job_id in error["message"]
+    assert "不要重試" in error["message"]

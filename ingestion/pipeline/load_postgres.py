@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import asyncpg
@@ -7,6 +8,22 @@ import jsonschema
 from ingestion.pipeline import group_statements, parse_source, schema_checker, validate_extraction
 
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
+
+# Job-id prefix for the *document extraction* path (ingestion.extract.runner). The seed
+# pipeline uses "job:" instead, and the concurrency guard below deliberately covers only
+# the extraction prefix: a seed run is idempotent, offline and free, so it has no spend to
+# protect. ``runner`` imports this constant so the prefix is not written down twice.
+EXTRACT_JOB_PREFIX = "ingest:"
+
+# How long a 'running' extraction row may sit before a new run treats it as an orphan and
+# takes the source over. Only a hard kill (container OOM/SIGKILL) can leave one behind —
+# runner's finally-block closes the job on both the success and the exception path.
+#
+# The value is deliberately generous. Too short is the dangerous direction: it would let a
+# still-running extraction be mistaken for an orphan and start a *second* one, which is the
+# duplicate token spend this whole change exists to prevent. Too long merely makes the
+# operator wait (or clear one DB row by hand).
+STALE_AFTER = timedelta(hours=2)
 
 _MIGRATION_ADD_SCHEMA_CHECK = """
 ALTER TABLE curation_items ADD COLUMN IF NOT EXISTS schema_check JSONB;
@@ -18,11 +35,61 @@ _MIGRATION_ADD_GROUP_ID = """
 ALTER TABLE curation_items ADD COLUMN IF NOT EXISTS group_id TEXT;
 """
 
+# At most one *running* extraction per source. This is what makes a retry after nginx's 504
+# harmless: the second submission cannot even open a job, so it never reaches the LLM loop.
+#
+# The unique index (rather than a session advisory lock) is what makes this connection-
+# agnostic — whoever submits, from whichever connection or process, is refused.
+#
+# The UPDATE runs first and is required, not cosmetic: if a previous duplicate-submission
+# incident already left two 'running' rows for one source, CREATE UNIQUE INDEX would fail,
+# ensure_schema would fail, and the backend would not start. It keeps the newest row per
+# source and closes the older ones, which are orphans by definition.
+#
+# NOTE: the 'ingest:%' literal below must stay in sync with EXTRACT_JOB_PREFIX. It cannot
+# reference the constant — an index predicate is stored SQL — so changing the prefix means
+# editing this migration and re-creating the index.
+_MIGRATION_INGEST_CONCURRENCY_GUARD = """
+UPDATE ingestion_jobs AS j
+SET status = 'failed',
+    error_message = COALESCE(j.error_message, 'orphaned running job closed by concurrency-guard migration'),
+    finished_at = COALESCE(j.finished_at, now())
+WHERE j.status = 'running'
+  AND j.job_id LIKE 'ingest:%'
+  AND EXISTS (
+      SELECT 1 FROM ingestion_jobs AS newer
+      WHERE newer.status = 'running'
+        AND newer.job_id LIKE 'ingest:%'
+        AND newer.source_path IS NOT DISTINCT FROM j.source_path
+        AND (newer.started_at, newer.job_id) > (j.started_at, j.job_id)
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS ingestion_jobs_one_running_extract_per_source
+    ON ingestion_jobs (source_path)
+    WHERE status = 'running' AND job_id LIKE 'ingest:%';
+"""
+
+
+class IngestAlreadyRunning(Exception):
+    """Raised when an extraction for the same source is already in flight.
+
+    Carries the blocking job's identity so the caller can tell the operator which job to go
+    look at, rather than only that "something" is running. Message wording is left to the
+    caller: the HTTP layer owns user-facing text, this layer owns facts.
+    """
+
+    def __init__(self, source_path: str, job_id: str | None, started_at: datetime | None) -> None:
+        super().__init__(f"an extraction for {source_path} is already running (job_id={job_id})")
+        self.source_path = source_path
+        self.job_id = job_id
+        self.started_at = started_at
+
 
 async def ensure_schema(conn: asyncpg.Connection) -> None:
     await conn.execute(SCHEMA_SQL)
     await conn.execute(_MIGRATION_ADD_SCHEMA_CHECK)
     await conn.execute(_MIGRATION_ADD_GROUP_ID)
+    await conn.execute(_MIGRATION_INGEST_CONCURRENCY_GUARD)
 
 
 async def upsert_documents(conn: asyncpg.Connection, documents: list[dict]) -> None:
@@ -84,6 +151,60 @@ async def start_ingestion_job(conn: asyncpg.Connection, job_id: str, source_path
         job_id,
         source_path,
     )
+
+
+async def claim_ingest_source(conn: asyncpg.Connection, job_id: str, source_path: str) -> None:
+    """Open an extraction job, but only if no other one holds this source.
+
+    The guarded counterpart of :func:`start_ingestion_job`, used by the document extraction
+    path. ``POST /admin/ingest/run`` blocks for minutes and exceeds nginx's proxy timeout, so
+    the operator sees a 504 for a run that is in fact still going; retrying used to start a
+    second extraction alongside the first and pay for the same chapter twice. Refusing the
+    claim here — before the caller reaches any LLM call — is what makes that retry harmless.
+
+    Raises :class:`IngestAlreadyRunning` instead of opening a second job.
+    """
+    # Release orphans first, scoped to this source. A row can only get stuck here if the
+    # process was killed outright; anything that merely fails is closed by runner's finally.
+    await conn.execute(
+        """
+        UPDATE ingestion_jobs
+        SET status = 'failed',
+            error_message = COALESCE(error_message, 'interrupted: still running past the stale threshold'),
+            finished_at = COALESCE(finished_at, now())
+        WHERE source_path = $1
+          AND status = 'running'
+          AND job_id LIKE $3
+          AND started_at < now() - $2::interval
+        """,
+        source_path,
+        STALE_AFTER,
+        EXTRACT_JOB_PREFIX + "%",
+    )
+
+    try:
+        await conn.execute(
+            "INSERT INTO ingestion_jobs (job_id, status, source_path) VALUES ($1, 'running', $2)",
+            job_id,
+            source_path,
+        )
+    except asyncpg.UniqueViolationError as exc:
+        blocking = await conn.fetchrow(
+            """
+            SELECT job_id, started_at FROM ingestion_jobs
+            WHERE source_path = $1 AND status = 'running' AND job_id LIKE $2
+            ORDER BY started_at DESC LIMIT 1
+            """,
+            source_path,
+            EXTRACT_JOB_PREFIX + "%",
+        )
+        # The row may have finished between the failed INSERT and this lookup, so report what
+        # was found rather than asserting it is there.
+        raise IngestAlreadyRunning(
+            source_path=source_path,
+            job_id=blocking["job_id"] if blocking else None,
+            started_at=blocking["started_at"] if blocking else None,
+        ) from exc
 
 
 async def finish_ingestion_job(

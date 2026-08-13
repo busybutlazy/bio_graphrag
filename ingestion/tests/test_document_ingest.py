@@ -1,6 +1,11 @@
+import os
+from datetime import timedelta
+
+import asyncpg
 import pytest
 
 from ingestion.extract import runner
+from ingestion.pipeline import load_postgres
 
 CHAPTER = (
     "---\n"
@@ -505,3 +510,212 @@ async def test_a_re_run_supplies_what_salvage_had_to_drop(tmp_path, pg_conn, qdr
         assert same_anchor["schema_gate"]["result"] == "pass"
     finally:
         await _cleanup(pg_conn, qdrant_client)
+
+
+# --- T1/T2: same-source concurrency guard (changes/ingest-concurrency-guard) ---
+#
+# Why these tests open a *second* connection: the guard has to hold no matter who submits.
+# Driving both claims down one connection would prove nothing about the case that actually
+# cost money — an operator retrying in a new request, which FastAPI serves on a fresh
+# connection. A single-connection test would also pass against a session advisory lock,
+# which is re-entrant and would not have stopped the incident.
+
+
+async def _second_connection():
+    return await asyncpg.connect(
+        host=os.getenv("POSTGRES_HOST", "postgres"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        database=os.getenv("POSTGRES_DB", "biology_graphrag"),
+        user=os.getenv("POSTGRES_USER", "biology_app"),
+        password=os.getenv("POSTGRES_PASSWORD", "change_me"),
+    )
+
+
+async def _clear_jobs(conn, *source_paths):
+    await conn.execute(
+        "DELETE FROM ingestion_jobs WHERE source_path = ANY($1::text[])", list(source_paths)
+    )
+
+
+@pytest.mark.asyncio
+async def test_claim_refuses_a_second_extraction_of_the_same_source(pg_conn):
+    """The incident, reproduced: a retry while the first run is still going."""
+    source = "/tmp/guard/chapter-a.md"
+    other = await _second_connection()
+    try:
+        await load_postgres.claim_ingest_source(pg_conn, "ingest:first", source)
+
+        with pytest.raises(load_postgres.IngestAlreadyRunning) as caught:
+            await load_postgres.claim_ingest_source(other, "ingest:second", source)
+
+        # names the blocking job, so the operator can go check it instead of guessing
+        assert caught.value.job_id == "ingest:first"
+        assert caught.value.started_at is not None
+
+        rows = await pg_conn.fetchval(
+            "SELECT count(*) FROM ingestion_jobs WHERE source_path = $1", source
+        )
+        assert rows == 1, "被拒絕的提交不得留下第二列 job"
+    finally:
+        await _clear_jobs(pg_conn, source)
+        await other.close()
+
+
+@pytest.mark.asyncio
+async def test_claim_allows_a_different_source(pg_conn):
+    """Two different chapters are two different jobs, not a duplicate."""
+    a, b = "/tmp/guard/chapter-a.md", "/tmp/guard/chapter-b.md"
+    other = await _second_connection()
+    try:
+        await load_postgres.claim_ingest_source(pg_conn, "ingest:a", a)
+        await load_postgres.claim_ingest_source(other, "ingest:b", b)  # must not raise
+
+        assert (
+            await pg_conn.fetchval(
+                "SELECT count(*) FROM ingestion_jobs WHERE status = 'running' AND source_path = ANY($1::text[])",
+                [a, b],
+            )
+            == 2
+        )
+    finally:
+        await _clear_jobs(pg_conn, a, b)
+        await other.close()
+
+
+@pytest.mark.asyncio
+async def test_claim_reuses_the_source_once_the_job_is_finished(pg_conn):
+    """Both terminal states release the source — a failed run must not lock a chapter out."""
+    source = "/tmp/guard/chapter-a.md"
+    try:
+        for job_id, status in (("ingest:ok", "success"), ("ingest:bad", "failed")):
+            await load_postgres.claim_ingest_source(pg_conn, job_id, source)
+            await load_postgres.finish_ingestion_job(pg_conn, job_id, status, {}, None)
+
+        await load_postgres.claim_ingest_source(pg_conn, "ingest:third", source)  # must not raise
+    finally:
+        await _clear_jobs(pg_conn, source)
+
+
+@pytest.mark.asyncio
+async def test_claim_takes_over_a_stale_orphan(pg_conn):
+    """A hard kill leaves a 'running' row behind; without this the chapter is locked forever."""
+    source = "/tmp/guard/chapter-a.md"
+    try:
+        await pg_conn.execute(
+            """
+            INSERT INTO ingestion_jobs (job_id, status, source_path, started_at)
+            VALUES ('ingest:orphan', 'running', $1, now() - $2::interval)
+            """,
+            source,
+            load_postgres.STALE_AFTER + timedelta(minutes=1),
+        )
+
+        await load_postgres.claim_ingest_source(pg_conn, "ingest:takeover", source)
+
+        orphan = await pg_conn.fetchrow(
+            "SELECT status, error_message, finished_at FROM ingestion_jobs WHERE job_id = 'ingest:orphan'"
+        )
+        assert orphan["status"] == "failed"
+        assert orphan["error_message"], "孤兒列必須留下可辨識的原因,否則稽核紀錄說謊"
+        assert orphan["finished_at"] is not None
+    finally:
+        await _clear_jobs(pg_conn, source)
+
+
+@pytest.mark.asyncio
+async def test_a_job_just_short_of_stale_still_blocks(pg_conn):
+    """The dangerous direction is releasing too early: that is what pays twice."""
+    source = "/tmp/guard/chapter-a.md"
+    try:
+        await pg_conn.execute(
+            """
+            INSERT INTO ingestion_jobs (job_id, status, source_path, started_at)
+            VALUES ('ingest:still-going', 'running', $1, now() - $2::interval)
+            """,
+            source,
+            load_postgres.STALE_AFTER - timedelta(minutes=1),
+        )
+
+        with pytest.raises(load_postgres.IngestAlreadyRunning):
+            await load_postgres.claim_ingest_source(pg_conn, "ingest:retry", source)
+    finally:
+        await _clear_jobs(pg_conn, source)
+
+
+@pytest.mark.asyncio
+async def test_the_seed_pipeline_is_not_covered_by_the_guard(pg_conn):
+    """Seeding is idempotent, offline and free — it has no spend to protect, and breaking
+    `make seed` to guard it would be a strictly worse trade."""
+    source = "/app/data/sample"
+    try:
+        await load_postgres.start_ingestion_job(pg_conn, "job:seed-one", source)
+        await load_postgres.start_ingestion_job(pg_conn, "job:seed-two", source)  # must not raise
+    finally:
+        await pg_conn.execute(
+            "DELETE FROM ingestion_jobs WHERE job_id = ANY($1::text[])",
+            ["job:seed-one", "job:seed-two"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_a_second_ingest_of_the_same_source_spends_nothing(tmp_path, pg_conn, qdrant_client):
+    """The whole point: the refusal lands *before* the LLM loop, so a retry costs zero tokens."""
+    path = _write_chapter(tmp_path)
+    calls = []
+
+    def counting_extract(system_prompt, user_prompt):
+        calls.append(user_prompt)
+        return _statement_candidate("chunk:x"), 1
+
+    other = await _second_connection()
+    try:
+        # stand in for the first run, still in flight
+        await load_postgres.claim_ingest_source(pg_conn, "ingest:in-flight", str(path))
+
+        with pytest.raises(load_postgres.IngestAlreadyRunning):
+            await runner.ingest_document(
+                source_path=path,
+                strategy="fixed",
+                chunk_params={"chunk_size": 10_000, "chunk_overlap": 0},
+                extract_fn=counting_extract,
+                pg_conn=other,
+                qdrant=qdrant_client,
+                neo4j_driver=None,
+            )
+
+        assert calls == [], "被拒絕的匯入不得呼叫模型——這正是重複扣款的來源"
+        assert (
+            await pg_conn.fetchval(
+                "SELECT count(*) FROM ingestion_jobs WHERE source_path = $1", str(path)
+            )
+            == 1
+        )
+    finally:
+        await _clear_jobs(pg_conn, str(path))
+        await other.close()
+
+
+@pytest.mark.asyncio
+async def test_preview_is_never_blocked(tmp_path, pg_conn, qdrant_client):
+    """Preview spends nothing and writes nothing, so it has no reason to queue behind a run —
+    and an interviewer exploring the UI must not be blocked by the owner's ingest."""
+    path = _write_chapter(tmp_path)
+    try:
+        await load_postgres.claim_ingest_source(pg_conn, "ingest:in-flight", str(path))
+
+        report = await runner.ingest_document(
+            source_path=path,
+            strategy="fixed",
+            chunk_params={"chunk_size": 10_000, "chunk_overlap": 0},
+            dry_run=True,
+            neo4j_driver=None,
+        )
+        assert report.status == "preview"
+        assert (
+            await pg_conn.fetchval(
+                "SELECT count(*) FROM ingestion_jobs WHERE source_path = $1", str(path)
+            )
+            == 1
+        ), "dry run 不得建立 job 列"
+    finally:
+        await _clear_jobs(pg_conn, str(path))

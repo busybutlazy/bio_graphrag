@@ -93,6 +93,27 @@ WHERE n.status = 'approved'
 | started_at | timestamptz | |
 | finished_at | timestamptz, nullable | |
 
+**約束:每個來源最多一個進行中的抽取 job。**
+
+```sql
+CREATE UNIQUE INDEX ingestion_jobs_one_running_extract_per_source
+    ON ingestion_jobs (source_path)
+    WHERE status = 'running' AND job_id LIKE 'ingest:%';
+```
+
+`POST /admin/ingest/run` 同步阻塞且超過 nginx 逾時,操作者會看到 504 卻不知道後端仍在跑;
+這個索引讓誤判後的重試在花掉任何 token 之前就被擋下(回 `409 ingest_already_running`,
+見 `docs/api_contract.md`)。用索引而非 advisory lock,是因為索引**連線無關**——換連線、
+換行程、換人提交一樣擋得住。
+
+述詞裡的 `'ingest:%'` 只涵蓋**文件抽取**路徑(`ingestion/extract/runner.py`);
+seed 管線的 job_id 前綴是 `job:`,不受約束,因為它冪等、離線、不花錢。
+前綴在程式碼中是 `load_postgres.EXTRACT_JOB_PREFIX`,但**索引述詞是已存下的 SQL 字面值,
+改常數不會跟著改**——兩邊要一起動。
+
+孤兒列(硬性中止留下的 `running`)在 `load_postgres.STALE_AFTER`(2 小時)後
+由下一次提交接手並標為 `failed`。
+
 ### 2.4 curation_items — 待審佇列
 
 代表一筆「尚待處理」的候選變更。這張表只描述**目前狀態**,不記錄歷史——歷史交給 `graph_change_logs`。
