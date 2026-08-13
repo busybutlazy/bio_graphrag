@@ -1,17 +1,16 @@
 # Task Log: close-approve-item-backdoor
 
-- **Plan revision**: 1
-- **Approval evidence**: `IMPLEMENTATION_PLAN.md`〈Human Decisions and Approval〉—— jett / 2026-08-13,
-  對 D1–D4 逐項批准(D1 含 `reject_item` 一併退場、D2 同意契約縮減、D3 supervised-auto、
-  D4 不跑 `make eval`)。
+> **本表頭刻意不複製 plan 的 revision、task 清單與路徑清單。**
+> 它們每次審查處置都會變,而複製一份就是複製一個會過期的事實——
+> 這份變更的報告表頭已經因為這個毛病被抓過三次(審查 M-A ×2、M-B ×1),
+> 而**這裡是第四處,審查者沒抓到,我自己補上**。
+> **以 `IMPLEMENTATION_PLAN.md` 的 Execution Policy 與 Human Decisions 為準**,
+> 本檔只記「每個 Task 實際做了什麼、跑了什麼、結果如何」。
+
 - **Risk level**: medium
 - **Automation mode**: supervised-auto
-- **Auto-approved tasks**: T1、T2、T3、T4
-- **Approved path scope**:
-  `backend/app/api/routes_curation.py`、`backend/app/curation/service.py`、
-  `backend/app/schemas/curation.py`、`backend/tests/integration/test_curation.py`、
-  `docs/api_contract.md`、`CLAUDE.md`、`docs/notes.md`、
-  `changes/close-approve-item-backdoor/`
+- **批准與路徑範圍**:見 `IMPLEMENTATION_PLAN.md`(現行 revision、auto-approved tasks、
+  approved file/path scope、commit 授權與其他證,皆以該檔為單一來源)。
 - **Baseline Git state**:
   - 起點 `main` @ `8112fda`(PR #21 merge commit),工作區僅一個未追蹤項:
     `changes/close-approve-item-backdoor/`(本變更產出物)。無不明修改。
@@ -336,8 +335,77 @@ supervised-auto 的 stop condition 明列「需要新增 Task／路徑 → 停�
 
 ### 驗證
 
-本輪只改 `changes/` 內的報告文字與 `IMPLEMENTATION_PLAN.md`,**未動任何程式碼或測試**,
-故未重跑測試套件(R6 的 `1 failed, 241 passed` 由第四位審查者獨立複跑確認)。
+本輪只改 markdown ——`changes/` 內的報告文字(含 `IMPLEMENTATION_PLAN.md`)與 `docs/notes.md`,
+**未動任何程式碼或測試**,故未重跑測試套件
+(R6 的 `1 failed, 241 passed` 由第四位審查者獨立複跑確認)。
+(審查 N-3:上一版這句寫成「只改 `changes/` 內…」,**漏了不在 `changes/` 內的 `docs/notes.md`**,
+且把本來就在 `changes/` 內的 `IMPLEMENTATION_PLAN.md` 另外列出,分類本身是亂的。結論不受影響。)
 
 - **Deviations**:**有,已於上方 N-1 揭露**——R6/R7 新增 Task 時未依 stop condition 停止回報。
+- **Result**: **Pass**
+
+---
+
+## R8 — 第五輪審查處置(最後一輪)
+
+- **觸發**:`REVIEW_REPORT_5.md`(2026-08-13,與第四輪同一位審查者,其自身已揭露
+  獨立性因此受限)。**Blocking / High 皆無**;Medium 一項(M-B)、Low 一項(N-3)、
+  Suggestion 兩項(S-E、S-F)。
+- **本輪的處置全部是 markdown**,未動任何程式碼或測試。
+
+### M-B(Medium)—— 表頭與 §7 停在第四輪之前
+
+成立。而且審查者點到的根因比發現本身重要:
+**「真正的問題不是這幾行字,而是報告表頭沒有納入每輪處置的收尾動作」——它已經漏了三次。**
+
+三次的方向不同但落點相同:
+- M-A(第二輪)把**做過的審查寫成沒做**(表頭「審查:未進行」+ 一節「審查處置」並存);
+- M-B(本輪)把**「已有獨立審查者複跑證據確認」寫成「三輪都是同一人、有確認偏誤」**——
+  一個只讀表頭與 §7 的驗收者會**低估**這個變更的審查強度,並保留一個已經解除的限制。
+
+**處置:不再修一次數字,而是讓表頭無法過期。**
+表頭刪去「第幾輪」「哪幾個 SHA」,只留不變的事(分支、授權狀態)與**指向可執行來源**
+(`git log main..HEAD`、`REVIEW_REPORT*.md` 檔案本身就是清單),
+並在表頭下方寫明**為什麼這裡刻意不寫這些**、以及它已經漏更新三次。
+§7 改為指向各報告自己的 Independence disclosure,並如實記載
+「前三輪同一人 → 第四輪不同人(重跑證據)→ 第五輪回到第四輪那位」。
+`VERIFICATION_REPORT.md` 表頭與 §6 同步。
+
+這與 §2 不寫檔案數、`ingest-concurrency-guard` 不寫累計行數是**同一個處方**:
+**會過期的事實不要寫進文件,寫指向來源。** 這是這條處方第三次被用上。
+
+### N-3(Low)—— 兩處一寫下就過期的敘述
+
+成立,且與 M-B 同一個根。
+- `IMPLEMENTATION_PLAN.md` 的授權欄列了「目前涵蓋 `99e34d5` 與 `62cf5a4`」,
+  **而寫下那句話的 commit(`c1ee36b`)自己就不在其中**。已刪去 SHA 列舉,只留「本變更的 commit」。
+- `TASK_LOG.md` R7〈驗證〉寫「只改 `changes/` 內的報告文字與 `IMPLEMENTATION_PLAN.md`」,
+  **漏了不在 `changes/` 內的 `docs/notes.md`**,且把本來就在 `changes/` 內的
+  `IMPLEMENTATION_PLAN.md` 另外列出——分類本身是亂的。已更正並註明結論不受影響。
+
+### N-1 的收尾:他證已由人類直接提供給審查者
+
+第四輪要求的「人類確認」原本只有**經我轉述**的一句。
+本輪審查者記載:**jett 已於同一 session 直接向審查者確認「我有授權」**——
+人類直接對審查者陳述,不經實作者轉述。已補記入 `IMPLEMENTATION_PLAN.md` 的授權證據欄(第 2 項)。
+審查者的理由值得抄下來:**「若審查者轉頭就採信一句無法查證的轉述,這條發現等於白提。」**
+
+### S-E(Suggestion)—— 併入 `docs/notes.md` N11
+
+「人類交來審查報告」不等於「授權繼續執行」,但實作端會這樣讀——**R6/R7 就是這樣發生的**。
+現行 `review-change` 的結尾「The reviewer does not approve...」是**對審查者說的**,
+不是對實作者說的。建議 template 補一句明確對實作端說的話。已併入 N11。
+
+### S-F —— 不再開第六輪
+
+第四輪的獨立複核(重跑負向對照與全套測試)已足夠;M-B / N-3 皆為文件級發現,
+不值得為它們再開一輪外部審查。§7 已如實記載各輪的獨立性實況。
+
+### 驗證
+
+本輪**零程式碼變更**,故未重跑測試(第四輪由獨立審查者實跑的
+`1 failed, 241 passed` 仍是現行證據)。變更檔案全部在 rev 2 的批准路徑內。
+
+- **Deviations**:None(本輪未新增 Task——R8 屬第五輪處置,已納入 rev 2 的
+  auto-approved 清單所涵蓋的審查處置系列,且人類已對該系列追認授權)。
 - **Result**: **Pass**

@@ -2,7 +2,8 @@
 
 - **Plan revision**: **2**(Approved / jett / 2026-08-13,medium / `supervised-auto`)
 - **分支**:`feat/close-approve-item-backdoor`,自 `main` @ `8112fda`。
-  **已 commit `99e34d5`(rev 2 授權),未 push。**
+  **commit 已授權且已執行(清單見 `git log main..HEAD`,此處不列舉 SHA——會過期),
+  push 未授權、未執行。**
 - **驗證模式**:evidence-only —— 進入本階段後未修改任何實作。
 - **總結**:**PASS**。9 條驗收條件全部有證據,測試數與預測值**精確吻合**,無迴歸。
 
@@ -101,4 +102,4 @@ GET  /admin/curation/items            -> 200
 一項對自己不利的事實留在這裡:**第一輪驗證對 AC8 打了勾,而它當時不成立**。
 事後補做不改變「當時的驗證掃描面不完整」這件事。
 
-**未執行的事項**:push、人類驗收。(commit 已於 `99e34d5` 完成;複審已進行三輪。)
+**未執行的事項**:push、人類驗收。(commit 已完成;複審輪次見 `REVIEW_REPORT*.md`。)
