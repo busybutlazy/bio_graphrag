@@ -89,3 +89,14 @@
   - **S-3 `ensure_schema` 每次啟動與每次 `/admin/ingest/run` 都跑一次全表 UPDATE**。目前約 100 列可忽略，此表只增不減；成長後再收斂為「索引不存在時才跑」。現階段 YAGNI，不要動。
   - **既有觀察（先於本變更，未實測，兩種結果皆可能）**：`runner.py` 的 `except Exception` 抓不到 `CancelledError`。優雅取消時 `finally` 若跑完，會用初始值 `status="success"` 收尾，把被中斷的 job 記成成功（稽核紀錄說謊，但鎖有被釋放）；若 `finally` 裡的 `await finish_ingestion_job(...)` 本身也被取消打斷，該列就留在 `running`，**鎖被洩漏 2 小時**。取決於取消時機，**不要假設方向是安全的**。（審查 N-3 指出我原本只寫了前一半。）
 範圍: 後續 change（可拆，皆為小範圍）
+────────────────────────────────────────
+順序: N10
+項目: lint 的容器化入口（`changes/close-approve-item-backdoor` 第四輪審查 S-C）
+為什麼在這個位置: 2026-08-13 由獨立審查者發現。`Makefile` 的 `lint` target 直接在 host 上跑 ruff/mypy，與工作準則「一律以 Docker 為執行環境」不一致；`docker compose run --rm backend ruff ...` 會得到 `ruff: not found`（backend image 不含 dev deps）。後果是**「lint 全過」成為審查者無法獨立複核的宣稱**——每次都只能採信實作者自述，而這正是這個變更四輪來反覆出問題的那一類。做法擇一：backend image 加一個含 dev deps 的 target，或 `Makefile` 改走拋棄式容器（實作端目前已在用 `docker run --rm --user $(id -u):$(id -g) -e RUFF_CACHE_DIR=/tmp/ruff ... python:3.12-slim`，把它收進 Makefile 即可）。注意 `--user` 與 `RUFF_CACHE_DIR` 不能省，否則會在 repo 內留下 root 所有的 `.ruff_cache`。
+範圍: 小 change（只動 Makefile / compose / CI）
+────────────────────────────────────────
+順序: N11
+項目: 把「守衛斷言必須能說出它在缺陷存在時如何失敗」寫進 `verify-change` 檢查表（第四輪審查 S-D）
+為什麼在這個位置: 同一個失效模式在兩個變更裡出現四次——`ingest-concurrency-guard` 的 N-2（斷言只命中訊息的一半）、本變更的 M1（斷言依賴狀態碼，而被移除的 handler 也回同一個碼）、L-A（依賴路徑參數名）、N-2（依賴路徑前綴）。**四次都是：宣稱守門的斷言，鑑別力靠一個沒被驗證的格式假設，於是測試在缺陷存在時照樣綠燈。**靠審查者每次抓不是辦法。做法：`verify-change` 增列一條——凡宣稱「守住某個回歸」的斷言，驗證報告必須附一個**負向對照**（實際製造出該缺陷，證明斷言會失敗），或明寫涵蓋範圍到哪為止。屬 skill 層改動（`canonical-configs/`），不屬任何單一專案變更。
+範圍: skill 層 change
+────────────────────────────────────────
