@@ -111,16 +111,22 @@ curl -X POST http://localhost:8080/check-answer -H "Content-Type: application/js
 
 `/query` and `/check-answer` call an LLM through a provider-agnostic gateway (`app/llm/gateway.py`). With `OPENAI_API_KEY` set, retrieval uses OpenAI embeddings + chat; **without a key the demo runs fully offline** — lexical bigram retrieval plus an extractive, clearly-labelled answer — so a fresh clone works with no secrets.
 
-Retrieval only ever reads `status = 'approved'` nodes/edges. New nodes/edges go through human curation first:
+Retrieval only ever reads `status = 'approved'` nodes/edges. Everything else is a *proposal*, and the unit of proposal is a **statement** — the nodes and edges that together say one biological thing — never a loose element. A proposal passes two gates before it reaches the graph: a Schema gate that checks form, then a human expert who reads it back in plain language and decides on the biology.
 
 ```bash
-curl -X POST http://localhost:8080/admin/curation/items \
+# propose one statement (nodes + edges sharing a group_id) → the review queue.
+# Minimal example; a real statement is usually a triple — e.g. Hormone -HAS_EFFECT->
+# RegulatoryEffect -ON_VARIABLE-> PhysiologicalVariable — proposed as one group.
+curl -X POST http://localhost:8080/admin/curation/groups \
   -H "Content-Type: application/json" \
-  -d '{"item_type":"node","action":"create","payload":{"id":"hormone:example","type":"Hormone","label":"Example","description":"..."},"reason":"why"}'
+  -d '{"proposed_nodes":[{"id":"hormone:example","type":"Hormone","label":"Example","description":"..."}],"proposed_edges":[],"reason":"why"}'
 
-curl -X POST http://localhost:8080/admin/curation/items/curation:hormone:example/approve \
+# dispose of it as a whole: approve / reject / record a schema gap
+curl -X POST http://localhost:8080/admin/review/groups/<group_id>/approve \
   -H "Content-Type: application/json" -d '{"reviewer":"you","reason":"looks correct"}'
 ```
+
+There is deliberately **no per-item approval endpoint**. One used to exist and was removed: it wrote a single element into the graph behind nothing but a "still pending?" check — no Schema gate, no plain-language read-back, no guard against resurrecting deleted knowledge or writing an edge into nothing. Approving one member of a statement also meant the graph could end up saying something the expert never agreed to.
 
 Every approve/reject/merge/delete is recorded in `graph_change_logs` with actor, action, and reason.
 

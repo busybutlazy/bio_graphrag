@@ -356,12 +356,17 @@ payload 欄位：
 
 第一版不需要完整後台 UI，但應保留 API 或 JSON workflow，證明架構支援 human-in-the-loop curation。
 
+> **2026-08-13 更新**:下表是第一階段的規劃,**單項提案/核准的三個端點已移除**
+> (`changes/close-approve-item-backdoor`)——它們合起來構成一條繞過雙 gate 的路徑。
+> 此處保留原表並就地標注,而非刪除:它記錄的是當時的計畫,改寫會失去歷史。
+> 現行契約以 `docs/api_contract.md` 為準。
+
 | Method | Endpoint | 用途 |
 |---|---|---|
 | GET | /admin/curation/items | 查看待審核節點與關係 |
-| POST | /admin/curation/items | 人工建立候選節點或候選關係 |
-| POST | /admin/curation/items/{item_id}/approve | 批准候選變更並寫入 approved graph |
-| POST | /admin/curation/items/{item_id}/reject | 拒絕候選變更 |
+| ~~POST~~ | ~~/admin/curation/items~~ | **已移除**,由 `POST /admin/curation/groups` 取代 |
+| ~~POST~~ | ~~/admin/curation/items/{item_id}/approve~~ | **已移除**,由 `POST /admin/review/groups/{group_id}/approve` 取代 |
+| ~~POST~~ | ~~/admin/curation/items/{item_id}/reject~~ | **已移除**,由 `POST /admin/review/groups/{group_id}/reject` 取代 |
 | POST | /admin/graph/merge-nodes | 合併同義或重複節點 |
 | POST | /admin/graph/delete-node | 軟刪除不必要節點 |
 | POST | /admin/graph/delete-edge | 軟刪除不必要關係 |

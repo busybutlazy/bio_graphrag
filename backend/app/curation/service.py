@@ -116,23 +116,13 @@ async def list_items(status: str | None, item_type: str | None) -> list[dict]:
         ]
 
 
-async def create_item(item_type: str, action: str, payload: dict, reason: str | None) -> str:
-    _validate_curation_payload(item_type, payload)
-    payload = {**payload, "status": "proposed"}
-    item_id = f"curation:{payload['id']}"
-    async with connection() as conn:
-        await conn.execute(
-            """
-            INSERT INTO curation_items (item_id, item_type, action, payload, status, proposed_by, reason)
-            VALUES ($1, $2, $3, $4, 'proposed', 'human', $5)
-            """,
-            item_id,
-            item_type,
-            action,
-            json.dumps(payload),
-            reason,
-        )
-    return item_id
+# `create_item` / `approve_item` / `reject_item` used to live here. They were removed, not
+# misplaced: `create_item` staged rows with no `group_id` (invisible to `list_groups`, and so to
+# the reviewer), and `approve_item` wrote a payload into Neo4j behind nothing but a
+# `status == 'proposed'` check. Between them, knowledge could reach the student-facing graph
+# without passing either gate. Proposing is now `create_group`; disposing is `approve_group` /
+# `reject_group` / `record_gap`, and every one of them goes through the guards documented on
+# `approve_group`.
 
 
 async def create_group(
@@ -242,73 +232,6 @@ async def create_group(
                     group_id,
                 )
     return {"group_id": group_id, "nodes": len(proposed_nodes), "edges": len(proposed_edges)}
-
-
-async def approve_item(item_id: str, reviewer: str, reason: str | None) -> dict:
-    async with connection() as conn:
-        row = await conn.fetchrow("SELECT * FROM curation_items WHERE item_id = $1", item_id)
-        if row is None:
-            raise CurationError(404, f"curation item {item_id} not found")
-        if row["status"] != "proposed":
-            raise CurationError(409, f"curation item {item_id} is not in proposed state")
-
-        payload = _load_json(row["payload"])
-        payload["status"] = "approved"
-
-        driver = get_driver()
-        writer = load_neo4j.write_nodes if row["item_type"] == "node" else load_neo4j.write_edges
-        await anyio.to_thread.run_sync(writer, driver, [payload])
-
-        await conn.execute(
-            """
-            UPDATE curation_items SET status = 'approved', reviewed_by = $2, reason = $3, reviewed_at = now()
-            WHERE item_id = $1
-            """,
-            item_id,
-            reviewer,
-            reason,
-        )
-        await _log_change(
-            conn,
-            action="approve",
-            target_type=row["item_type"],
-            target_id=payload["id"],
-            actor=reviewer,
-            reason=reason,
-            curation_item_id=row["id"],
-            after_state=payload,
-        )
-        return {"item_id": item_id, "status": "approved"}
-
-
-async def reject_item(item_id: str, reviewer: str, reason: str | None) -> dict:
-    async with connection() as conn:
-        row = await conn.fetchrow("SELECT * FROM curation_items WHERE item_id = $1", item_id)
-        if row is None:
-            raise CurationError(404, f"curation item {item_id} not found")
-        if row["status"] != "proposed":
-            raise CurationError(409, f"curation item {item_id} is not in proposed state")
-
-        payload = _load_json(row["payload"])
-        await conn.execute(
-            """
-            UPDATE curation_items SET status = 'rejected', reviewed_by = $2, reason = $3, reviewed_at = now()
-            WHERE item_id = $1
-            """,
-            item_id,
-            reviewer,
-            reason,
-        )
-        await _log_change(
-            conn,
-            action="reject",
-            target_type=row["item_type"],
-            target_id=payload["id"],
-            actor=reviewer,
-            reason=reason,
-            curation_item_id=row["id"],
-        )
-        return {"item_id": item_id, "status": "rejected"}
 
 
 # --- Group-level review (unified two-gate: schema gate + expert gate) -----------------
