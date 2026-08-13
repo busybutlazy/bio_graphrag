@@ -143,17 +143,20 @@ class CurationItemResponse(BaseModel):
     reviewed_at: datetime | None = None
 ```
 
-### `POST /admin/curation/items`
-
-```python
-class CurationItemCreate(BaseModel):
-    item_type: str  # node | edge
-    action: str  # create | update | delete | merge
-    payload: dict
-    reason: str | None = None
-```
-
-寫入 `curation_items`,狀態預設 `proposed`。
+> **單項寫入路徑已移除**(`changes/close-approve-item-backdoor`,2026-08-13)。
+> `POST /admin/curation/items`(提案單一元素)、`.../{item_id}/approve`、`.../{item_id}/reject`
+> **不再存在**(回 `404`/`405`)。
+>
+> 原因不是簡化,是治理:`create_item` 寫入的列**沒有 `group_id`**,
+> 而 `GET /admin/review/groups` 只列有 group 的,所以那些提案**在審閱佇列裡看不見**;
+> 而 `approve_item` 唯一的守衛是 `status == 'proposed'`,之後直接寫進 Neo4j——
+> 不經 Schema gate、不經反向翻譯、不擋 `deprecated` 復活、不檢查邊端點是否存在。
+> `approve_group` 這四道全都有。兩者合起來是一條繞過雙 gate 的完整平行路徑。
+>
+> **進入圖譜現在只有一個入口**:以 `POST /admin/curation/groups` 提案一個**陳述**,
+> 再以 `POST /admin/review/groups/{group_id}/{approve,reject,gap}` 處置。
+> 上面的 `GET /admin/curation/items` 保留:它不寫任何東西,
+> 且是檢視分組機制之前留下的舊列的唯一途徑。
 
 ### `POST /admin/curation/groups`
 
@@ -179,21 +182,7 @@ class CurationGroupCreate(BaseModel):
 | 群組內重複 id(node+edge 合併集合) | `422 invalid_request` |
 | edge 端點無法解析(既非本群組提案節點、也非既有 approved 節點) | `422 invalid_request` |
 
-此端點依 CLAUDE.md 契約回 `{"error":{code,message}}`(較舊的 `/admin/curation/items` 仍回 `{"detail"}`)。
-
-### `POST /admin/curation/items/{item_id}/approve`
-
-```python
-class ReviewDecision(BaseModel):
-    reviewer: str
-    reason: str | None = None
-```
-
-副作用:`curation_items.status -> approved`;寫入 Neo4j(狀態 `approved`);寫入一筆 `graph_change_logs`(`action = approve`)。
-
-### `POST /admin/curation/items/{item_id}/reject`
-
-同 `ReviewDecision` payload。副作用:`curation_items.status -> rejected`;**不**寫入 Neo4j;寫入一筆 `graph_change_logs`(`action = reject`)。
+此端點依 CLAUDE.md 契約回 `{"error":{code,message}}`。
 
 ### `POST /admin/graph/merge-nodes`
 

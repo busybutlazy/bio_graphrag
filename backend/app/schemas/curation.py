@@ -9,11 +9,8 @@ MAX_REVIEWER_LEN = 100
 MAX_REASON_LEN = 2000
 
 
-class CurationItemCreate(BaseModel):
-    item_type: str
-    action: str
-    payload: dict
-    reason: str | None = None
+# `CurationItemCreate` was removed with the single-item write path — proposing one loose element
+# skipped both gates. The unit of proposal is a statement: see `CurationGroupCreate`.
 
 
 class CurationItemResponse(BaseModel):

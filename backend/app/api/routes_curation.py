@@ -1,12 +1,28 @@
+"""Curation endpoints.
+
+**There is no single-item write path here, and that is deliberate.** This module used to
+expose `POST /curation/items` (propose one element) and `POST /curation/items/{id}/approve`
+(write it straight into Neo4j). Together they formed a complete parallel route that bypassed
+both gates: `create_item` wrote rows without a `group_id`, so `list_groups` never showed them,
+and `approve_item` checked only `status == 'proposed'` before writing — no Schema gate, no
+back-translation for the expert, no deprecated-resurrection check, no dangling-edge check.
+`approve_group` has all four.
+
+Knowledge now reaches the graph through exactly one door: propose a *statement* via
+`POST /curation/groups`, dispose of it via `POST /admin/review/groups/{id}/{approve,reject,gap}`.
+Anyone re-adding a per-item approval has to bring the gates with it.
+
+`GET /curation/items` stays: it writes nothing, and it is the only way to see legacy rows that
+predate grouping.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import require_admin
 from app.api.errors import APIError
 from app.curation import service
 from app.schemas.curation import (
-    ApproveRejectRequest,
     CurationGroupCreate,
-    CurationItemCreate,
     CurationItemResponse,
     DeleteEdgeRequest,
     DeleteNodeRequest,
@@ -33,15 +49,6 @@ async def list_curation_items(
     return [CurationItemResponse(**row) for row in rows]
 
 
-@router.post("/curation/items", status_code=201)
-async def create_curation_item(body: CurationItemCreate) -> dict:
-    try:
-        item_id = await service.create_item(body.item_type, body.action, body.payload, body.reason)
-    except service.CurationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
-    return {"item_id": item_id, "status": "proposed"}
-
-
 @router.post("/curation/groups", status_code=201)
 async def create_curation_group(body: CurationGroupCreate) -> dict:
     """Stage a hand-made proposal group (nodes+edges statement) → the group Review queue."""
@@ -54,22 +61,6 @@ async def create_curation_group(body: CurationGroupCreate) -> dict:
         )
     except service.CurationError as exc:
         raise _as_api_error(exc) from exc
-
-
-@router.post("/curation/items/{item_id}/approve")
-async def approve_curation_item(item_id: str, body: ApproveRejectRequest) -> dict:
-    try:
-        return await service.approve_item(item_id, body.reviewer, body.reason)
-    except service.CurationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
-
-
-@router.post("/curation/items/{item_id}/reject")
-async def reject_curation_item(item_id: str, body: ApproveRejectRequest) -> dict:
-    try:
-        return await service.reject_item(item_id, body.reviewer, body.reason)
-    except service.CurationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 @router.post("/graph/merge-nodes")

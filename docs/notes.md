@@ -61,6 +61,13 @@
 項目: 群組審閱的部分處置：residual 組逐項處置、pattern 組「修正後核准」；一併關掉 approve_item 繞過 gate 的路徑
 為什麼在這個位置: 2026-08-12 發現。pattern 組（P1/P2/P4/P6）本身就是一條陳述，部分核准會讓圖譜內容與專家核准的那句話不一致，正解是「改了再核准」——但 service 只有 create/approve/reject，沒有 update，所以今天只能退回重提。residual 組不是陳述（lens 自己渲染成「不屬於任何已知的調控模式」），整包丟棄純屬浪費，逐項處置沒有原子性要守。另 approve_item（service.py:247）無 group 意識，會把單一成員直接寫進 Neo4j，繞過 Schema gate、反向翻譯、deprecated 與懸空邊兩道防線；前端未呼叫該端點且 /admin 暫不對外開放，故非緊急，但 N6 上線前必須關掉
 範圍: 新 change（需一輪 grill 定義部分處置的邊界）
+狀態: **後門已關（`changes/close-approve-item-backdoor`，2026-08-13）。部分處置仍未做。**
+關掉的比原本記的更多：後門不只 `approve_item`，而是「`create_item` 產生沒有 `group_id`、
+審閱佇列看不見的列」＋「`approve_item` 只憑 `status=='proposed'` 就寫進 Neo4j」兩個缺口串成的
+**完整平行路徑**。三個寫入端點（`POST /admin/curation/items`、`.../approve`、`.../reject`）已整條移除，
+`GET` 保留。進入圖譜現在只有群組端點一個入口。
+**仍未做**：residual 組逐項處置、pattern 組「修正後核准」（service 沒有 update，今天仍只能退回重提）。
+那部分照原記載需要一輪 grill 定義邊界，**N7 不能因後門關掉而視為完成**。
 ────────────────────────────────────────
 順序: N8
 項目: 長時間 ingest 的請求形態:POST /admin/ingest/run 目前是同步阻塞,四個 chunk 就要約 4 分鐘,超過 nginx 預設代理逾時
