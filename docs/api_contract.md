@@ -294,6 +294,49 @@ Structured Outputs(`json_schema` + `strict`)約束;若驗證仍失敗,重試用�
 丟棄不是永久損失:`group_id` 由 chunk 與收斂節點推導,修正抽取後重跑會把先前丟棄的元素**補進同一組**,
 該組的 Schema gate 結果隨之更新。
 
+### `POST /admin/ingest/run` —— 同來源併發防護(409)
+
+> 本節記載 `changes/ingest-concurrency-guard`(`docs/notes.md` 的 N8 方向 c)帶來的行為。
+
+**先讀這一句:這個端點的 504 不代表失敗。** 它是同步阻塞的,四個 chunk 約需 4 分鐘,
+超過 nginx 預設代理逾時;nginx 回 504 時**後端通常仍在跑、而且會跑完**。
+2026-08-12 有人把 504 讀成失敗而重試,於是兩次抽取同時進行,同一章節重複花掉約 15–25k tokens。
+
+現在同一個來源在有進行中的抽取 job 時,再次提交會被擋下:
+
+| 情況 | 狀態碼 | `error.code` |
+|---|---|---|
+| 同一 `source` 已有進行中的抽取 job | `409` | `ingest_already_running` |
+
+`message` 含**擋住本次請求的 `job_id` 與其開始時間**,並明講「本次請求未執行、未花費任何 token」
+與「不要重試」。要確認先前那個 job 的最終狀態,查 `ingestion_jobs` 表。
+
+四點語意需要說清楚:
+
+1. **防護在後端,不在介面提示。** 它不能依賴操作者判讀 504 是否代表失敗——那正是上次失敗的環節。
+   實作是 `ingestion_jobs` 上的部分唯一索引(見 `schema/graph_schema.md` §2.3),
+   所以**連線無關**:換一條連線、換一個行程、換一個人提交,一樣擋。
+2. **拒絕發生在任何 LLM 呼叫之前**,所以被擋下的提交花費恆為 0,也不會留下第二列 job。
+3. **只擋同一個來源。** 不同章節同時抽取是兩份不同的工作,不是重複,照常放行。
+4. **`preview` 與 `options` 完全不受影響**;預覽不花錢也不寫入,沒有理由排在 run 後面。
+
+**孤兒鎖與手動解法。** job 的正常與例外收尾都會關掉該列,所以要留下 `running` 的孤兒列需要硬性中止。
+但**不要把它當成罕見**:最容易製造孤兒的不是 OOM,而是 **`make up`** ——
+`docker compose up -d --build` 會重啟 backend,而一次四分鐘的抽取撐不過 docker 預設的 10 秒
+stop grace,必定被 SIGKILL。**匯入進行中重啟 backend,就會鎖住那個章節。**
+此時 409 訊息的「後端沒有失敗」不適用——它確實失敗了,只是沒機會收尾。
+孤兒在 **2 小時**(`load_postgres.STALE_AFTER`)後自動失效,
+下一次提交會把它標成 `failed` 並接手。取值刻意偏長:太短會把「還在跑」誤判成孤兒而**重複扣款**,
+太長只是讓人等。要立刻解除,直接改那一列:
+
+```sql
+UPDATE ingestion_jobs SET status = 'failed', finished_at = now()
+WHERE job_id = '<擋住你的 job_id>';
+```
+
+**seed 管線不在防護範圍內**(`make seed`,job_id 前綴 `job:`,抽取則是 `ingest:`)。
+seed 冪等、離線、不花錢,沒有要保護的花費。
+
 ### `POST /admin/review/groups/{group_id}/approve`
 
 三個群組端點(`approve` / `reject` / `gap`)的 `reviewer` 上限 100 字元、`reason` 上限 2000 字元(超過回 `422`);兩者都會原樣寫入 `graph_change_logs`,所以與其他請求欄位一樣需要邊界。

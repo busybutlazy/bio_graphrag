@@ -199,7 +199,7 @@ async def ingest_document(
     """
     chunk_params = chunk_params or {}
     extract_fn = extract_fn or llm_client.extract
-    job_id = f"ingest:{uuid.uuid4()}"
+    job_id = f"{load_postgres.EXTRACT_JOB_PREFIX}{uuid.uuid4()}"
 
     doc = parse_document(source_path)
     chunker = chunkers.get_chunker(strategy, **chunk_params)
@@ -248,7 +248,13 @@ async def ingest_document(
         raise ValueError("a non-dry-run ingest requires pg_conn and qdrant")
 
     await load_postgres.ensure_schema(pg_conn)
-    await load_postgres.start_ingestion_job(pg_conn, job_id, str(source_path))
+    # Claim the source before the chunk loop below, which is where the spending starts.
+    # `POST /admin/ingest/run` blocks past nginx's proxy timeout, so the operator sees a 504
+    # for a run that is still going; retrying used to start a second extraction next to the
+    # first and pay for the chapter twice. Raising here makes that retry free. Deliberately
+    # not caught: the HTTP layer turns it into a 409, and a direct in-container call — the
+    # documented way to verify an ingest without going through nginx — is protected the same way.
+    await load_postgres.claim_ingest_source(pg_conn, job_id, str(source_path))
 
     total_tokens = 0
     failed_chunks = 0
