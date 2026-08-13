@@ -173,3 +173,47 @@ ruff check / ruff format --check / mypy(拋棄式容器)
 
 - **Deviations**:None。未動防護邏輯,未擴大路徑範圍。
 - **Result**: **Pass**
+
+---
+
+## R2 — 追加審查處置(REVIEW_REPORT〈追加審查:修復後複驗〉)
+
+- **觸發**:同一份 `REVIEW_REPORT.md` 追加的第二輪(針對 `8be0e86`)。
+  該輪確認 M-1 / S-1 修法正確、無迴歸、防護邏輯逐行未動,新發現 **N-1 ~ N-4,皆 Low / Suggestion**。
+- **人類處置決定**:jett,2026-08-13 —— 「請修改」(四項全修)。
+- **Boundary and allowed paths**:`backend/app/api/routes_ingest.py`、
+  `backend/tests/integration/test_ingest.py`、`docs/notes.md`、
+  `changes/ingest-concurrency-guard/`(皆在原批准清單內)。
+
+### 四項發現,我逐項獨立驗證後全部成立
+
+- **N-1(產出物數字未隨修復更新)** —— 實測 `git diff main..HEAD --stat -- . ':(exclude)changes/'`
+  為 **8 檔、+527 / −3**、**10 個新測試**,而 `CHANGE_REPORT` §2 仍寫 +479 / −3 與 9 個。
+  **審查者是對的。** 已更新 §2 並註明兩組數字各自對應哪個 commit;
+  `VERIFICATION_REPORT` 開頭補上「本檔記錄的是 `a42b278` 那一輪」的指向。
+- **N-2(M-1 修復的那半段訊息無測試守住)** —— 成立且是四項中最重要的:
+  `assert "不要重試" in message` 現在命中的是條件句,**孤兒指引整段沒有任何斷言**,
+  刪掉它測試仍綠、M-1 會靜靜復發。已在同一測試補上
+  `"重啟"` / `"2 小時"` / `"手動關閉"` 三項斷言。
+- **N-3(`CancelledError` 那條筆記結論只寫了一半)** —— 成立,而且我原本的結論是**錯的**:
+  我寫「方向是安全的(錯誤地釋放鎖,不是洩漏鎖)」,但 `finally` 裡的
+  `await finish_ingestion_job(...)` 本身也可能被取消打斷,那一列就留在 `running`、
+  **鎖被洩漏 2 小時**,方向相反。已改寫 N9 該條為「兩種結果皆可能,未實測,不要假設方向安全」。
+- **N-4(訊息裡的 `**` 是字面字元)** —— 成立。`frontend/app.js` 的 `E()` 以文字節點附加子元素
+  (`:4-16`,只有 `html` 這個 prop 才走 `innerHTML`),所以操作者會看到星號。
+  已移除訊息中兩對 `**`,並加 `assert "**" not in message` 擋回歸。
+
+### 驗證
+
+```
+docker compose build backend                                                     # exit 0
+docker compose run --rm -e OPENAI_API_KEY= backend pytest tests ingestion/tests -q
+→ 1 failed, 242 passed in 90.44s     # 數量不變(N-2 是在既有測試上加斷言,非新增測試)
+ruff check / ruff format --check / mypy(拋棄式容器)
+→ All checks passed! / 107 files already formatted / no issues found in 83 source files   # exit 0
+```
+
+`make eval` **未重跑**(只改訊息字串、測試斷言與文件,不影響檢索或作答;重跑要再花真實 token)。
+
+- **Deviations**:None。未動防護邏輯,未擴大路徑範圍。
+- **Result**: **Pass**

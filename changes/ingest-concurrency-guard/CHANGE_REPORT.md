@@ -28,9 +28,12 @@ nginx 回 504 但**後端仍在跑而且會跑完**;操作者把 504 讀成失�
 | runner 在花錢前宣告,例外原樣上傳 | `ingestion/extract/runner.py:202, 251` | AC1/AC5 |
 | HTTP 對映 409 | `backend/app/api/routes_ingest.py::ingest_run` | AC2 |
 | 契約與 schema 文件 | `docs/api_contract.md`、`schema/graph_schema.md` §2.3、`docs/notes.md` N8 | — |
-| 9 個新測試(離線,注入 `extract_fn`,零 token) | `ingestion/tests/test_document_ingest.py`(8)、`backend/tests/integration/test_ingest.py`(1) | AC1–AC7 |
+| 10 個新測試(離線,注入 `extract_fn`,零 token) | `ingestion/tests/test_document_ingest.py`(9,含 S-1 前綴守衛)、`backend/tests/integration/test_ingest.py`(1) | AC1–AC7 |
 
-`git diff --stat`:8 檔、+479 / −3,**全部落在批准的路徑範圍內**。
+`git diff main..HEAD --stat -- . ':(exclude)changes/'`:**8 檔、+527 / −3**,
+全部落在批准的路徑範圍內。(**數字含 `8be0e86` 的審查處置**;
+第一個 commit `a42b278` 單獨計為 9 個新測試、+479 / −3——審查 N-1 指出這兩組數字
+原本沒有隨修復更新,單獨打開報告的人會看到對不上的值。)
 
 ## 3. 可觀察的行為改變
 
@@ -108,6 +111,16 @@ Plan 同時把 `make eval` 列為必要驗證、又宣稱零花費,**這兩條�
   審查者未提的既有觀察:`runner.py` 的 `except Exception` 抓不到 `CancelledError`,
   優雅取消時 job 會被記成 `success`——先於本變更,方向安全(錯誤地釋放鎖而非洩漏鎖),
   但稽核紀錄會說謊。
+
+## 6.2 追加審查的處置(第二輪,N-1 ~ N-4,jett 決定四項全修)
+
+第二輪審查確認 M-1 / S-1 修法正確、無迴歸、防護邏輯逐行未動,並提出四項 Low/Suggestion。
+**四項我獨立驗證後全部成立,已全修**(細節見 `TASK_LOG.md` R2):
+
+- **N-1** 產出物數字未隨修復更新(實測 +527 / −3、10 個測試,報告仍寫 +479 / −3、9 個)。已更正並註明各數字對應的 commit。
+- **N-2** M-1 修好的那半段訊息**沒有任何測試守住**,刪掉它測試仍綠、缺陷會靜靜復發。已補三項斷言。**四項中最重要的一項。**
+- **N-3** 我對 `CancelledError` 的結論**寫錯了一半**:`finally` 裡的 `await` 若也被取消打斷,鎖會被**洩漏** 2 小時,方向與我寫的「安全」相反。已改寫 N9 該條。
+- **N-4** 訊息裡的 `**` 會以字面星號顯示給操作者(`frontend/app.js` 的 `E()` 以文字節點附加)。已移除並加斷言擋回歸。
 
 ## 7. 未完成 / 未驗證
 

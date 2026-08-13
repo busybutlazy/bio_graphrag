@@ -212,6 +212,16 @@ def test_run_refuses_a_second_ingest_of_the_same_source(client, monkeypatch):
     assert resp.status_code == 409
     error = resp.json()["error"]
     assert error["code"] == "ingest_already_running"
+    message = error["message"]
     # the operator must be able to find the job, and be told the 504 was not a failure
-    assert job_id in error["message"]
-    assert "不要重試" in error["message"]
+    assert job_id in message
+    assert "不要重試" in message
+    # ...but "do not retry" only holds while the blocking job is alive. The other half of the
+    # message — the one that covers a row left behind by restarting mid-ingest, and says how to
+    # get out of it — has to be asserted too, or it can be deleted with this test still green
+    # and the wrong-instruction defect (review finding M-1) comes back silently.
+    assert "重啟" in message
+    assert "2 小時" in message
+    assert "手動關閉" in message
+    # the frontend renders this as a text node, so markdown emphasis would show up as asterisks
+    assert "**" not in message

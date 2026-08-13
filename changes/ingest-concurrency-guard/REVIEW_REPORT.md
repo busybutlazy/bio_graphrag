@@ -209,3 +209,66 @@ AC8 的基準 232 是 **TASK_LOG 實測所得**（非引用 handoff 文件），
 - 若決定不處置 M-1，本變更在功能面仍達成其目標——防護本身經真實競態驗證是正確的。
 
 The reviewer does not approve, fix, merge, or release this change.
+
+---
+
+# 追加審查:修復後複驗（2026-08-13）
+
+**範圍**:`8be0e86 fix(ingest): say which kind of stuck job the operator is looking at`
+（`a42b278` → `8be0e86`）。**M-1 與 S-1 已修，無迴歸，無範圍外編輯，防護邏輯逐行未動。**
+
+## 處置確認
+
+| 發現 | 處置 | 複驗 |
+|---|---|---|
+| **M-1**（Medium） | 409 訊息改為條件式；`load_postgres` 註解與 `docs/api_contract.md` 孤兒段同步 | ✅ 前提我獨立驗證：`docker-compose.yml` **未設 `stop_grace_period`** → docker 預設 10 秒，4 分鐘的抽取必被 SIGKILL。實作者的成因分析成立 |
+| **S-1**（Suggestion） | 新增 `test_the_index_predicate_and_the_job_prefix_stay_in_sync` | ✅ 斷言真的會咬：改常數而不改 migration 會立刻紅；`claim_ingest_source` 與 `runner` 都以參數方式跟隨常數，唯一的「存下的 SQL 副本」正是被釘住的那一份 |
+| **L-1 / L-2 / L-3 / S-2 / S-3** | 記入 `docs/notes.md` N9 | ✅ 五項全在，摘要與處置方向皆與本報告一致，**無一被靜默丟棄** |
+
+**獨立複跑**（非引用 TASK_LOG R1 的數字）:
+
+- `pytest ingestion/tests/test_document_ingest.py tests/integration/test_ingest.py -q` → **31 passed**
+  （前一輪同樣兩檔為 30，恰好 +1，與 241 → 242 的宣稱一致）
+- `ruff check` / `ruff format --check` / `mypy`（拋棄式容器）→ **三者 exit 0**
+- `git show 8be0e86` 逐行確認:`routes_ingest.py` 只改註解與訊息字串，
+  `load_postgres.py` 只改註解，測試檔純新增。**`claim_ingest_source`、migration SQL、
+  索引述詞、runner 的 claim 位置皆未被觸碰。**
+
+**流程面**:本報告以 211 行原樣進 commit，findings 與末句「The reviewer does not approve」
+未被更動；實作者改在 `CHANGE_REPORT` §6.1 與 `TASK_LOG` R1 回應。**審查產出物的所有權被尊重。**
+`CHANGE_REPORT` §6 亦誠實把 L1/L6 標為「審查已推翻」而非悄悄刪去。
+
+## 本輪新發現（皆為 Low / Suggestion，不影響功能）
+
+**N-1 —— 產出物數字未隨修復更新，彼此不一致。**
+`CHANGE_REPORT.md` §2 仍寫「9 個新測試」與「`git diff --stat`:8 檔、+479 / −3」，
+實際為 **10 個新測試、+527 / −3**（實測）。`VERIFICATION_REPORT.md` 仍停在 241 passed，
+R1 那一輪的證據只存在於 `TASK_LOG.md`。單獨打開驗證報告的人會看到對不上的數字。
+**處置**:兩處各改一行；或在驗證報告加一句指向 TASK_LOG R1。
+
+**N-2 —— M-1 修復的那半段訊息沒有任何測試守住。**
+`test_run_refuses_a_second_ingest_of_the_same_source` 的
+`assert "不要重試" in error["message"]` 仍然通過——但它現在命中的是條件句
+「**若那個 job 還在跑,請不要重試**」，而**新增的孤兒指引（重啟殘留、2 小時、手動關閉）
+完全沒有斷言**。日後有人刪掉那半段，測試仍綠，M-1 會靜靜復發。
+這正是 S-1 想防的那類失效，只是換了個地方。
+**處置**:在同一測試補一句對孤兒半段的斷言（例如 `"重啟" in message` 或 `"手動關閉" in message`）。
+
+**N-3 —— N9 那條 `CancelledError` 觀察是推理，不是實測，且結論只寫了一半。**
+筆記斷言「優雅取消時 job 會被記成 `success`……方向安全（錯誤地釋放鎖，不是洩漏鎖）」。
+但 `finally` 裡的 `await finish_ingestion_job(...)` 本身也可能被取消打斷，
+那一列就會留在 `running` → **鎖被洩漏 2 小時**，方向相反。兩種結果都可能，取決於取消時機。
+**處置**:把 N9 該條改成「兩種結果皆可能，未實測」，免得日後有人依「方向安全」的結論決定不處理。
+
+**N-4（沿用，未變）**——訊息裡的 `**` 是字面字元。
+`frontend/app.js` 以純文字顯示 `error.message`，操作者會看到星號；現在有兩對。
+與 `CHANGE_REPORT` L3（前端無人眼驗證）是同一個缺口，不是本輪新增。
+
+## 追加審查結論
+
+M-1 的修法正確且克制:**只改文案與註解，沒有為了修文案去動防護**——這在
+「保護不能依賴操作者判讀」的立論下是正確的取捨。S-1 的守衛選在了唯一真正危險的那一份副本上。
+N-1 ~ N-3 皆為一行級處置，是否在合併前處理由人類決定；**N-2 是三者中最值得做的**，
+因為它守的是剛剛才修好的東西。
+
+The reviewer does not approve, fix, merge, or release this change.

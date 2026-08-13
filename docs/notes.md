@@ -80,5 +80,5 @@
   - **L-3 HTTP 測試在真實 demo 章節路徑上留 `running` 列**（`test_run_refuses_a_second_ingest_of_the_same_source`），只靠 `finally` 清。pytest 被硬殺時開發機的 demo 章節會被鎖 2 小時，症狀與真實事故無法區分。處置：改用不對應真實檔案的 source_path。
   - **S-2 `_second_connection()` 逐字複製了 `conftest.py::pg_conn` 的連線參數**。conftest 若改來源，這裡不會跟著改，「兩條連線指向同一個 DB」會靜默變假而測試仍過。處置：把連線工廠抽到 conftest 共用。
   - **S-3 `ensure_schema` 每次啟動與每次 `/admin/ingest/run` 都跑一次全表 UPDATE**。目前約 100 列可忽略，此表只增不減；成長後再收斂為「索引不存在時才跑」。現階段 YAGNI，不要動。
-  - **既有觀察（先於本變更）**：`runner.py` 的 `except Exception` 抓不到 `CancelledError`，優雅取消時 `finally` 會用初始值 `status="success"` 收尾，把被中斷的 job 記成成功。方向是安全的（錯誤地釋放鎖，不是洩漏鎖），但稽核紀錄會說謊。
+  - **既有觀察（先於本變更，未實測，兩種結果皆可能）**：`runner.py` 的 `except Exception` 抓不到 `CancelledError`。優雅取消時 `finally` 若跑完，會用初始值 `status="success"` 收尾，把被中斷的 job 記成成功（稽核紀錄說謊，但鎖有被釋放）；若 `finally` 裡的 `await finish_ingestion_job(...)` 本身也被取消打斷，該列就留在 `running`，**鎖被洩漏 2 小時**。取決於取消時機，**不要假設方向是安全的**。（審查 N-3 指出我原本只寫了前一半。）
 範圍: 後續 change（可拆，皆為小範圍）

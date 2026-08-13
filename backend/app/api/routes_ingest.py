@@ -211,12 +211,13 @@ async def ingest_run(body: IngestRequest) -> dict:
         raise APIError(
             409,
             "ingest_already_running",
+            # No markdown emphasis here: the frontend appends error.message as a text node
+            # (`frontend/app.js` E()), so `**` would reach the operator as literal asterisks.
             f"這個來源已經有一個匯入正在進行中(job_id={exc.job_id},開始於 {started}),"
             "本次請求未執行、未花費任何 token。"
-            "**若那個 job 還在跑,請不要重試**:先前的 504 只代表 nginx 等不到回應,不代表後端失敗。"
-            "**若你剛重啟過 backend(例如 make up),這一列很可能是中斷殘留**——"
-            "行程被殺時 job 來不及收尾。殘留列會在 2 小時後自動失效,"
-            "要立刻解除請依 docs/api_contract.md 手動關閉該列。"
+            "若那個 job 還在跑,請不要重試——先前的 504 只代表 nginx 等不到回應,不代表後端失敗。"
+            "若你剛重啟過 backend(例如 make up),這一列很可能是中斷殘留:行程被殺時 job 來不及收尾。"
+            "殘留列會在 2 小時後自動失效,要立刻解除請依 docs/api_contract.md 手動關閉該列。"
             "分辨方法:查 ingestion_jobs 表,對照 started_at 與你最後一次重啟的時間。",
         ) from exc
     finally:
