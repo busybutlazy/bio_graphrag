@@ -205,3 +205,77 @@ The reviewer does not approve, fix, merge, or release this change.
 
 **本報告不構成執行授權**：處置任何一項 finding 之前，需取得人類對「新增 Task／擴充路徑範圍」的批准
 （見 `docs/notes.md` N11）。
+
+---
+
+# Round 2 — 審查處置的複核（plan revision 2）
+
+- **比較基準**：`git diff 6202a15..HEAD`（rev 2 的兩個 commit：`100c7e9` 修正、`7d23686` 文件）。
+- **審查者**：與 Round 1 同一個 session（未參與任何實作；rev 2 由另一個 session
+  `session_01KNgUgGR35aRwBAc3mfXEre` 完成）。
+- **報告完整性**：`REVIEW_REPORT.md` 被原文 commit，**未被改寫、未被插入「已修復」之類的註記**
+  （逐字比對表頭；全文搜尋無事後標註）。這點值得記一筆——審查紀錄被完整保存，而不是被處置方重寫。
+
+## 逐項複核
+
+| Finding | 宣稱 | 本次獨立複核 |
+|---|---|---|
+| **M1** | `make lint` / `make format` 改用 `docker compose run --build` | **實測確認修好**。在乾淨 checkout 中：穩態 `make lint` 綠；**追加一行到 `backend/requirements-dev.txt` 後，build 確實重跑 pip 層**（`Successfully installed … ruff-0.15.21 mypy-1.19.1`），修正前同一操作**完全沒有 build 步驟**。漂移的根因已消除 |
+| **M2** | diff base 改為 `git merge-base main HEAD`、移除手動 exclude | **確認**。兩份報告皆已更正。**實作比 plan rev 2 表格寫的更好**：表格說「改為 `776438b`」，實際做法是不寫死 SHA——後者才對，因為 rebase 會讓任何 SHA 再次失效 |
+| **M3** | 人類裁定「接受本次，且不另立規則」 | **確認記載方式誠實**。裁定留在「偏差」章節，未被改寫成聽起來像原本就在授權內；裁定範圍（只此一次、不成為規則）寫得明確。這是我要求的處置形式 |
+| **L1** | §8 更正 | **確認**：已改為「已 commit、未 push、未 merge、rev 2 未經第二輪審查」 |
+| **L2** | `requirements-dev.txt` 註解改指向 lint stage | **確認**，且該檔已明列為 rev 2 唯一新增的路徑（範圍擴充有記錄，不是偷偷擴的） |
+| **L3** | N12 commit 不拆，改在表頭揭露 | **確認**。判斷合理：為一個乾淨的 docs commit 重寫分支不划算，揭露即可 |
+| **L4** | `backend` service 補 `target: runtime` | **實測確認**：`docker compose build backend` → `Cmd=[uvicorn app.main:app …]`、`WorkingDir=/app`；`docker compose config --quiet` exit 0；`config --services` 仍不含 lint。stage 順序陷阱已根治 |
+| **L5** | dump 搬到 `~/backups/bio_graphrag/` | **檔案存在**（131 KB，與 Round 1 查到的同一份）。但見 N-1 |
+| **S1–S3** | 不做 | 理由成立，無異議 |
+
+**範圍**：rev 2 只動了 `Makefile`、`docker-compose.yml`、`backend/requirements-dev.txt` 與五份
+change 文件——皆在 rev 1 已批准路徑內，加上唯一一條聲明過的新路徑。**未觸碰任何 runtime 程式碼**，
+故「不重跑 `make test`」的判斷成立。穩態 `make lint` 本次實測 **27.1s**（Round 1 修正前為 22.8s），
+與「+2–3 秒」的宣稱在 Pi 的雜訊範圍內一致。
+
+## Round 2 Findings
+
+無 Blocking、無 High、無 Medium。以下皆為 Low / Suggestion，且都只影響紀錄準確度：
+
+**N-1（Low）— L5 說「搬」，實際是「複製」。** `CHANGE_REPORT.md` §5.3 與 commit message 寫
+「搬到／Moved to `~/backups`」，但 `/tmp/.../eea0bc56-.../scratchpad/pre-wipe-governance-tables.sql`
+**仍然存在**（同樣 131 KB）。`VERIFICATION_REPORT.md` 的 R6 寫的是 `cp`，才是實情。
+實務上無害（`/tmp` 那份會自行消失），但兩份報告對同一個動作的描述不一致，而**紀錄準確度正是這個
+專案的貨幣**。→ 把 CHANGE_REPORT 的「搬」改成「複製一份到」，或真的把 `/tmp` 那份刪掉。
+
+**N-2（Low）— 三份文件對 `--build` 成本給了三個數字。**
+plan rev 2 表格「24.6s → **27.9s**」、`CHANGE_REPORT` §9 與 commit message「24.6s → **26.5s**」、
+本次獨立實測 **27.1s**。沒有人說謊，是 Pi 的負載雜訊，而 `VERIFICATION_REPORT.md` 的風險段已經
+把話說對了（「不要把單一數字當成基準」）。→ 讓 plan 與 CHANGE_REPORT 指向那句話，
+或統一寫成範圍，別再各持一個數字。
+
+**N-3（Low，未驗證）— 「首次 lint 需要網路」這句話在 rev 2 之後可能已經不準。**
+`--build` 讓**每一次** `make lint` 都經過一次 build，其中含 `load metadata for docker.io/library/python:3.12-slim`。
+離線機器是否連暖機執行都會失敗，**本次未驗證**（我沒有安全的方式讓這台機器離線）。
+→ 若在意，斷網跑一次 `make lint` 即可定論；否則把 `CHANGE_REPORT` §6 那句改成
+「lint 每次執行都會走一次 build，離線行為未驗證」。
+
+**N-4（Low，Round 1 我漏掉的）— plan 的 `Approval evidence` 欄位仍是未填的模板句。**
+`IMPLEMENTATION_PLAN.md` 最後一行仍寫「**Not approved until a human explicitly records it here.**」，
+而同一份文件上方已寫 `Status: Approved`、`Approved plan revision: 2`、`Approved by/date: jett / 2026-08-14`。
+一個專門用來承載批准證據的欄位裡放著「尚未批准」的樣板句，讀者無法分辨「已批准」與「模板沒填」。
+**rev 1 就是這樣，我 Round 1 沒看到，這是我的疏漏。** → 兩個 revision 各補一行實際的批准證據
+（何時、以什麼形式），或刪掉模板句。
+
+## 殘留風險（與 Round 1 相同，未因 rev 2 改變）
+
+- **AC6 仍無 CI 實跑證據**，且 rev 2 自身也沒有。`--build` 對 CI 的影響（每次冷啟建置）同樣未量測。
+  這是目前唯一還需要真實環境才能關掉的缺口——**開 PR 是關掉它的方法**。
+- **AC8 的歸因仍是推論鏈**，不是對照實驗（本輪未重跑 `make test`，且我同意不需要重跑）。
+- 本輪未執行：`make test`、`make eval`、`make format`、`make up`；未跨機器。
+
+## Round 2 Human Disposition
+
+三個 Medium 全部關閉：M1、L2、L4、L5 我**實測確認**，M2、L1、L3 為文件更正、已確認，
+M3 是人類裁定、記載誠實。**沒有任何新的 Blocking / High / Medium。**
+N-1 到 N-4 皆為紀錄準確度層級，可以現在修，也可以併入開 PR 前的最後一次整理。
+
+The reviewer does not approve, fix, merge, or release this change.
+**本報告不構成執行授權。**

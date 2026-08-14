@@ -96,9 +96,12 @@
 （`curation_items` 20 列 `proposed`、`graph_change_logs` 24 列、`ingestion_jobs` 208 列）。
 **這些治理資料未被還原**——人類裁定開發階段可接受。
 
-**處置（審查 L5）**：dump 原本只在 `/tmp` 的 session scratchpad（重開機即消失）。
-依人類裁定已搬到 repo 外的持久位置：
+**處置（審查 L5 / N-1）**：dump 原本只在 `/tmp` 的 session scratchpad（重開機即消失）。
+依人類裁定，已**複製**一份到 repo 外的持久位置：
 `~/backups/bio_graphrag/2026-08-14-pre-wipe-governance-tables.sql`（131 KB / 302 行）。
+**是複製不是搬移**——`/tmp` 那份仍在，任其隨 session 清理消失（審查 N-1 指出本檔與 commit message
+原本寫「搬」，而 `VERIFICATION_REPORT.md` 的 `cp` 才是實情；此處以實情為準，
+commit message 已成歷史不再改）。
 不放進 repo：內含真實治理資料，且 `data/seed/` 本來就是 gitignored 的同類資產。`make seed` 已回填
 45 nodes / 84 edges / 5 documents / 9 chunks 與 5 個 demo review groups，站台功能正常。
 
@@ -125,7 +128,10 @@
   `build: {context: ./backend, target: runtime}`，建置目標與 stage 順序脫鉤，Dockerfile 的註解
   退化為說明而非唯一防線。已實測 `docker compose build backend` 仍產出 runtime 映像
   （`Cmd=["uvicorn","app.main:app",…]`、`WorkingDir=/app`）。
-- 首次 lint 需要網路（`pip install`）。離線機器第一次跑 `make lint` 會失敗。
+- **rev 2 起每次 `make lint` 都會走一次 build**（`--build`），其中含
+  `load metadata for docker.io/library/python:3.12-slim`。首次執行需要網路（`pip install`）是確定的；
+  **暖機執行在離線機器上的行為未驗證**（審查 N-3 指出這點，並說明他沒有安全的方式讓這台機器斷網——
+  這台機器同時在對外服務）。要定論的話，斷網跑一次 `make lint` 即可。
 
 ## 7. Rollback
 
@@ -140,9 +146,12 @@ docker image rm bio_graphrag-lint
 
 ## 8. 交接
 
-已 commit 於 `feat/containerize-lint`（數量與內容跑 `git log main..HEAD`）；
-**未 push、未 merge**。已經過一輪獨立審查（`REVIEW_REPORT.md`），處置見 §9。
-rev 2 的處置**尚未經第二輪審查**。
+已 commit 於 `feat/containerize-lint`（數量與內容跑 `git log main..HEAD`）。
+已經過**兩輪**獨立審查（`REVIEW_REPORT.md`：Round 1 對 rev 1、Round 2 對 rev 2 的處置），
+處置見 §9 與 §9.1。Round 2 無 Blocking / High / Medium。
+
+**剩下唯一需要真實環境才能關掉的缺口是 AC6——CI 從未實跑過本變更。開 PR 就是關掉它的方法。**
+人類（jett，2026-08-14）已授權 push 與開 PR；**merge 仍未授權**，須待 CI 綠燈與人類驗收。
 
 ## 9. 審查處置（`REVIEW_REPORT.md` → plan revision 2）
 
@@ -150,7 +159,7 @@ rev 2 的處置**尚未經第二輪審查**。
 
 | Finding | 處置 | 證據 |
 |---|---|---|
-| **M1** `make lint` 永不重建 image | **修行為**：`Makefile` 的 `lint` / `format` 改用 `docker compose run --build`。實測改動 `requirements-dev.txt` 後確實觸發重建（`Image bio_graphrag-lint Built`）；穩態成本約 +2–3 秒（24.6s → 26.5s） | §3、§5.4 |
+| **M1** `make lint` 永不重建 image | **修行為**：`Makefile` 的 `lint` / `format` 改用 `docker compose run --build`。實測改動 `requirements-dev.txt` 後確實觸發重建（`Image bio_graphrag-lint Built`）；穩態成本**約 +2–3 秒**——**不引用單一數字**（審查 N-2：三份文件各持一個數字，皆為 Pi 的負載雜訊），基準以 `VERIFICATION_REPORT.md` §風險 的說明為準 | §3、`VERIFICATION_REPORT.md` §風險 |
 | **M2** diff base 已失效 | 表頭改為「用 `git merge-base main HEAD` 取」，並移除手動 exclude 指示；`VERIFICATION_REPORT.md` 同步 | 本檔表頭 |
 | **M3** 快取刪除繞過 stop condition | **人類裁定：接受本次，不另立規則**（jett，2026-08-14） | §5.2 |
 | **L1** §8 與表頭矛盾 | 已更正 | §8 |
@@ -164,3 +173,19 @@ rev 2 的處置**尚未經第二輪審查**。
 
 審查者自己指出的兩件事我原樣保留、不粉飾：**AC6 仍無 CI 實跑證據**（審查用乾淨 checkout
 做了三個變體模擬，把風險壓低但不等於 CI 綠），以及 **AC8 的歸因是推論鏈、不是對照實驗**。
+
+### 9.1 Round 2 複核與其 findings
+
+審查者對 rev 2 做了第二輪複核：**無 Blocking、無 High、無 Medium**；M1 / L2 / L4 / L5 經其
+**獨立實測**確認，M2 / L1 / L3 為文件更正已確認，M3 的記載方式被認可為誠實。
+四個 Low 全屬紀錄準確度，處置如下：
+
+| Finding | 處置 |
+|---|---|
+| **N-1** L5 寫「搬」，實際是 `cp` | 改為「複製」，並寫明 `/tmp` 那份仍在、任其消失（§5.3）。commit message 已成歷史不追改 |
+| **N-2** 三份文件對 `--build` 成本各持一個數字 | 一律改為「約 +2–3 秒」並指向 `VERIFICATION_REPORT.md` §風險 的說明（該處已寫明不要把單一數字當基準） |
+| **N-3** 「首次 lint 需要網路」在 `--build` 之後可能不準 | §6 改寫為「每次都會走一次 build；**離線暖機行為未驗證**」，未假裝驗證過 |
+| **N-4** plan 的 `Approval evidence` 欄仍是模板句 | 兩個 revision 各補上實際批准證據（時間、形式、涵蓋範圍），並寫明不含 push / merge / release |
+
+N-3 的判斷值得留下：審查者說他**沒有安全的方式讓這台機器斷網**（它同時在對外服務），
+所以誠實標為未驗證，而不是猜一個方向。此處沿用同一判斷。

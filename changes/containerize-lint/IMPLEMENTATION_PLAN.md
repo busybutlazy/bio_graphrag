@@ -270,7 +270,7 @@ docker image rm bio_graphrag-lint  # 若已 build
 
 | Finding | 裁定 | 任務 |
 |---|---|---|
-| **M1** `make lint` 永不重建 image → 升 tooling 後本機與 CI 靜默漂移 | **修行為**（不是修宣稱）。實測 `--build` 只多約 3 秒（24.6s → 27.9s） | R1 |
+| **M1** `make lint` 永不重建 image → 升 tooling 後本機與 CI 靜默漂移 | **修行為**（不是修宣稱）。實測 `--build` 只多約 2–3 秒；**不引用單一數字**（審查 N-2），基準見 `VERIFICATION_REPORT.md` §風險 | R1 |
 | **M2** 兩份報告的 diff base `b71481f` 已失效（main 已推進至 `776438b`，分支已 rebase） | 改為 `776438b`，移除手動 exclude 指示 | R2 |
 | **M3** 快取以容器內 root 刪除，繞過「需 sudo 即停止」的 stop condition | **人類裁定：接受本次，且不另立規則**（jett）。報告如實記載裁定與其範圍 | R3 |
 | **L1** CHANGE_REPORT §8 與表頭矛盾（「尚未 commit」vs 已 commit） | 更正 | R2 |
@@ -289,4 +289,13 @@ docker image rm bio_graphrag-lint  # 若已 build
 
 **Mandatory stop conditions（rev 2 沿用 rev 1，另加）**：若 R5 使 `docker compose build backend`
 產出不同於 runtime stage 的映像 → 停止。
-- **Approval evidence**：**Not approved until a human explicitly records it here. Material plan changes invalidate approval.**
+- **Approval evidence**（審查 N-4：此欄原本留著「尚未批准」的模板句，與上方的
+  `Status: Approved` 並存，讀者無從分辨「已批准」與「模板沒填」。現以實際證據取代）：
+  - **rev 1**：2026-08-14，jett 在 `plan-change` 交出計畫後，於本 session 的互動式提問中
+    逐項選定 D1 = A（lint stage 只裝 dev tooling）、D2 = `supervised-auto`（T1–T6）、
+    D3 = 刪除既存 root-owned 快取。三項選擇即構成對 rev 1 範圍、風險等級與自動化模式的批准。
+  - **rev 2**：2026-08-14，jett 在獨立審查（`REVIEW_REPORT.md` Round 1）後，於同一 session
+    裁定 M3「接受本次且不另立規則」、L2「擴充範圍順手修」、L5「搬到 repo 外的持久位置」，
+    並未反對隨附的 M1 / M2 / L1 / L3 / L4 處置表。該表即為 rev 2 的批准範圍。
+  - **仍然成立的限制**：批准涵蓋實作與 commit，**不含 push、merge、release**；
+    重大計畫變更會使批准失效。
