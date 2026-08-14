@@ -8,29 +8,35 @@
 
 ────────────────────────────────────────
 
-## N1 — Structured Outputs（json_schema + strict）+ 逐元素失敗而非整塊丟棄
-
-- **來源**: 抽取品質檢視「發現三」（`docs/notes.md` 舊記錄,原始日期未標註)
-- **Evidence**: 未附具體 run/log 引用（承接自舊記錄,原文未附)
-- **延後理由**: 獨立於分組工作,但應排在下一次真實抽取之前
-- **可能後果（若持續延後）**: 下一次真實抽取若再遇到單一元素格式錯誤,可能導致整份 chunk 的抽取結果被整塊丟棄（"整章報銷"）
-- **Blocking trigger**: 下一次會花 token 的真實抽取執行前
-- **Owner**: 未指定
-- **範圍**: 新 change
-
-────────────────────────────────────────
-
 ## N2 — 為 `endocrine_demo_v1` 寫 extraction profile
 
 限定型別、講清楚 `HAS_EFFECT` / `ON_VARIABLE` 方向、附正確範例。
 
+- **狀態**: **N1 前置已解除,內容是否足夠待人類判斷**。原 blocking trigger（N1 完成之後）已滿足——
+  `changes/structured-outputs-extraction`（PR #20,`51a2056`／`521197c`／`f9e1929`)已合併進
+  `main`:`build_strict_schema()`、`salvage.py`、`runner.ExtractionAttempt` 均在現行程式碼中,
+  真實抽取由 `failed_chunks 2/4` 降為 `0/4`。原 N1 項目已從本檔移除（結果見該 change 的
+  `CHANGE_REPORT.md`,未收斂成 `CHANGE.md`)。
+- **新發現**: `prompts/profiles/endocrine_v1.profile.md` 已存在（最後修改 2026-07-21,早於 N1
+  合併),內容已涵蓋「限定 node/relationship type、RegulatoryEffect 方向與 id 慣例、
+  HAS_EFFECT/ON_VARIABLE 相關 few-shot 範例」,表面上與本項訴求高度重疊。**本次 triage 未判斷
+  該檔是否已足夠**——是否需要針對 N1 之後的 strict-schema 輸出重新驗證/修訂,屬內容判斷,
+  留待人類或下一輪 grill 決定,不由 triage 逕行認定完成。
 - **來源**: 抽取品質檢視「發現二」
-- **Evidence**: 未附具體引用（承接自舊記錄)
-- **延後理由**: 需要 N1 先穩住輸出形式,才驗得出內容改善
-- **可能後果**: 抽取內容品質（型別誤用、關係方向錯誤）持續不受 profile 約束
-- **Blocking trigger**: N1 完成之後
+- **Evidence**: 未附具體引用（承接自舊記錄);`prompts/profiles/endocrine_v1.profile.md` 現存內容見上
+- **延後理由（原始）**: 需要 N1 先穩住輸出形式,才驗得出內容改善——此前置條件現已成立
+- **可能後果**: 若現有 profile 內容不足,抽取內容品質（型別誤用、關係方向錯誤）持續不受 profile 約束;
+  若已足夠但未經確認,則本項目在 Pending 中空占位
+- **Blocking trigger**: 已解除（N1 完成)。下一個動作是人類判斷 `endocrine_v1.profile.md` 是否已滿足
+  本項訴求,而非預設要另開一次花 token 的驗證
 - **Owner**: 未指定
-- **範圍**: 新 change（含一次花 token 的驗證）
+- **範圍**: 待定——視人類判斷結果,可能是「無需新 change（現有檔案已足夠,關閉本項)」或「小 change
+  （用現有真實章節跑一次驗證/修訂 profile)」
+- **關聯操作（2026-08-14)**: 公開 demo vendor key（原 N12,已執行)的 quota 已人為調成 0
+  （`vendor_usage.used=1748 > quota=0`,呈現 `quota_exceeded`),原因就是本項未確認完——
+  在確認 `endocrine_v1.profile.md` 是否足夠、抽取品質站得住腳之前,先不讓讀者實際試用。
+  **本項確認完成(或決定不需再動)後,記得把 quota 調回 5,000,000**
+  （`docker compose run --rm backend python scripts/manage_vendors.py update --code demo --quota 5000000`)。
 
 ────────────────────────────────────────
 
@@ -64,9 +70,10 @@ accept／reject／復原、engineer override、孤兒 JSON 去留。
 
 ## N5 — gold 改打真實抽取輸出（DF2）
 
+- **狀態**: N1 半已完成（見 N2 狀態行,PR #20 已合併),仍卡在 N2（profile 內容是否足夠未定案）
 - **來源**: `changes/phase-p5-run-2026-08-11/DECISION_READINESS_SUMMARY.md` §Intentionally Deferred Decisions
 - **Evidence**: 現有 gold（6 tests,全綠）仍是有效的 renderer 回歸網,未依賴真實抽取輸出
-- **延後理由**: 需要 N1 + N2 讓抽取品質穩定後,以真實輸出作為 golden 基準才有意義
+- **延後理由**: 需要 N1 + N2 讓抽取品質穩定後,以真實輸出作為 golden 基準才有意義;N1 已滿足,N2 未定案
 - **可能後果**: golden regression 持續只驗證 renderer,不驗證真實抽取品質
 - **Blocking trigger**: 宣告 Roadmap P5 完成時,或要以真實抽取輸出作為 golden 基準時
 - **Owner**: owner
@@ -173,22 +180,6 @@ accept／reject／復原、engineer override、孤兒 JSON 去留。
 - **Blocking trigger**: 未明確記載
 - **Owner**: 未指定
 - **範圍**: skill 層 change（`canonical-configs/agent-memory/`,非本專案 change)
-
-────────────────────────────────────────
-
-## N12 — 公開一把固定的 demo vendor key（小額 quota)
-
-取代「來信索取 token」。
-
-- **來源**: 2026-08-12 已定案
-- **Evidence**: 作品集讀者是 recruiter／技術主管,不會為了試用而寄信,只會關掉分頁;但 LLM token 是
-  真實花費,不能無上限開放。發放指令 `scripts/manage_vendors.py` 已支援
-  （`add --code demo --name "Public Demo" --quota <N> --key <fixed-string>`)
-- **延後理由**: 實質工作是配額數字的決定,尚未定案
-- **可能後果**: 讀者目前無法自助試用系統,只能透過索取 token 的方式
-- **Blocking trigger**: 未明確記載（決策已定案,待決定配額數字並執行）
-- **Owner**: 未指定
-- **範圍**: 小 change（無程式新功能;動 README／前端提示文案＋一次發 key 的維運動作)
 
 ────────────────────────────────────────
 
