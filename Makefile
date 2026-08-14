@@ -9,8 +9,15 @@ down:
 logs:
 	docker compose logs -f
 
+# -e OPENAI_API_KEY= overrides the backend service's env_file (.env) for this run only,
+# so a real local dev key never leaks into the test suite: N14 found `make test` spending
+# real tokens and `test_qdrant_payload_is_queryable` failing because a live key pushes
+# embeddings to 1536 dims (a different Qdrant collection) than the test hardcodes. CI was
+# never affected — it copies .env.example (no key) before `make test` — which is exactly
+# why this went unnoticed locally. To deliberately exercise the OpenAI-backed code path,
+# run `docker compose run --rm backend pytest ...` directly instead of through this target.
 test:
-	docker compose run --rm backend pytest tests ingestion/tests
+	docker compose run --rm -e OPENAI_API_KEY= backend pytest tests ingestion/tests
 
 health:
 	curl -sf http://localhost:8080/health | python3 -m json.tool
