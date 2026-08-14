@@ -17,6 +17,8 @@ make up            # docker compose up -d --build (postgres, neo4j, qdrant, back
 make seed          # load seed data into all three stores — safe to re-run
 make health        # curl /health
 make test          # docker compose run --rm backend pytest tests ingestion/tests
+make lint          # ruff + mypy in the `lint` container (nothing to install on the host)
+make format        # same container, ruff --fix + formatter in place
 make eval          # replay 22 golden questions, gate on thresholds
 make down          # stop; `docker compose down -v` also wipes the volumes
 make export-seed   # snapshot current DB (approved graph + chunks) → data/seed/

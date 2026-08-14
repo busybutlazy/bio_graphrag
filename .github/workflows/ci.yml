@@ -19,12 +19,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: backend/requirements-dev.txt
-      - run: pip install -r backend/requirements-dev.txt
+      # No setup-python / pip install: `make lint` builds and runs the `lint`
+      # compose service (ruff + mypy pinned in backend/requirements-dev.txt), so
+      # CI and a developer's machine run byte-identical tooling.
       - run: make lint
 
   test:

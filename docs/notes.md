@@ -94,6 +94,15 @@
 項目: lint 的容器化入口（`changes/close-approve-item-backdoor` 第四輪審查 S-C）
 為什麼在這個位置: 2026-08-13 由獨立審查者發現。`Makefile` 的 `lint` target 直接在 host 上跑 ruff/mypy，與工作準則「一律以 Docker 為執行環境」不一致；`docker compose run --rm backend ruff ...` 會得到 `ruff: not found`（backend image 不含 dev deps）。後果是**「lint 全過」成為審查者無法獨立複核的宣稱**——每次都只能採信實作者自述，而這正是這個變更四輪來反覆出問題的那一類。做法擇一：backend image 加一個含 dev deps 的 target，或 `Makefile` 改走拋棄式容器（實作端目前已在用 `docker run --rm --user $(id -u):$(id -g) -e RUFF_CACHE_DIR=/tmp/ruff ... python:3.12-slim`，把它收進 Makefile 即可）。注意 `--user` 與 `RUFF_CACHE_DIR` 不能省，否則會在 repo 內留下 root 所有的 `.ruff_cache`。
 範圍: 小 change（只動 Makefile / compose / CI）
+狀態: **已完成**（`changes/containerize-lint`，2026-08-14）。`make lint` / `make format` 改走
+`docker compose run --rm lint`；命令與路徑清單集中在 `scripts/lint.sh`（單一來源，Makefile 與 CI 都引用它），
+lint stage 定義在 `backend/Dockerfile`（獨立 `FROM python:3.12-slim AS lint`，只裝 `requirements-dev.txt`，
+故 mypy 看到的與原本 CI 完全相同）。compose 的 `lint` service 放在 `profiles: ["tools"]`，`make up` 不會啟動；
+快取以 `RUFF_CACHE_DIR` / `MYPY_CACHE_DIR` 導到 `/tmp`，容器以 Makefile 帶入的真實 uid/gid 執行。
+CI 的 lint job 已移除 `setup-python` + `pip install`。既存的 root-owned `.ruff_cache/`、`.mypy_cache/` 已刪除。
+**發現**：本機不只沒有 `ruff`，`mypy` 還是 1.15.0（pin 為 1.19.1）——原本的 `make lint` 在本機第一行就失敗。
+**未做**：`__pycache__` 等由 backend 容器以 root 寫入 repo 的檔案仍是 root 所有（既有問題，範圍更大，不在本次）；
+讓 mypy 看得見 runtime 套件真實型別（D1 選項 B）刻意延後，見 N13。
 ────────────────────────────────────────
 順序: N11
 項目: 把「守衛斷言必須能說出它在缺陷存在時如何失敗」寫進 `verify-change` 檢查表（第四輪審查 S-D）
@@ -105,4 +114,26 @@
 項目: 公開一把固定的 demo vendor key（小額 quota），取代「來信索取 token」
 為什麼在這個位置: 2026-08-12 已定案（本檔先前未記載）。作品集的讀者是 recruiter／技術主管，不會為了試用而寄信，只會關掉分頁；但 LLM token 是真實花費，不能無上限開放。公開 key + 硬性配額同時解決兩邊，且配額治理機制本身成為 demo 的一部分，比在 README 宣稱「我實作了多租戶配額」更有說服力。瀏覽端（library/graph/nodes）本來就開放，key 用完後治理流程仍看得到。發放指令 `scripts/manage_vendors.py` 已支援（`add --code demo --name "Public Demo" --quota <N> --key <fixed-string>`），本項的實質工作是**配額數字的決定**、`README.md` Demo 區塊的說明，以及 `quota_exceeded` 前端提示改為引導至聯絡方式
 範圍: 小 change（無程式新功能；動 README／前端提示文案＋一次發 key 的維運動作）
+────────────────────────────────────────
+順序: N13
+項目: 強化 mypy 訊號：讓 type-check 看得見 runtime 套件的真實型別
+為什麼在這個位置: 2026-08-14 由 `containerize-lint` 的 D1 刻意延後。現行 lint 映像只裝 dev tooling，
+與原本 CI 等價，但 fastapi / pydantic / asyncpg 全走 `ignore_missing_imports`，型別訊號偏弱。
+若把 lint stage 疊在 backend runtime image 上，mypy 會第一次看到真實型別，預期一次冒出可觀的既有錯誤——
+那是獨立的「修型別」工作，不該混進換執行方式的變更裡
+範圍: 新 change（動 backend/Dockerfile 一行 + 後續修型別，規模未知）
+────────────────────────────────────────
+順序: N14
+項目: 本機 `make test` 帶著 OpenAI key 跑（backend service 走 `env_file: .env`），與 `CLAUDE.md` 宣稱的
+「tests run offline (no key configured)」不符
+為什麼在這個位置: 2026-08-14 在 `containerize-lint` 的驗證中清空 volume 後暴露。兩個後果：
+(1) **可能真的在花 token**——與已知的「`make eval` 本機會花錢」同一個根因；
+(2) `ingestion/tests/test_pipeline.py::test_qdrant_payload_is_queryable` **穩定失敗**：
+`load_qdrant.py:25` 的集合名取決於向量維度（`biology_chunks` / `biology_chunks_{dim}`），有 key → 1536 →
+資料寫進 `biology_chunks_1536`，而測試硬編 `COLLECTION_NAME`。實測 `biology_chunks` 0 點、
+`biology_chunks_1536` 9 點。先前會過只是因為舊 volume 還留著更早期無 key（dim 128）時寫的點，
+volume 一清就露餡。**CI 用 `.env.example`（無 key）→ dim 128 → 會過**，所以 CI 綠不代表本機綠。
+處置方向擇一：測試改成依實際維度解集合名（治標，最小）；或讓測試／本機測試環境不吃 `.env` 的 key
+（治本，同時止血 token 花費）。後者要先確認離線模式下整套測試仍成立
+範圍: 新 change（小；但「測試該不該吃 .env」是個要先定的姿態）
 ────────────────────────────────────────
