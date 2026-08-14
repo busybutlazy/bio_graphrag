@@ -101,3 +101,8 @@
 另含（第五輪審查 S-E）：**「人類交來審查報告」不等於「授權繼續執行」**，但實作端會這樣讀——本變更的 R6/R7 就是這樣發生的（新增 Task 未依 stop condition 停止）。現行 `review-change` 的產出結尾只有「The reviewer does not approve, fix, merge, or release this change」，那是**對審查者說的**，不是對實作者說的。建議在 template 補一句明確對實作端說的話：**本報告不構成執行授權；處置前需取得人類對「新增 Task／範圍」的批准**。這比要求實作者「下次記得停」可靠，因為它把提醒放在實作者一定會讀到的地方。
 範圍: skill 層 change
 ────────────────────────────────────────
+順序: N12
+項目: 公開一把固定的 demo vendor key（小額 quota），取代「來信索取 token」
+為什麼在這個位置: 2026-08-12 已定案（本檔先前未記載）。作品集的讀者是 recruiter／技術主管，不會為了試用而寄信，只會關掉分頁；但 LLM token 是真實花費，不能無上限開放。公開 key + 硬性配額同時解決兩邊，且配額治理機制本身成為 demo 的一部分，比在 README 宣稱「我實作了多租戶配額」更有說服力。瀏覽端（library/graph/nodes）本來就開放，key 用完後治理流程仍看得到。發放指令 `scripts/manage_vendors.py` 已支援（`add --code demo --name "Public Demo" --quota <N> --key <fixed-string>`），本項的實質工作是**配額數字的決定**、`README.md` Demo 區塊的說明，以及 `quota_exceeded` 前端提示改為引導至聯絡方式
+範圍: 小 change（無程式新功能；動 README／前端提示文案＋一次發 key 的維運動作）
+────────────────────────────────────────
