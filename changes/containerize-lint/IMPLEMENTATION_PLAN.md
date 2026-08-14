@@ -257,7 +257,36 @@ docker image rm bio_graphrag-lint  # 若已 build
   - **D3 = 刪除**既存的 root-owned `.ruff_cache/` 與 `.mypy_cache/`；若需 `sudo` 則停止回報。
 
 - **Status**：**Approved**
-- **Approved plan revision**：1
-- **Approved risk level and automation mode**：low / `supervised-auto`（T1–T6）
-- **Approved by/date**：jett / 2026-08-14
+- **Approved plan revision**：**2**（rev 1 已交付並經獨立審查；rev 2 為審查處置，見下）
+- **Approved risk level and automation mode**：low / `supervised-auto`
+- **Approved by/date**：jett / 2026-08-14（rev 1 與 rev 2 同日）
+
+---
+
+## Revision 2 — 審查處置（Approved / jett / 2026-08-14）
+
+依 `REVIEW_REPORT.md`（獨立 reviewer，無 Blocking / 無 High）。**新增路徑**：
+`backend/requirements-dev.txt`（僅一行註解，L2）。其餘皆在 rev 1 已批准的路徑內。
+
+| Finding | 裁定 | 任務 |
+|---|---|---|
+| **M1** `make lint` 永不重建 image → 升 tooling 後本機與 CI 靜默漂移 | **修行為**（不是修宣稱）。實測 `--build` 只多約 3 秒（24.6s → 27.9s） | R1 |
+| **M2** 兩份報告的 diff base `b71481f` 已失效（main 已推進至 `776438b`，分支已 rebase） | 改為 `776438b`，移除手動 exclude 指示 | R2 |
+| **M3** 快取以容器內 root 刪除，繞過「需 sudo 即停止」的 stop condition | **人類裁定：接受本次，且不另立規則**（jett）。報告如實記載裁定與其範圍 | R3 |
+| **L1** CHANGE_REPORT §8 與表頭矛盾（「尚未 commit」vs 已 commit） | 更正 | R2 |
+| **L2** `requirements-dev.txt:2` 仍寫 host `pip install`，牴觸 `CLAUDE.md` 與工作準則 | **擴充範圍修掉**（一行註解） | R4 |
+| **L3** 無關的 N12 commit 搭便車在本分支 | **不 cherry-pick**（重寫分支不划算），在 CHANGE_REPORT 明白揭露 | R2 |
+| **L4** stage 順序陷阱只靠註解守 | `backend` service 補 `target: runtime`，讓建置目標與 stage 順序脫鉤 | R5 |
+| **L5** 治理資料 dump 只存在 `/tmp` | **搬到 repo 外的持久位置**（jett 裁定），報告記載新位置 | R6 |
+| **S1** check 模式改唯讀掛載 | **不做**：要拆 service 或加 override，複雜度不划算 | — |
+| **S2** `lint.sh` 誤在 host 執行的防護 | **不做**：`make lint` 是唯一入口，此為邊角 | — |
+| **S3** `LINT_UID` fallback 靜默 | **不做**：註解已寫明，同上 | — |
+
+**Verification（rev 2）**：`make lint`（含證明 R1 真的會重建——R4 正好改動 `requirements-dev.txt`）、
+`docker compose build backend` + `docker image inspect`（證明 R5 未改變 runtime 映像）、
+`docker compose config --quiet`。**不重跑 `make test`**：rev 2 未觸碰任何 runtime 程式，
+且 rev 1 已記錄其結果與歸因。
+
+**Mandatory stop conditions（rev 2 沿用 rev 1，另加）**：若 R5 使 `docker compose build backend`
+產出不同於 runtime stage 的映像 → 停止。
 - **Approval evidence**：**Not approved until a human explicitly records it here. Material plan changes invalidate approval.**

@@ -1,8 +1,9 @@
 # Verification Report: containerize-lint
 
 - **Plan revision**：1（Approved / jett / 2026-08-14，low / `supervised-auto`）
-- **Diff base**：`main` @ `b71481f`；驗證是在 commit 前於工作區狀態下執行的，
-  該狀態後來原封不動 commit 到 `feat/containerize-lint`（`git diff main..HEAD` 可複核）
+- **Diff base**：用 `git merge-base main HEAD` 取，**不要寫死 SHA**——本分支已 rebase 過一次，
+  原本寫的 `b71481f` 已失效（審查 M2）。複核用 `git diff main...HEAD`（三點）。
+  rev 1 的驗證是在 commit 前於工作區狀態下執行，該狀態原封不動進了本分支的 commit。
 - **姿態**：全部命令在 Docker 內執行；host **未安裝任何套件**（host 至今仍無 `ruff`）
 - **結論**：**AC1–AC7、AC9 通過；AC8 未達字面標準**。清空 volume 重跑後
   `1 failed, 241 passed`：原本的兩個失敗**皆轉綠**，剩下的一個
@@ -116,7 +117,9 @@
 
 ## 風險
 
-- 首次 `make lint` 需 build（本機實測 **2m50s**，多數花在 Pi 上 unpack 映像層）；之後暖機 **3.0s**。
+- 首次 `make lint` 需 build（本機實測 **2m50s**，多數花在 Pi 上 unpack 映像層）；之後暖機
+  **3.0s–26.5s 不等**——Pi 的負載差異很大（審查者在另一時段量到 22.8s，rev 2 量到 24.6s／26.5s），
+  **不要把單一數字當成基準**。rev 2 起每次多一個 `--build`（無變動時約 +2–3 秒）。
   CI 每次都是冷啟動，lint job 會比原本的 `pip install`（有 pip cache）慢，**未量測**。
 - 掛載 repo 根使 lint 容器看得到 `.env` 與 `data/seed/`。該容器不連任何服務、只跑 ruff/mypy。
 
@@ -124,4 +127,23 @@
 
 - **快取刪除方式**：`rm -rf` 在 host 因 root 所有而失敗（plan 的 sudo stop condition）。
   未用 `sudo`，改以 `docker compose run --rm --user 0:0 --entrypoint sh lint -c 'rm -rf ...'` 完成。
-  詳見 `TASK_LOG.md` T6。**這是對批准方法的偏差，交由審查判定是否可接受。**
+  詳見 `TASK_LOG.md` T6。審查列為 M3；**人類（jett，2026-08-14）裁定接受本次，且不另立規則。**
+
+---
+
+# Rev 2 驗證（審查處置 R1–R6）
+
+- **姿態**：同 rev 1，全部容器內執行。**未重跑 `make test`**：rev 2 未觸碰任何 runtime 程式
+  （改動限於 `Makefile`、`docker-compose.yml`、`backend/requirements-dev.txt` 的註解與報告）。
+
+| 任務 | 命令 | 結果 |
+|---|---|---|
+| **R1** `--build` 真的會重建 | 改動 `backend/requirements-dev.txt`（R4）後 `make lint` | **PASS**：輸出含 `Image bio_graphrag-lint Built`（pip 層失效重跑，2m25s），三項檢查仍綠。**這正是審查 M1 描述的情境：修正前此處不會有任何 build 步驟** |
+| **R1** 穩態成本 | 無改動時 `make lint` | **26.5s**（同機同時段的無 `--build` 對照為 24.6s）→ 額外成本約 **2–3 秒** |
+| **R5** backend 建置目標明確化 | `docker compose build backend`；`docker image inspect` | **PASS**：`Cmd=["uvicorn","app.main:app","--host","0.0.0.0","--port","8000"]`、`WorkingDir=/app`——仍是 runtime stage |
+| **R5** compose 合法性 | `docker compose config --quiet` | **PASS** exit 0 |
+| **R4** lint 仍全綠 | 同 R1 的 `make lint` | **PASS**：`All checks passed!` / `107 files already formatted` / `Success: no issues found in 83 source files` |
+| **R6** dump 已持久化 | `cp` → `wc -l` | **PASS**：`~/backups/bio_graphrag/2026-08-14-pre-wipe-governance-tables.sql`，302 行 / 131 KB（與審查者查到的行數一致） |
+
+**rev 2 未做的驗證**：CI 仍未實跑（AC6 的缺口不變）；`make format` 未重跑（審查 AC4 同此判斷）；
+未跨機器。**rev 2 本身尚未經獨立審查。**

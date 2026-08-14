@@ -107,7 +107,53 @@
 
 ---
 
-## 停止點
+## 停止點（rev 1）
 
 T1–T6 全數完成，進入 evidence-only 驗證階段（見 `VERIFICATION_REPORT.md`）。
-**未 commit、未 push、未自我審查。**
+未自我審查。其後依人類指示 commit 到 `feat/containerize-lint`（未 push），並交由獨立 agent 審查。
+
+---
+
+# Revision 2 — 審查處置（Approved / jett / 2026-08-14）
+
+依 `REVIEW_REPORT.md`（無 Blocking / 無 High）。**新增路徑**：`backend/requirements-dev.txt`。
+
+## R1 — `make lint` / `make format` 改用 `--build`（M1）✅
+
+- **檔案**：`Makefile`
+- **為什麼**：`docker compose run` 只在 image 不存在時建置，於是升 `requirements-dev.txt` 後
+  本機會靜默沿用舊工具、CI（每次冷啟）用新的——正是本變更要消滅的那類漂移，只是搬了個位置。
+- **證據**：R4 改動 `requirements-dev.txt` 後 `make lint` 輸出含 `Image bio_graphrag-lint Built`
+  （修正前此處不會有任何 build 步驟）；穩態成本 24.6s → 26.5s。
+
+## R2 — 報告更正（M2 / L1 / L3）✅
+
+- **檔案**：`CHANGE_REPORT.md`、`VERIFICATION_REPORT.md`
+- diff base 改為「用 `git merge-base main HEAD` 取」並移除手動 exclude 指示（原寫死的
+  `b71481f` 因分支 rebase 而失效）；§8 的「尚未 commit」更正；搭便車的 N12 commit 在表頭揭露。
+
+## R3 — M3 裁定記錄 ✅
+
+- **檔案**：`CHANGE_REPORT.md` §5.2、`VERIFICATION_REPORT.md` §偏差
+- 人類裁定：**接受本次，且不另立規則**。如實記載，未粉飾為「本來就在授權內」。
+
+## R4 — `requirements-dev.txt` 的 host `pip install` 指示（L2）✅
+
+- **檔案**：`backend/requirements-dev.txt`（rev 2 擴充的唯一路徑）
+- 改為指向 lint stage 與 `make lint`，並說明改 pin 會在下次執行時重建。
+
+## R5 — `backend` service 補 `target: runtime`（L4）✅
+
+- **檔案**：`docker-compose.yml`
+- **證據**：`docker compose build backend` → `docker image inspect` 仍為
+  `Cmd=["uvicorn","app.main:app",…]`、`WorkingDir=/app`；`docker compose config --quiet` exit 0。
+
+## R6 — 治理資料 dump 搬離 `/tmp`（L5）✅
+
+- `~/backups/bio_graphrag/2026-08-14-pre-wipe-governance-tables.sql`（302 行 / 131 KB）。
+- 不放進 repo（含真實治理資料）。
+
+## 停止點（rev 2）
+
+R1–R6 完成並驗證（見 `VERIFICATION_REPORT.md` §Rev 2）。**rev 2 尚未經第二輪獨立審查；
+未 push、未 merge。**
