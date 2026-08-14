@@ -190,7 +190,7 @@ The token-spending tutor endpoints (`POST /query`, `POST /check-answer`) are gat
 X-API-Key: kNkzEApwqofySMrZHG7CTdPWjsfHfqsz
 ```
 
-Paste it into the login box (top right of the app, or `localStorage.setItem('apiKey', '<key>')`), or send it directly as the `X-API-Key` header. It's a shared, quota-capped key (5,000,000 tokens, no expiry) — if the quota ever runs out, `/query` and `/check-answer` fall back to `login_required` until it's topped up; browsing keeps working regardless.
+Paste it into the login box (top right of the app, or `localStorage.setItem('apiKey', '<key>')`), or send it directly as the `X-API-Key` header. It's a shared, quota-capped key (5,000,000 tokens, no expiry) — if the quota ever runs out, `/query` and `/check-answer` return `quota_exceeded` until it's topped up; browsing keeps working regardless.
 
 - **Closed by default.** With no account (or an unknown/expired/disabled/over-quota key) the token endpoints return a structured error and stay closed. There is no "open when unconfigured" fallback — safe for a public deployment.
 - Accounts live in the `vendors` table, hand-maintained via a small CLI:
