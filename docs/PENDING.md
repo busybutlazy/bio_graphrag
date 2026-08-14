@@ -32,6 +32,11 @@
 - **Owner**: 未指定
 - **範圍**: 待定——視人類判斷結果,可能是「無需新 change（現有檔案已足夠,關閉本項)」或「小 change
   （用現有真實章節跑一次驗證/修訂 profile)」
+- **關聯操作（2026-08-14)**: 公開 demo vendor key（原 N12,已執行)的 quota 已人為調成 0
+  （`vendor_usage.used=1748 > quota=0`,呈現 `quota_exceeded`),原因就是本項未確認完——
+  在確認 `endocrine_v1.profile.md` 是否足夠、抽取品質站得住腳之前,先不讓讀者實際試用。
+  **本項確認完成(或決定不需再動)後,記得把 quota 調回 5,000,000**
+  （`docker compose run --rm backend python scripts/manage_vendors.py update --code demo --quota 5000000`)。
 
 ────────────────────────────────────────
 
