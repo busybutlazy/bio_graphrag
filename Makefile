@@ -36,15 +36,25 @@ export-seed:
 eval:
 	docker compose run --rm backend python -m app.eval.runner
 
-# Lint + type-check (needs dev tools: pip install -r backend/requirements-dev.txt).
-# Config lives in pyproject.toml. CI runs the same three commands.
-LINT_PATHS = backend/app ingestion backend/tests ingestion/tests scripts
+# Lint + type-check inside a container — nothing to install on the host, so any
+# reviewer can reproduce "lint passes". Commands and paths live in scripts/lint.sh;
+# config in pyproject.toml; tool versions in backend/requirements-dev.txt.
+# CI runs this same target.
+#
+# LINT_UID/GID are read by the compose `lint` service: without them the container
+# runs as root and leaves root-owned caches and rewritten files in the repo.
+LINT_UID := $(shell id -u)
+LINT_GID := $(shell id -g)
+export LINT_UID
+export LINT_GID
+
+# --build is not optional: `docker compose run` alone reuses an existing image and
+# never notices that requirements-dev.txt changed, so bumping ruff/mypy would leave
+# this machine silently on the old version while CI (always a cold build) uses the
+# new one. That is the exact drift this target exists to remove. Costs ~3s.
 lint:
-	ruff check $(LINT_PATHS)
-	ruff format --check $(LINT_PATHS)
-	mypy backend/app ingestion scripts
+	docker compose run --build --rm lint
 
 # Auto-fix imports + apply the formatter in place.
 format:
-	ruff check --fix $(LINT_PATHS)
-	ruff format $(LINT_PATHS)
+	docker compose run --build --rm lint --fix

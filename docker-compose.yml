@@ -17,7 +17,12 @@ services:
       - web
 
   backend:
-    build: ./backend
+    # target is explicit so this never depends on stage order in the Dockerfile:
+    # an untargeted build resolves to the last stage, so appending one there would
+    # otherwise swap the app image out from under the stack.
+    build:
+      context: ./backend
+      target: runtime
     # No longer exposed directly; nginx proxies to it.
     env_file:
       - .env
@@ -42,6 +47,30 @@ services:
       - ./ingestion:/app/ingestion
       - ./schema:/app/schema
       - ./prompts:/app/prompts
+
+  # Lint + type-check in a container, so `make lint` needs nothing on the host and
+  # any reviewer can reproduce the result. In a profile, so `docker compose up`
+  # (i.e. `make up`) ignores it entirely; `docker compose run` still starts it.
+  lint:
+    build:
+      context: ./backend
+      target: lint
+    profiles: ["tools"]
+    working_dir: /repo
+    # The whole repo: ruff/mypy config lives in the root pyproject.toml and the
+    # linted paths span backend/, ingestion/ and scripts/.
+    volumes:
+      - .:/repo
+    environment:
+      # Keep the caches out of the bind mount — otherwise they land in the repo
+      # owned by root, which is exactly what this change is cleaning up.
+      RUFF_CACHE_DIR: /tmp/ruff
+      MYPY_CACHE_DIR: /tmp/mypy
+    # Real uid/gid, exported by the Makefile: whatever `--fix` rewrites must stay
+    # owned by the caller. The 1000 fallback only applies to a bare
+    # `docker compose run --rm lint` outside make.
+    user: "${LINT_UID:-1000}:${LINT_GID:-1000}"
+    entrypoint: ["bash", "scripts/lint.sh"]
 
   postgres:
     image: postgres:16-alpine
