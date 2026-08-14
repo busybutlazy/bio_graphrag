@@ -149,23 +149,38 @@ Reviewer（獨立 agent 或人）以唯讀方式嘗試**推翻完成聲明**：�
 
 封裝會重複執行的工作流程、檢查表、模板與 scripts。Agent 只在任務匹配時載入完整內容，適合承載比 instruction file 更長的程序。
 
+#### Human-friendly Workflow Entrypoints
+
+一般使用者只需記住四個入口：
+
+| 入口 | 用途 |
+|------|------|
+| `what-next` | 依 repository evidence 說明目前狀態、下一個入口與下一道 gate |
+| `work-on-change` | 推進一個 bounded Change，並自行選用適合的 atomic Change Workflow skill |
+| `work-on-phase` | 推進一個指定且唯一的 Roadmap Phase |
+| `review-change` | 在新開、乾淨的 agent context 中進行獨立對抗式審查 |
+
+安裝時，`what-next` 是 Development Workflow bundle 的根節點，會一併安裝上述入口與相關 atomic skills。安裝完整 dependency closure 只代表 workflow 可用，不代表入口取得跨越 Human Approval、review、Git 或 release boundary 的權限。
+
+正式 `review-change` 必須由未繼承 implementation conversation 的全新 agent／session 執行。同 context 的自我檢查不能產生滿足正式 gate 的 Review Report；subagent 只有在平台保證不繼承該 conversation 時才具備正式 reviewer 的獨立性。
+
 #### Project Lifecycle Routing
 
 這張表只選擇入口，不取代各 skill 的 admission、approval 或 authority 規則。並非所有專案都必須先執行 `grill-with-docs`；決策已完整時直接進入相應下游入口。
 
 | 情境 | 路由 |
 |------|------|
-| New or ambiguous project | `grill-with-docs` → `define-project` → human project approval → `bootstrap-project` → `deliver-roadmap-phase` → human phase acceptance → `commit` → `create-pr` |
-| Ambiguous major change | `grill-with-docs` → `plan-change` → human approval → approved delivery workflow |
-| Clear bounded change | `plan-change` → human approval → approved delivery workflow |
-| Approved Roadmap phase | `deliver-roadmap-phase` |
+| Unsure where the repository is | `what-next` → evidence-based routing |
+| New or ambiguous project | `what-next` → `grill-with-docs` → `define-project` → human project approval → `bootstrap-project` |
+| Ambiguous or clear bounded change | `work-on-change` → applicable decision/change atomic skills → independent `review-change` |
+| Approved Roadmap phase | `work-on-phase` → `deliver-roadmap-phase` → human phase acceptance |
 
 入口判斷：
 
 - 模糊或有重大未決策：`grill-with-docs`。
 - 決策已完整但尚未形成正式專案文件：`define-project`。
 - 已有人類批准的 Project Definition，但缺開發基線：`bootstrap-project`。
-- 已批准 Roadmap 且準備交付一個明確 Phase：`deliver-roadmap-phase`。
+- 已批准 Roadmap 且準備交付一個明確 Phase：使用 `work-on-phase`，由它路由至 `deliver-roadmap-phase`。
 
 `grill-with-docs` 必須保存完整或明確標示 partial 的 Decision Inventory。只有 `Status: Ready` 且 `Blocking Open Decisions: None` 可進入 `define-project` 或 `plan-change`；已完成評估但存在 blockers 使用 `Stopped With Blocking Decisions`，尚未完成 inventory 或 readiness assessment 則使用 `Incomplete — Session Stopped Before Readiness Assessment`。
 
@@ -173,9 +188,12 @@ skill-forge 已提供的 Workflow skills：
 
 | Skill | 用途 | 禁止事項 |
 |-------|------|----------|
+| `what-next` | 唯讀判斷目前狀態、下一個人類入口與下一道 gate；只有 current Verification Report 與 current Change Report 都能追溯至同一批准 Plan revision/diff 時才交接 review | 猜測批准、只憑 implementation 完成就導向 review、連續跨越多個入口或把完整安裝誤當執行授權 |
+| `work-on-change` | 推進一個 bounded Change，依 artifacts 選擇適合的 atomic workflow；預設一次一個 workflow | 自我批准、同 context 自我 review、隱含 Git／release 動作 |
+| `work-on-phase` | 人類入口：指定一個 Roadmap Phase，轉交底層 phase delivery workflow | 推定下一 Phase、跨 Phase、降低底層 admission 或 authority gate |
 | `grill-with-docs` | 盤點所有未決選擇、分類決策 ownership，並優先收斂 load-bearing decisions | 遺漏影響 observable behavior／failure handling／data semantics／operations／acceptance 的小型選擇；production implementation；自行批准決策 |
 | `define-project` | 將具備 readiness evidence 的決策整理為可批准的 SPEC、必要 CONTRACTS 與含 Decision Gates 的 outcome-based ROADMAP | 猜測未決策答案、把不安全的延後事項視為 ready、自行批准或啟動 bootstrap |
-| `deliver-roadmap-phase` | 使用者入口：指定一個 Roadmap Phase，拆分並協調受控 Changes | 推定下一 Phase、跨 Phase、自我批准、隱含 Git／release 動作 |
+| `deliver-roadmap-phase` | `work-on-phase` 使用的底層 orchestrator：拆分並協調指定 Phase 的受控 Changes | 推定下一 Phase、跨 Phase、自我批准、隱含 Git／release 動作 |
 | `plan-change` | 唯讀分析、產生 Implementation Plan、拆 Task | 修改 production code、裝 dependency |
 | `implement-task` | 只執行指定 Task、更新測試、回報偏差 | 自動執行下一 Task、擴張 scope |
 | `run-approved-change` | 依批准 Plan 自動執行低／中風險 Tasks、驗證並報告 | 重規劃、自我 review／批准、commit／push |
@@ -184,7 +202,9 @@ skill-forge 已提供的 Workflow skills：
 | `review-change` | 唯讀審查、產生 Review Report | 修改程式 |
 | `bootstrap-project` | 唯讀探索並在人工批准後建立 Docker-first 骨架、CI、canonical scripts | 未批准前不得寫入；不得使用 host fallback |
 
-對 Roadmap 驅動的開發，使用者通常只需安裝並呼叫 `deliver-roadmap-phase`。安裝器會揭露並一併安裝它相依的 atomic Change Workflow skills；這些 skills 仍保持獨立，以便精準重跑單一 Task、驗證、報告或 review。入口 skill 不得降低任何底層 approval、risk、verification 或 authority gate。
+一般使用者通常只需從 manager 安裝 Development Workflow，並呼叫 `what-next`、`work-on-change`、`work-on-phase` 或在新 agent 中呼叫 `review-change`。底層 skills 仍保持獨立，以便入口路由與精準重跑單一 Task、驗證、報告或 review。入口 skill 不得降低任何底層 approval、risk、verification 或 authority gate。
+
+`work-on-change` 的建議互動邊界是每次只執行一個 atomic workflow，回報新的 state 與 next action 後交還控制權。這不是硬性禁止串接：只有入口要求明確授權連續範圍，且相鄰 workflows 之間不存在新的 Human Approval、decision、checkpoint、independent review、Git、release 或 deployment authority gate 時，才可在每次重新驗證 admission criteria 後繼續。
 
 `bootstrap-project` 是新專案缺少容器入口時唯一受規範允許的架設路徑：先唯讀探索並產生完整 bootstrap plan，取得人類對該計畫的明確批准後才能建立基線。在 Docker 基線完成前，不得在 host 安裝 dependency 或執行專案命令。
 
@@ -206,7 +226,28 @@ skill-forge 的 `agent-hooks` guideline item 可為 Claude Code 與 Codex 安裝
 
 ### Subagents / Reviewer
 
-用於角色與 context 隔離，並限制可用工具。建議角色：Explorer（唯讀搜尋）、Planner（只產生計畫）、Implementer（只執行指定 Task）、Code Reviewer / Security Reviewer / Test Reviewer（唯讀）。每個角色要有清楚的觸發條件、輸入輸出、工具限制與完成條件；不要建立過多角色。
+用於角色與 context 隔離，並限制可用工具。建議角色：Explorer（唯讀搜尋）、Planner（只產生計畫）、Implementer（只執行指定 Task）、Code Reviewer / Security Reviewer / Test Reviewer（唯讀）。每個角色要有清楚的觸發條件、輸入輸出、工具限制與完成條件；不要建立過多角色。一般 reviewer subagent 可提供自我檢查證據，但若平台不能保證它未繼承 implementation conversation，就不能滿足正式獨立 review gate。
+
+#### 委派政策
+
+任務複雜度依影響範圍、風險、所需探索量與可獨立分工性判斷，不得只用修改行數判斷：
+
+| 複雜度 | 判斷方式 | 執行方式 |
+|--------|----------|----------|
+| 簡單 | 單一局部、低風險、行為明確、無需廣泛探索或跨模組協調 | 主 agent 可直接執行 |
+| 中等 | 涉及多個檔案、一般業務邏輯、測試面向或需要先探索既有行為 | 若有邊界清楚且可獨立驗證的子工作，應委派至少一項給 subagent |
+| 複雜 | 跨模組／服務、探索輸出龐大、多種驗證面向或需要獨立 review | 應拆成多個有界子工作，優先使用 subagents；只有相依的關鍵路徑留在主 agent |
+
+適合委派的工作包括：唯讀 codebase 探索、規格或文件查證、測試執行與失敗分析、log 分析、互不重疊的實作 Task，以及獨立 code／security／test review。委派的目的除了平行化，也包括把搜尋結果、測試輸出、stack trace 與探索筆記隔離在子 context，讓主 context 專注於需求、限制、決策與最終成果。
+
+每次委派必須遵守：
+
+1. 主 agent 明確提供目標、範圍、必要背景、允許的工具／寫入邊界、預期輸出與完成條件。
+2. 子工作必須可獨立完成與驗證；不要把仍需共同決策或高度耦合的工作硬拆出去。
+3. 多個寫入型 subagent 不得同時修改相同或高度重疊的檔案；寫入範圍不易隔離時改為循序執行，或只委派唯讀分析。
+4. subagent 回傳的是證據與建議，不是自動成立的完成聲明。主 agent 必須檢查關鍵結論、整合變更、處理衝突並執行最終驗證。
+5. 不得用委派繞過 Human Approval、Execution Policy、sandbox、Stop Conditions、獨立 review 或其他 authority boundary。
+6. 若環境不支援 subagent，或任務沒有合理的獨立子工作，主 agent 可自行執行，但應限制載入內容並摘要大量中間輸出；中等或複雜任務還應在回報中簡述未委派原因。
 
 ### Permission / Sandbox
 
@@ -267,14 +308,14 @@ repository/
 ```text
 1. CLAUDE.md / AGENTS.md（agent memory）
 2. 本文件（docs/agent-guideline.md）
-3. plan-change / verify-change / report-change skills
+3. Development Workflow bundle（以 `what-next` 安裝完整 dependency closure）
 4. make verify（或等價 canonical command）
 5. CI
 6. changes/<change-id>/
 7. Git checkpoint（分支 + 可回退 commit）
 ```
 
-再逐步增加：implement-task / run-approved-change skills、reviewer subagent、security review。若目標環境具備 Python 3.11+，可透過 guideline 安裝 protected-file / dangerous-command hooks。
+再逐步增加：更細緻的 project-specific hooks、專門 security review、外部 approval receipt 與 CI policy enforcement。若目標環境具備 Python 3.11+，可透過 guideline 安裝 protected-file / dangerous-command hooks。
 
 ---
 
@@ -293,4 +334,4 @@ repository/
 
 Auto mode 只應存在於「已批准的輸入」與「不可跳過的驗證」之間，而不是涵蓋需求、規劃、實作、驗證與批准的全部流程。
 
-<!-- skill-forge:agent-guideline version=0.8.3 sha256=2a439ab313775150b727d3ecab9701c8759ae50cdd510ec578c64bf24758058f -->
+<!-- skill-forge:agent-guideline version=0.8.5 sha256=a46d1178a724d0d8ee9ae33420796c2312a77384bc7db9551c112dd9725c44f1 -->
