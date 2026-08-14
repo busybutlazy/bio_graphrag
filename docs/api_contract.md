@@ -285,7 +285,7 @@ Structured Outputs(`json_schema` + `strict`)約束;若驗證仍失敗,重試用�
 
 ### `POST /admin/ingest/run` —— 同來源併發防護(409)
 
-> 本節記載 `changes/ingest-concurrency-guard`(`docs/notes.md` 的 N8 方向 c)帶來的行為。
+> 本節記載 `changes/ingest-concurrency-guard`(`docs/PENDING.md` 的 N8 方向 c)帶來的行為。
 
 **先讀這一句:這個端點的 504 不代表失敗。** 它是同步阻塞的,四個 chunk 約需 4 分鐘,
 超過 nginx 預設代理逾時;nginx 回 504 時**後端通常仍在跑、而且會跑完**。
