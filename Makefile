@@ -48,9 +48,13 @@ LINT_GID := $(shell id -g)
 export LINT_UID
 export LINT_GID
 
+# --build is not optional: `docker compose run` alone reuses an existing image and
+# never notices that requirements-dev.txt changed, so bumping ruff/mypy would leave
+# this machine silently on the old version while CI (always a cold build) uses the
+# new one. That is the exact drift this target exists to remove. Costs ~3s.
 lint:
-	docker compose run --rm lint
+	docker compose run --build --rm lint
 
 # Auto-fix imports + apply the formatter in place.
 format:
-	docker compose run --rm lint --fix
+	docker compose run --build --rm lint --fix

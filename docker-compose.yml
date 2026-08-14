@@ -17,7 +17,12 @@ services:
       - web
 
   backend:
-    build: ./backend
+    # target is explicit so this never depends on stage order in the Dockerfile:
+    # an untargeted build resolves to the last stage, so appending one there would
+    # otherwise swap the app image out from under the stack.
+    build:
+      context: ./backend
+      target: runtime
     # No longer exposed directly; nginx proxies to it.
     env_file:
       - .env

@@ -1,4 +1,6 @@
 # Dev-only tooling (lint + type-check). Not installed into the runtime image.
-# Install locally with: pip install -r backend/requirements-dev.txt
+# Installed into the `lint` stage of backend/Dockerfile — nothing to install on the
+# host; run `make lint` / `make format`. Changing a pin here takes effect on the
+# next run, which rebuilds the image.
 ruff==0.15.21
 mypy==1.19.1
