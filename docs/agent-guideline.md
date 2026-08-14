@@ -42,7 +42,7 @@ Human：是否批准繼續與接受成果
 定義模組組成、各模組責任與非責任、模組間通訊、資料與控制流向、錯誤處理層級、安全與一致性邊界。
 
 - 產物：`docs/architecture/`、`docs/ADR/`。
-- 重大技術決策記錄在 ADR（決策、替代方案、理由、後果）；一般實作細節不需要 ADR。
+- 重大技術決策才適合 ADR；一般實作細節不需要。Agent 只能提出 ADR candidate，必須先詢問人類是否值得建立；人類選擇 `Create ADR` 後才能草擬 `Proposed`，另一次明確確認後才能標記 `Accepted`、修改或 supersede 既有 ADR。
 
 ### 3. Contract
 
@@ -68,7 +68,9 @@ CI 在大量業務邏輯進入前建立，且是**合併條件**，不只是報�
 
 ### 1. Change Request
 
-每次變更先定義：要解決的問題、預期結果、In Scope、Out of Scope、驗收條件、限制與禁止事項。每個 change 有獨立識別名稱，產物放在 `changes/<change-id>/`（見第五節）。
+每次變更先定義：要解決的問題、預期結果、In Scope、Out of Scope、驗收條件、限制與禁止事項。每個 Change 有獨立識別名稱；進行中以單一 `changes/<change-id>/CHANGE_WORKING.md` 承載暫時資訊，結案後收斂為 `CHANGE.md`。
+
+開發中發現有效但不屬於目前 scope 的問題，寫入受控的 `docs/PENDING.md`，包含 evidence、延後理由、可能後果、blocking trigger、owner 與來源。Pending capture 不授權實作，也不應偷偷擴張目前 Change。
 
 不要下「完成整個下一階段」這種指令；改成單一功能、單一 use case、可獨立驗證的垂直切片。
 
@@ -76,7 +78,7 @@ CI 在大量業務邏輯進入前建立，且是**合併條件**，不只是報�
 
 | 等級 | 範例 | 自動化程度 |
 |------|------|------------|
-| 低 | 文件、註解、格式、局部測試補充 | 批准 Plan 後可使用 `supervised-auto` |
+| 低 | 文件、註解、格式、局部測試補充、易回退局部修改 | 可使用 lightweight working record；依 repository policy 決定是否需獨立 Plan Approval |
 | 中 | 一般 API、業務邏輯、adapter 修改、一般重構、SDK 串接 | 審查並批准完整 Plan 後可使用 `supervised-auto` |
 | 高 | 認證權限、DB migration、資料刪除、公開 Contract、金流、部署、production dependency | `one-task-at-a-time`，逐 Task 保留人工批准點 |
 | 極高 | production 資料操作、secret/IAM、不可逆 migration、大量資料修改、全域安全策略 | manual only，不得使用 auto mode |
@@ -87,13 +89,13 @@ CI 在大量業務邏輯進入前建立，且是**合併條件**，不只是報�
 
 此階段**不得**：修改 production code、安裝 dependency、執行 migration、順手重構或修復無關問題。
 
-### 4. Implementation Plan
+### 4. Risk-adaptive Working Plan
 
-產物：`changes/<change-id>/IMPLEMENTATION_PLAN.md`，至少包含：目標、In/Out of Scope、現況分析、受影響檔案、Contract/schema 影響、實作步驟、測試案例、風險與未知、rollback 方法、可獨立驗證的小 Task 清單，以及 Execution Policy（Plan revision、風險、`one-task-at-a-time` / `supervised-auto`、auto-approved Tasks、路徑範圍、人工 checkpoints 與 stop conditions）。
+產物：`CHANGE_WORKING.md` 的 planning section。低風險只需目標、scope、acceptance、paths、verification 與 rollback；中高風險再加入 bounded tasks、checkpoints、Execution Policy、remediation envelope 與完整 traceability。不要複製 repository tour、動態行數、檔案數或 SHA 清單。
 
-### 5. 人類批准計畫
+### 5. 依風險取得人類批准
 
-人類確認：理解是否正確、有無過度設計、有無漏掉需求、有無動到不該動的區域、Task 是否夠小、測試策略是否合理、有無 breaking change、是否需要 migration 或 dependency。**未批准前不得進入正式實作。**
+Public Contract、schema/migration、權限/安全、不可逆或大量資料、production/外部花費、dependency/重大架構、高/極高風險或多個 consequential alternatives 必須取得明確批准。低風險是否需要獨立批准由 repository policy 決定。必要測試、文件同步、批准範圍內的一般修正與已接受 finding 的 bounded remediation 不自動使 Plan 失效。
 
 ### 6. 先定義測試案例
 
@@ -105,31 +107,33 @@ CI 在大量業務邏輯進入前建立，且是**合併條件**，不只是報�
 
 預設 `one-task-at-a-time`：每次只執行批准計畫中的指定 Task，確認範圍 → 最小必要修改 → 更新測試 → 局部驗證 → 回報 → 停止等待下一個 Task。
 
-低／中風險 Change 只有在人類明確批准目前 Plan revision 的 `supervised-auto`、auto-approved Task IDs 與路徑範圍後，才可依序連續執行。每個 Task 仍須局部驗證並寫入 `TASK_LOG.md`；需要新 Task／路徑／dependency／Contract 決定、觸發 checkpoint、發生不可歸因修改或完整驗證失敗時立即停止。完整驗證階段不得切回實作偷偷修正。
+低／中風險 Change 只有在符合目前 Execution Policy 時才可連續執行。每個 outcome 將簡短 delta append 到 `CHANGE_WORKING.md`，不另外建立永久 `TASK_LOG.md`。驗證仍是 evidence-only；失敗後必須退出 verification，只有落在預先批准 remediation envelope 才能修復並重新驗證，否則停止。
 
 兩種模式都**不得**自行修改規格、擴張 scope、順手統一命名、順手更新 dependency、順手重構鄰近模組或刪除未確認的「看似未使用」程式碼。發現原計畫錯誤時，停止並回報，不得自行改寫需求。
 
-### 8. 驗證與 Verification Report
+### 8. 驗證證據
 
 依序執行 canonical commands（format → lint → type check → unit → integration → contract → E2E → build → security），記錄實際命令、exit code、通過/失敗數、未執行的測試與原因、是否使用 mock。**不得只寫「測試皆已通過」。**
 
-產物：`changes/<change-id>/VERIFICATION_REPORT.md`，核心是 Requirement → Implementation → Test → Result 的追溯表，加上 Commands Executed、Tests Not Run、Known Risks、Human Review Hotspots。
+驗證結果預設 append 到 `CHANGE_WORKING.md`，只有 audit policy 或人類明確要求才建立獨立 Verification Report。優先追溯 consequential acceptance；任何會花費、修改 persistent data、使用 secret 或接觸 production 的驗證命令都要預先取得權限。
 
-### 9. Change Report
+### 9. Review Handoff
 
-產物：`changes/<change-id>/CHANGE_REPORT.md`：完成內容、修改/新增/刪除檔案、外部可觀察行為變化、Contract/migration/dependency 變化、與計畫的偏差、breaking change、remaining work、rollback 方法。
-
-報告必須同時揭露：**完成了什麼、沒完成什麼、沒驗證什麼、偏離了什麼、最不確定的是什麼。**
+在同一份 working record 中準備 concise Review Handoff：diff base、completion claim、外部行為、material effects、偏差、未驗證、限制、rollback、Pending candidates 與可能的 ADR candidates。引用既有 evidence，不複製命令表與 task history。
 
 ### 10. 獨立 Review
 
 Reviewer（獨立 agent 或人）以唯讀方式嘗試**推翻完成聲明**：規格是否完整實作、測試是否真的對應需求（而非只測 mock）、錯誤路徑、相容性、安全、過度抽象、Out of Scope 修改、未證明的宣稱。Reviewer 不直接修改程式。
 
-產物：`changes/<change-id>/REVIEW_REPORT.md`，finding 分級：Blocking / High / Medium / Low / Suggestion。
+產物：單一 `changes/<change-id>/REVIEW.md`，以穩定 finding ID 與狀態維護，不建立 `_2`、`_3` 等副本。預設一次完整 review 加一次 accepted findings 的 targeted confirmation；只有 remediation 改變重要行為或風險面才重開完整 review。純 working metadata／表頭／行數問題原則上不是產品 finding。
 
-### 11. 人類最終審查與 Merge
+### 11. Closure、Retention 與人類接受
 
-人類優先閱讀：Plan、Change Report、Verification Report、Review Report、Contract diff、migration、dependency 變化、reviewer 標記的 hotspots，然後決定接受、要求修改、拆分、回退或拒絕。
+人類先 disposition findings；remediation 後由 reviewer targeted confirmation。接著在 fresh closure context 執行 `close-change`：建立 Absorption Matrix，把 temporary knowledge 放入 durable project truth、Pending、final `CHANGE.md` 或明確 discard reason。
+
+所有 ADR candidates 必須組成 Decision Retention Packet，逐項詢問人類：Create ADR / Keep in Change Record / Defer to Pending / Discard。刪除 temporary artifact 永遠不授權 agent 自動建立 ADR。
+
+Absorption 與 retention 完成後，才可提出刪除或 archive `CHANGE_WORKING.md`；最後停在 Human Change Acceptance。Reviewer 可做一次 closure-integrity check，但不得因此重開完整 code review。
 
 合併前確認：CI 全過、必要 review 已批准、規格/Contract/ADR 已同步、migration 有 rollback、無 secret 或 debug code、commit 可理解可回退。部署後視需要做 smoke test、health check、指標監控與 rollback readiness。
 
@@ -151,7 +155,7 @@ Reviewer（獨立 agent 或人）以唯讀方式嘗試**推翻完成聲明**：�
 
 #### Human-friendly Workflow Entrypoints
 
-一般使用者只需記住四個入口：
+一般使用者主要記住以下入口：
 
 | 入口 | 用途 |
 |------|------|
@@ -159,6 +163,8 @@ Reviewer（獨立 agent 或人）以唯讀方式嘗試**推翻完成聲明**：�
 | `work-on-change` | 推進一個 bounded Change，並自行選用適合的 atomic Change Workflow skill |
 | `work-on-phase` | 推進一個指定且唯一的 Roadmap Phase |
 | `review-change` | 在新開、乾淨的 agent context 中進行獨立對抗式審查 |
+| `triage-pending` | 分類延後發現、檢查 blocking trigger，不實作或代替人類決策 |
+| `close-change` | 收斂 temporary artifacts、執行 Human ADR Retention Gate、產生 final `CHANGE.md` |
 
 安裝時，`what-next` 是 Development Workflow bundle 的根節點，會一併安裝上述入口與相關 atomic skills。安裝完整 dependency closure 只代表 workflow 可用，不代表入口取得跨越 Human Approval、review、Git 或 release boundary 的權限。
 
@@ -188,18 +194,20 @@ skill-forge 已提供的 Workflow skills：
 
 | Skill | 用途 | 禁止事項 |
 |-------|------|----------|
-| `what-next` | 唯讀判斷目前狀態、下一個人類入口與下一道 gate；只有 current Verification Report 與 current Change Report 都能追溯至同一批准 Plan revision/diff 時才交接 review | 猜測批准、只憑 implementation 完成就導向 review、連續跨越多個入口或把完整安裝誤當執行授權 |
+| `what-next` | 從 durable truth、Pending、working record、review 與 closure evidence 判斷下一步 | 猜測批准、讓 unrelated Pending 阻擋工作、重建已吸收刪除的暫時報告 |
 | `work-on-change` | 推進一個 bounded Change，依 artifacts 選擇適合的 atomic workflow；預設一次一個 workflow | 自我批准、同 context 自我 review、隱含 Git／release 動作 |
 | `work-on-phase` | 人類入口：指定一個 Roadmap Phase，轉交底層 phase delivery workflow | 推定下一 Phase、跨 Phase、降低底層 admission 或 authority gate |
 | `grill-with-docs` | 盤點所有未決選擇、分類決策 ownership，並優先收斂 load-bearing decisions | 遺漏影響 observable behavior／failure handling／data semantics／operations／acceptance 的小型選擇；production implementation；自行批准決策 |
 | `define-project` | 將具備 readiness evidence 的決策整理為可批准的 SPEC、必要 CONTRACTS 與含 Decision Gates 的 outcome-based ROADMAP | 猜測未決策答案、把不安全的延後事項視為 ready、自行批准或啟動 bootstrap |
 | `deliver-roadmap-phase` | `work-on-phase` 使用的底層 orchestrator：拆分並協調指定 Phase 的受控 Changes | 推定下一 Phase、跨 Phase、自我批准、隱含 Git／release 動作 |
-| `plan-change` | 唯讀分析、產生 Implementation Plan、拆 Task | 修改 production code、裝 dependency |
-| `implement-task` | 只執行指定 Task、更新測試、回報偏差 | 自動執行下一 Task、擴張 scope |
-| `run-approved-change` | 依批准 Plan 自動執行低／中風險 Tasks、驗證並報告 | 重規劃、自我 review／批准、commit／push |
-| `verify-change` | 執行 canonical commands、建立追溯表、產生 Verification Report | 修改程式 |
-| `report-change` | 比對 Plan 與實際 diff、產生 Change Report | 修改程式 |
-| `review-change` | 唯讀審查、產生 Review Report | 修改程式 |
+| `plan-change` | 建立 risk-adaptive `CHANGE_WORKING.md`，納入 relevant Pending 與 remediation envelope | 修改 production code、裝 dependency |
+| `implement-task` | 只執行指定 Task、append concise evidence、capture Pending | 自動執行下一 Task、擴張 scope |
+| `run-approved-change` | 在批准 envelope 內執行低／中風險 outcomes、驗證並準備 handoff | 重規劃、自我 review／批准、commit／push |
+| `verify-change` | 執行 canonical commands，將 consequential evidence 寫入 working record | 在 verification mode 修改程式 |
+| `report-change` | 相容入口：更新 working record 的 Review Handoff | 產生重複的 final report、修改程式 |
+| `review-change` | Fresh review，以一份 `REVIEW.md` 與 stable IDs 管理 findings | 修改程式、無限重開 cosmetic review |
+| `triage-pending` | 驗證與分類 Pending destinations／blocking triggers | 自行選擇解法或實作 |
+| `close-change` | Absorption、Human Retention Gate、final `CHANGE.md` 與 temporary disposal | 自行接受 ADR、重新 review 或修改程式 |
 | `bootstrap-project` | 唯讀探索並在人工批准後建立 Docker-first 骨架、CI、canonical scripts | 未批准前不得寫入；不得使用 host fallback |
 
 一般使用者通常只需從 manager 安裝 Development Workflow，並呼叫 `what-next`、`work-on-change`、`work-on-phase` 或在新 agent 中呼叫 `review-change`。底層 skills 仍保持獨立，以便入口路由與精準重跑單一 Task、驗證、報告或 review。入口 skill 不得降低任何底層 approval、risk、verification 或 authority gate。
@@ -278,15 +286,14 @@ repository/
 │   ├── SPEC.md
 │   ├── CONTRACTS.md
 │   ├── ROADMAP.md
+│   ├── PENDING.md
 │   ├── architecture/
 │   └── ADR/
 ├── changes/
 │   └── <change-id>/
-│       ├── REQUEST.md
-│       ├── IMPLEMENTATION_PLAN.md
-│       ├── VERIFICATION_REPORT.md
-│       ├── CHANGE_REPORT.md
-│       └── REVIEW_REPORT.md
+│       ├── CHANGE_WORKING.md     # temporary
+│       ├── REVIEW.md             # stable finding IDs
+│       └── CHANGE.md             # durable after closure
 ├── .claude/                     # Claude Code：settings / hooks / agents / skills
 ├── .agents/skills/              # Codex：repository skills
 ├── scripts/
@@ -297,7 +304,7 @@ repository/
 
 多 Agent 並用時：skill 名稱、報告模板、canonical commands、CI、instruction file 核心規則保持一致，避免兩套流程各自漂移。`changes/` 與 `docs/` 完全共用。
 
-`changes/<change-id>/` 的用途是保存單次變更的決策、支援人類快速審查與 rollback 追蹤；完成後可歸檔，不需要載入每次 Agent context。
+`CHANGE_WORKING.md` 與中間 Phase/decision packets 是 temporary artifacts。只有完成 Absorption Matrix、Pending capture 與 Human ADR Retention Gate 後才能刪除或 archive；`CHANGE.md` 保存最後仍影響未來工作的結果與限制。
 
 ---
 
@@ -321,17 +328,18 @@ repository/
 
 ## 七、最終原則
 
-**Agent 可以自動化**：搜尋與分析、產生計畫、依批准 Execution Policy 實作 Task、新增測試、執行驗證、整理報告、提出 review findings、更新已批准的文件。
+**Agent 可以自動化**：搜尋與分析、產生計畫、依批准 Execution Policy 實作、新增測試、執行驗證、capture Pending、提出 review findings、更新已批准的 durable 文件、整理 ADR candidates。
 
-**Agent 不得自行決定**：改變需求、擴張 scope、修改公開 Contract、引入 production dependency、執行不可逆 migration、操作 production、存取 secret、忽略 failing test、批准自己的偏差、宣稱未證明的完成狀態、自行 merge 高風險變更。
+**Agent 不得自行決定**：改變需求、擴張 scope、修改公開 Contract、引入 production dependency、執行不可逆 migration、操作 production、存取 secret、忽略 failing test、批准自己的偏差、把 candidate 升格為 Accepted ADR、宣稱未證明的完成狀態、自行 merge 高風險變更。
 
 整套流程濃縮為：
 
 ```text
-規格 → 唯讀分析 → 實作計畫 → 人類批准 → 小 Task 實作
-→ 機器驗證 → 變更報告 → 獨立審查 → 人類驗收 → CI 合併 → 部署驗證
+規格／Pending／ADR → risk-adaptive working plan → 必要的人類批准 → 有界實作
+→ 機器驗證 → fresh review → 人類 disposition → targeted confirmation
+→ absorption + Human ADR Retention Gate → durable CHANGE.md → 人類驗收 → Git／部署
 ```
 
 Auto mode 只應存在於「已批准的輸入」與「不可跳過的驗證」之間，而不是涵蓋需求、規劃、實作、驗證與批准的全部流程。
 
-<!-- skill-forge:agent-guideline version=0.8.5 sha256=a46d1178a724d0d8ee9ae33420796c2312a77384bc7db9551c112dd9725c44f1 -->
+<!-- skill-forge:agent-guideline version=0.8.5 sha256=857d309292b1b4be79f54253259273b859559f2726d5815c352890976ab491b5 -->
