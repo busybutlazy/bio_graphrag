@@ -100,7 +100,11 @@ function renderLoginControl() {
       E('button', { class: 'login-btn', onclick: () => { setKey(''); renderLoginControl(); } }, '登出'),
     );
   } else {
-    const input = E('input', { class: 'login-input', type: 'password', placeholder: '公司存取金鑰' });
+    const input = E('input', {
+      class: 'login-input',
+      type: 'password',
+      placeholder: '公司存取金鑰（README 有公開 Demo Key）',
+    });
     const submit = () => { const v = input.value.trim(); if (v) { setKey(v); renderLoginControl(); } };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
     box.append(input, E('button', { class: 'login-btn', onclick: submit }, '登入'));
